@@ -672,6 +672,94 @@ export class EconomyManager {
     return o ? { ...o, bug: BattleBug.fromJSON(o.bug) } : null;
   }
 
+  // ───────────── Mechanic's advice ─────────────
+  /** Rating of `bug` with `part` fitted in place of its equivalent (weapons: a free or the weakest slot). */
+  ratingWith(bug, part) {
+    const clone = BattleBug.fromJSON(bug.toJSON());
+    const p = Part.fromJSON(part.toJSON());
+    if (p.type === 'weapon') {
+      if (clone.weapons.length >= clone.weaponSlots) {
+        if (!clone.weaponSlots) return -Infinity;
+        const worst = clone.weapons.reduce((w, x, i) => (x.value * x.hpRatio < clone.weapons[w].value * clone.weapons[w].hpRatio ? i : w), 0);
+        clone.equip(p, worst);
+      } else clone.equip(p);
+    } else {
+      clone.equip(p);
+    }
+    return this.rating(clone);
+  }
+
+  /** The single best part of `type` for this bug, judged on a pristine example of each. */
+  optimalPart(bug, type) {
+    const base = this.rating(bug);
+    let best = null;
+    for (const key of PART_KEYS_BY_TYPE[type]) {
+      const part = new Part(key);
+      // Weapons all add the same raw rating, so break ties by quality (tier, then value).
+      const gain = this.ratingWith(bug, part) - base + (type === 'weapon' ? PARTS[key].tier * 0.5 + PARTS[key].value / 1000 : 0);
+      if (!best || gain > best.gain) best = { key, gain };
+    }
+    if (!best) return null;
+    const current = type === 'weapon' ? null : bug[type];
+    if (current?.key === best.key) return null; // already fitted
+    return best.gain > 0.5 ? best.key : null;
+  }
+
+  /**
+   * What the mechanic says about a bug: what's limiting it and the one
+   * optimal part to fix that. Only optimal picks — if it isn't in your
+   * spares or on the Marketplace, tough.
+   * @returns {{lines: string[], pick: {key, type, reason}|null}}
+   */
+  mechanicAdvice(bug) {
+    const out = { lines: [], pick: null };
+    if (!bug) return out;
+    const s = bug.getStats();
+    const hurt = bug.parts.filter((p) => p.hpRatio < 0.5).sort((a, b) => a.hpRatio - b.hpRatio)[0];
+    if (hurt) out.lines.push(`Fix your ${hurt.name} first — it's at ${Math.round(hurt.hpRatio * 100)}% and dragging everything down.`);
+    if (this.inField) {
+      if (!hurt) out.lines.push("We're in the field — no upgrades now. Just keep her patched up.");
+      return out;
+    }
+
+    // Diagnose, in order of what hurts a sumo bug most.
+    const needs = [];
+    if (s.fDrive > s.fGrip * 1.05) needs.push(['tires', 'traction-limited — the motor out-muscles your tires']);
+    else if (s.fGrip > s.fDrive * 1.25) needs.push(['engine', 'power-limited — your tires can take more than the motor gives']);
+    if (!bug.armor) needs.push(['armor', "you've got no armour — every hit goes straight to the hull"]);
+    if (bug.weapons.length < bug.weaponSlots) needs.push(['weapon', `you've got ${bug.weaponSlots - bug.weapons.length} empty hardpoint${bug.weaponSlots - bug.weapons.length > 1 ? 's' : ''}`]);
+    if (s.cooling < 12) needs.push(['engine', 'your motor runs hot — you\'ll stall in long pushes']);
+    needs.push(['engine', 'more push always helps'], ['tires', 'more grip always helps'], ['armor', 'tougher plating']);
+
+    for (const [type, reason] of needs) {
+      const key = this.optimalPart(bug, type);
+      if (key) {
+        out.pick = { key, type, reason };
+        break;
+      }
+    }
+    if (!out.pick) out.lines.push("Honestly? She's as good as parts can make her.");
+    return out;
+  }
+
+  /** Where the mechanic's pick can be had right now. */
+  pickAvailability(key) {
+    const spare = this.state.inventory.find((p) => p.key === key);
+    if (spare) return { where: 'spares', part: spare };
+    const listing = this.state.market.parts.find((l) => l.part.key === key);
+    if (listing) return { where: 'market', listing, price: this.partPrice(listing) };
+    return { where: 'none' };
+  }
+
+  /** Manager's legwork: add the mechanic's pick to the Marketplace. */
+  stockPick(key) {
+    if (this.state.market.parts.some((l) => l.part.key === key)) return false;
+    const part = Part.create(key, rand(0.75, 1));
+    const price = roundTo(part.value * part.hpRatio * rand(ECONOMY.MARKUP_MIN, ECONOMY.MARKUP_MAX), 5);
+    this.state.market.parts.unshift({ id: makeId('mk'), part, price, managerFind: true });
+    return true;
+  }
+
   // ───────────── Survival ─────────────
   /** Cash plus what the parts inventory would fetch. */
   get liquidWorth() {
@@ -795,7 +883,12 @@ export class EconomyManager {
     if (s.staff.manager) this.runManager(report);
 
     this.afterBout(challenger, tournament);
+    // The mechanic's pick is judged on the bug you'll fight with next.
+    const pick = s.staff.mechanic ? this.mechanicAdvice(s.activeBug).pick : null;
     this.generateMarket();
+    if (pick && s.staff.manager && !this.inField && chance(ECONOMY.MANAGER_FINDS_PICK)) {
+      if (this.stockPick(pick.key)) report.lines.push(`Manager: tracked down the ${PARTS[pick.key].name} your mechanic wanted — it's on the Marketplace.`);
+    }
     this.ensureReplacementListing();
     if (s.staff.manager) {
       const deals = [...s.market.parts, ...s.market.vehicles].filter((l) => this.isRareDeal(l));

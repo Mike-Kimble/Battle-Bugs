@@ -346,7 +346,15 @@ export class TerminalUI {
     const active = s.activeBug;
     const cat = this.marketCat;
     const [, catLabel, catBlurb] = MARKET_CATEGORIES.find(([k]) => k === cat);
-    const dealBadge = (l) => (manager && this.economy.isRareDeal(l) ? el('span', { class: 'badge badge-gold' }, '★ RARE DEAL') : null);
+    const pickKey = s.staff.mechanic && s.activeBug ? this.economy.mechanicAdvice(s.activeBug).pick?.key : null;
+    const dealBadge = (l) => {
+      const badges = [
+        l.part && l.part.key === pickKey ? el('span', { class: 'badge badge-match' }, "🔧 MECHANIC'S PICK") : null,
+        l.managerFind ? el('span', { class: 'badge badge-gold' }, '★ MANAGER FOUND') : null,
+        manager && this.economy.isRareDeal(l) ? el('span', { class: 'badge badge-gold' }, '★ RARE DEAL') : null,
+      ].filter(Boolean);
+      return badges.length ? el('div', { class: 'badges' }, badges) : null;
+    };
 
     const countFor = (key) => {
       if (key === 'sell') return s.inventory.length;
@@ -448,9 +456,9 @@ export class TerminalUI {
     return el('div', {},
       el('div', { class: 'card-grid' },
         staffCard('mechanic', 'Mechanic', ECONOMY.MECHANIC_HIRE, ECONOMY.MECHANIC_WAGE,
-          'Repairs your active vehicle after each bout as far as funds allow, and gets you 10% off parts and repairs.', '🔧'),
+          'Repairs your active vehicle after each bout, gets you 10% off parts and repairs, and tells you the one upgrade that would help most.', '🔧'),
         staffCard('manager', 'Manager', ECONOMY.MANAGER_HIRE, ECONOMY.MANAGER_WAGE,
-          'Bets on your fights, sells broken scrap at peak value (double scrap rate) and flags rare Marketplace deals.', '📈')),
+          'Bets on your fights, sells broken scrap at peak value, flags rare deals — and usually tracks down the part your mechanic wants.', '📈')),
       s.staff.manager ? this.renderBetting() : null,
       s.fine ? this.renderFine() : null,
       el('h3', {}, 'Recent log'),

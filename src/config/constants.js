@@ -127,6 +127,7 @@ export const ECONOMY = Object.freeze({
   FINE_BATTLES: 3,           // battles allowed to pay the fine
 
   MECHANIC_DISCOUNT: 0.9,    // mechanic gets 10% off parts & repairs
+  MANAGER_FINDS_PICK: 0.8,   // chance the manager stocks the mechanic's pick after a fight
   MIN_VEHICLE_PRICE: 100,
   MARKET_STOCK: { engine: 3, tires: 3, weapon: 4, armor: 3 },
   MARKET_VEHICLES: 3,

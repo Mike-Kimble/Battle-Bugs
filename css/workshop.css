@@ -290,3 +290,18 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 }
 .ref-note { display: block; }
 .ref-note .cmp-legend-mark { vertical-align: middle; margin: 0 2px; }
+
+/* Mechanic's advice on the hoist */
+.advice {
+  display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; padding: 8px 10px;
+  background: #0e0b16; border: 2px solid #3f6a8a; border-left-width: 6px; border-radius: var(--radius); font-size: 17px; line-height: 1.15;
+}
+.advice-head { font-family: var(--pixel); font-size: 9px; color: var(--cyan); }
+.advice-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+@media (max-width: 900px) {
+  .advice { font-size: 15px; padding: 5px 8px; margin: 4px 0; gap: 2px; }
+}
+@media (max-width: 900px) and (max-height: 720px) {
+  .advice { font-size: 14px; line-height: 1.05; }
+  .advice-head { display: none; }
+}

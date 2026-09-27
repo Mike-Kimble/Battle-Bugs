@@ -1,5 +1,5 @@
 import { HOIST_REGIONS, WEAPON_CLASSES } from '../config/constants.js';
-import { PART_KEYS_BY_TYPE } from '../config/partsData.js';
+import { PARTS, PART_KEYS_BY_TYPE } from '../config/partsData.js';
 import { BattleBug } from '../entities/BattleBug.js';
 import { Part } from '../entities/Part.js';
 import { SpriteRenderer } from '../render/SpriteRenderer.js';
@@ -318,6 +318,7 @@ export class WorkshopUI {
           }, `Sell ${formatMoney(this.economy.vehicleSellPrice(bug))}`)),
       ].filter(Boolean)),
       el('div', { class: 'hoist-side' }, ...[
+        this.state.staff.mechanic ? this.renderAdvice(bug, locked) : null,
         this.refBug ? el('div', { class: 'notice notice-gold ref-note' },
           el('strong', {}, 'Captured! '), 'White ticks show ', el('span', { class: 'cmp-legend-mark' }), ` ${this.refBug.name}, the bug that won it.`) : null,
         this.renderStats(bug),
@@ -361,6 +362,37 @@ export class WorkshopUI {
       el('div', { class: 'part-actions' },
         el('button', { class: 'btn btn-primary', onclick: () => { closeModal(); onYes(); } }, 'Confirm'),
         el('button', { class: 'btn', onclick: closeModal }, 'Cancel'))));
+  }
+
+  /** The mechanic's verdict: what's holding the bug back and the one part that fixes it. */
+  renderAdvice(bug, locked) {
+    const eco = this.economy;
+    const advice = eco.mechanicAdvice(bug);
+    const lines = advice.lines.map((l) => el('div', {}, l));
+    if (advice.pick) {
+      const def = PARTS[advice.pick.key];
+      const where = eco.pickAvailability(advice.pick.key);
+      const reason = advice.pick.reason[0].toUpperCase() + advice.pick.reason.slice(1);
+      lines.push(el('div', {}, `${reason}. Get the `, el('strong', {}, def.name), '.'));
+      if (where.where === 'spares') {
+        lines.push(el('div', { class: 'advice-row' }, 'You\'ve got one in your spares.',
+          el('button', {
+            class: 'btn btn-small btn-primary', disabled: locked,
+            onclick: () => this.act(() => eco.equipFromInventory(bug, where.part.uid), `Fitted ${def.name}`),
+          }, 'Fit it')));
+      } else if (where.where === 'market') {
+        lines.push(el('div', { class: 'advice-row' }, `On the Marketplace for ${formatMoney(where.price)}.`,
+          el('button', {
+            class: 'btn btn-small btn-primary', disabled: this.state.money < where.price,
+            onclick: () => this.act(() => eco.buyPartListing(where.listing.id), `Bought ${def.name} — it's in your spares`),
+          }, 'Buy')));
+      } else {
+        lines.push(el('div', { class: 'muted' }, 'Not on the Marketplace right now — tough.',
+          this.state.staff.manager ? ' Your manager will go looking for one.' : ''));
+      }
+    }
+    if (!lines.length) return null;
+    return el('div', { class: 'advice' }, el('div', { class: 'advice-head' }, '🔧 Mechanic'), lines);
   }
 
   /** Put the next/previous hangar vehicle on the hoist. */
