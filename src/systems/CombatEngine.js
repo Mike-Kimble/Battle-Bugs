@@ -54,6 +54,13 @@ export class CombatEngine extends EventEmitter {
 
   other(bug) { return bug === this.player ? this.opponent : this.player; }
 
+  /** Pull a point back inside the current ring, leaving `margin` px to the edge. */
+  clampInside(point, margin = 0) {
+    const limit = Math.max(0, this.arenaRadius - margin);
+    const d = point.length();
+    return d > limit ? point.scale(limit / d) : point;
+  }
+
   // ───────────── Main update ─────────────
   update(dt) {
     if (this.phase === 'countdown') {
@@ -128,6 +135,14 @@ export class CombatEngine extends EventEmitter {
     bug.control.target = null;
     bug.lunge = null;
     this.eliminations.push({ bug, reason, time: this.time });
+    // The survivor digs in at the tawara: cancel its charge and brake hard so a
+    // winning shove doesn't carry it over the edge too.
+    for (const other of this.bugs) {
+      if (other.out) continue;
+      other.lunge = null;
+      other.control.target = null;
+      other.vel.scaleInPlace(ACTIONS.VICTORY_BRAKE);
+    }
     if (reason === 'ringout') this.emit(EVENTS.RING_OUT, { bug });
     if (reason === 'stallout') this.emit(EVENTS.STALL, { bug, strikes: bug.stallStrikes, stallOut: true });
     if (this.firstElimAt === null) {
@@ -233,7 +248,8 @@ export class CombatEngine extends EventEmitter {
       impactMult: power ? ACTIONS.SHOVE_IMPACT_MULT : ACTIONS.RAM_IMPACT_MULT,
       power,
     };
-    bug.control.target = target.pos.add(dir.scale(ACTIONS.PUSH_THROUGH));
+    // Follow through, but never aim past the edge — shove them out, not yourself.
+    bug.control.target = this.clampInside(target.pos.add(dir.scale(ACTIONS.PUSH_THROUGH)), bug.radius * 1.5);
     bug.stamina -= cost;
     bug.actionCooldown = ACTIONS.ACTION_COOLDOWN;
     this.emit(EVENTS.ACTION, { bug, type: power ? 'shove' : 'ram', dir });
@@ -373,6 +389,12 @@ export class AIController {
       return;
     }
 
+    // Low-skill pilots hesitate, idling instead of pressing the attack.
+    if (Math.random() < (1 - difficulty) * 0.35) {
+      engine.stop(me);
+      return;
+    }
+
     // 3. Weapons.
     me.weapons.forEach((w, i) => {
       if (this.shouldFire(engine, w, foeD, R, dist)) engine.fireWeapon(me, i);
@@ -380,7 +402,7 @@ export class AIController {
 
     // 4. Close in, aiming past the opponent to shove them outward.
     const outward = foeD > 1 ? foe.pos.normalize() : toFoe.normalize();
-    engine.moveTo(me, foe.pos.add(outward.scale(45)));
+    engine.moveTo(me, engine.clampInside(foe.pos.add(outward.scale(45)), me.radius * 1.5));
 
     // 5. Rams & shoves when lined up.
     const aligned = Math.abs(wrapAngle(toFoe.angle() - me.angle)) < 0.55;

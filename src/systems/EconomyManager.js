@@ -236,9 +236,37 @@ export class EconomyManager {
       id: makeId('ch'),
       tier,
       bounty,
-      difficulty: Math.min(1, 0.2 + tier * 0.15 + rand(-0.05, 0.05)),
+      difficulty: Math.min(1, 0.1 + tier * 0.16 + rand(-0.05, 0.05)),
       bug,
     };
+  }
+
+  /** A deliberately weak, unarmed, half-wrecked opponent for new pilots. */
+  makeRookie() {
+    const bug = BattleBug.create({
+      name: `Rookie ${pick(BUG_NOUNS)}`,
+      hue: randInt(0, 359),
+      alien: true,
+      pilot: { name: alienName(), planet: pick(PLANETS) },
+      chassis: 'scrapper_frame',
+      engine: 'rust_motor',
+      tires: 'bald_rollers',
+      armor: null,
+      weapons: [],
+      condition: () => rand(0.5, 0.65),
+    });
+    return {
+      id: makeId('ch'),
+      tier: 1,
+      bounty: roundTo(ECONOMY.BOUNTY_BASE + rand(20, 60), 5),
+      difficulty: 0.05,
+      rookie: true,
+      bug,
+    };
+  }
+
+  get hasRookie() {
+    return this.state.challengers.some((c) => c.rookie);
   }
 
   generateChallengers() {
@@ -246,10 +274,14 @@ export class EconomyManager {
     const base = this.baseTier;
     const board = [];
     for (let i = 0; i < n; i++) {
+      if (i === 0 && this.state.record.challengerWins < ECONOMY.ROOKIE_UNTIL_WINS) {
+        board.push(this.makeRookie());
+        continue;
+      }
       const tier = i === 0 ? Math.max(1, base - 1) : clampTier(base + randInt(-1, 1));
       board.push(this.makeChallenger(tier));
     }
-    board.sort((a, b) => a.tier - b.tier || a.bounty - b.bounty);
+    board.sort((a, b) => (b.rookie ? 1 : 0) - (a.rookie ? 1 : 0) || a.tier - b.tier || a.bounty - b.bounty);
     this.state.challengers = board;
   }
 

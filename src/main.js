@@ -1,4 +1,4 @@
-import { EVENTS, MATCH, PHYSICS, INPUT, WEAPON_CLASSES } from './config/constants.js';
+import { ECONOMY, EVENTS, MATCH, PHYSICS, INPUT, WEAPON_CLASSES } from './config/constants.js';
 import { GameState } from './core/GameState.js';
 import { Vector2D } from './physics/Vector2D.js';
 import { CombatEngine } from './systems/CombatEngine.js';
@@ -21,7 +21,8 @@ class App {
   constructor() {
     this.state = GameState.load() || GameState.newGame();
     this.economy = new EconomyManager(this.state);
-    if (!this.state.challengers.length) this.economy.generateChallengers();
+    const needsRookie = this.state.record.challengerWins < ECONOMY.ROOKIE_UNTIL_WINS && !this.economy.hasRookie;
+    if (!this.state.challengers.length || needsRookie) this.economy.generateChallengers();
     if (!this.state.market.parts.length) this.economy.generateMarket();
     this.state.save();
 

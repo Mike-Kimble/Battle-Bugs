@@ -39,24 +39,26 @@ export const PHYSICS = Object.freeze({
 });
 
 export const STAMINA = Object.freeze({
-  DRIVE_DRAIN_K: 7e-7,       // ΔS = k · F_drive · (|v| + floor) · dt
+  DRIVE_DRAIN_K: 4e-7,       // ΔS = k · F_drive · (|v| + floor) · dt
   PUSH_SPEED_FLOOR: 120,     // motor under load while pushing a stationary mass
   RECOVER_FRACTION: 0.2,     // stall clears at S ≥ 20%
+  DRIVING_COOL_FRACTION: 0.2, // share of R_cool still recovered while driving
 });
 
 export const ACTIONS = Object.freeze({
-  RAM_COST: 15,
+  RAM_COST: 10,
   RAM_SPEED_MULT: 1.35,
   RAM_IMPACT_MULT: 1.3,
   RAM_DURATION: 0.45,
-  SHOVE_COST: 35,
+  SHOVE_COST: 25,
   SHOVE_SPEED_MULT: 1.9,
   SHOVE_IMPACT_MULT: 1.8,
   SHOVE_DURATION: 0.55,
-  DASH_COST: 12,
+  DASH_COST: 8,
   DASH_SPEED: 330,
   ACTION_COOLDOWN: 0.35,
-  PUSH_THROUGH: 70,          // after a ram, keep driving this far past the target
+  PUSH_THROUGH: 70,
+  VICTORY_BRAKE: 0.25,       // survivor keeps this share of velocity when the foe is eliminated          // after a ram, keep driving this far past the target
   EXPOSED_DAMAGE_MULT: 1.5,  // grip weapons expose flanks while deploying
 });
 
@@ -90,6 +92,7 @@ export const ECONOMY = Object.freeze({
   BOUNTY_PER_TIER: 120,
   CHALLENGER_MIN: 3,
   CHALLENGER_MAX: 5,
+  ROOKIE_UNTIL_WINS: 2,      // board always offers an easy rookie until this many wins
   MARKET_PARTS: 7,
   MARKET_VEHICLES: 2,
   TOURNAMENT_UNLOCK_WINS: 5,

@@ -107,7 +107,7 @@ export class TerminalUI {
     return el('div', {},
       el('p', { class: 'muted' }, `Alien challengers are queuing at the dohyo. Win to claim the bounty AND their entire vehicle. Your fighter: `,
         el('strong', {}, active ? active.name : '—'), ready ? '' : el('span', { class: 'bad' }, ' (not battle-ready)')),
-      el('div', { class: 'card-grid' }, s.challengers.map((c) => this.challengerCard(c, { ready, onFight: () => this.onFight(c, { tournament: false }) }))));
+      el('div', { class: 'card-grid' }, s.challengers.map((c) => this.challengerCard(c, { ready, label: c.rookie ? 'ROOKIE · EASY' : null, onFight: () => this.onFight(c, { tournament: false }) }))));
   }
 
   challengerCard(c, { ready, onFight, label }) {
@@ -142,11 +142,15 @@ export class TerminalUI {
     wrap.append(el('div', { class: 'card-grid' }, s.vehicles.map((bug) => this.vehicleCard(bug))));
     wrap.append(el('h3', {}, `Parts inventory (${s.inventory.length})`));
     if (!s.inventory.length) wrap.append(el('p', { class: 'muted' }, 'Empty. Strip captured vehicles or buy parts at the Marketplace.'));
-    wrap.append(el('div', { class: 'card-grid parts' }, s.inventory.map((p) => partCard(p, this.economy, {
+    wrap.append(el('div', { class: 'card-grid parts' }, s.inventory.map((p) => this.sellPartCard(p))));
+    return wrap;
+  }
+
+  sellPartCard(p) {
+    return partCard(p, this.economy, {
       actions: [el('button', { class: 'btn btn-small', onclick: () => this.act(() => this.economy.sellPart(p.uid), (v) => `Sold ${p.name} for ${formatMoney(v)}`) },
         `${p.isBroken ? 'Scrap' : 'Sell'} ${formatMoney(this.economy.partSellPrice(p))}`)],
-    }))));
-    return wrap;
+    });
   }
 
   vehicleCard(bug) {
@@ -235,9 +239,12 @@ export class TerminalUI {
           el('div', { class: 'bounty' }, el('small', {}, 'Price'), el('strong', {}, formatMoney(l.price))),
           el('button', { class: 'btn btn-primary', disabled: s.money < l.price, onclick: () => this.act(() => this.economy.buyVehicleListing(l.id), `${l.bug.name} added to your hangar`) }, 'Buy'))),
       )),
-      el('h3', {}, 'Sell'),
-      el('p', { class: 'muted small' }, 'Sell captured vehicles and spare parts from the Hangar tab. Broken parts fetch scrap value only.'),
-      el('button', { class: 'btn', onclick: () => { this.tab = 'hangar'; this.render(); } }, 'Open Hangar'),
+      el('h3', {}, `Sell your parts (${s.inventory.length})`),
+      s.inventory.length
+        ? el('p', { class: 'muted small' }, `Parts you've removed or stripped. Buyers pay ${Math.round(ECONOMY.SELL_RATE * 100)}% of value × condition; broken parts fetch scrap only.`)
+        : el('p', { class: 'muted small' }, 'No spare parts. Remove parts on the hoist or strip a captured vehicle to sell them here.'),
+      el('div', { class: 'card-grid parts' }, s.inventory.map((p) => this.sellPartCard(p))),
+      el('p', { class: 'muted small' }, 'Whole vehicles can be sold from the Hangar tab.'),
     );
   }
 

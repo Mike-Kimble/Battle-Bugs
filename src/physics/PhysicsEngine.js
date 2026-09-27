@@ -138,10 +138,12 @@ export class PhysicsEngine {
     bug.throttle = throttle;
     bug.odometer += Math.abs(fwd) * dt;
 
-    // Stamina: continuous drain ∝ F_drive · v while driving, R_cool recovery while idle.
+    // Stamina: continuous drain ∝ F_drive · v while driving (partly offset by
+    // cooling), full R_cool recovery while idle.
     if (throttle > 0) {
       const applied = s.fUsable * throttle;
       bug.stamina -= STAMINA.DRIVE_DRAIN_K * applied * (Math.abs(fwd) + STAMINA.PUSH_SPEED_FLOOR) * dt;
+      bug.stamina += s.cooling * STAMINA.DRIVING_COOL_FRACTION * dt;
     } else {
       bug.stamina += s.cooling * dt;
     }
