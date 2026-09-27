@@ -285,7 +285,7 @@ export class WorkshopUI {
     const repairAll = this.economy.repairAllCost(bug);
     const issues = bug.battleIssues();
 
-    const canDispose = !locked && this.state.vehicles.length > 1;
+    const canDispose = !locked && !this.economy.inField && this.state.vehicles.length > 1;
     this.root.replaceChildren(el('div', { class: 'hoist-layout' },
       el('div', { class: 'hoist-main' }, ...[
         this.renderCarousel(bug, locked),
@@ -611,6 +611,8 @@ export class WorkshopUI {
         }
         actions.push(el('button', {
           class: 'btn btn-small',
+          disabled: this.economy.inField,
+          title: this.economy.inField ? "No selling while you're in the tournament" : null,
           onclick: () => this.act(() => this.economy.sellPart(part.uid), (v) => `Sold ${part.name} for ${formatMoney(v)}`),
         }, `${part.isBroken ? 'Scrap' : 'Sell'} ${formatMoney(this.economy.partSellPrice(part))}`));
         list.append(partCard(part, this.economy, { actions, compareTo: counterpart(bug, part) }));

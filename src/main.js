@@ -62,12 +62,33 @@ class App {
 
     window.addEventListener('resize', () => this.engine && this.renderer.resize());
     this.showWorkshop();
-    if (this.economy.checkGameOver()) this.showGameOver();
+    if (this.state.gameComplete) this.showChampion();
+    else if (this.economy.checkGameOver()) this.showGameOver();
   }
 
   newGame() {
     GameState.wipe();
     window.location.reload();
+  }
+
+  /** Champion's reward: a fresh game from scratch, bankrolled by the grand prize. */
+  newSeason() {
+    const s = this.state;
+    GameState.newGame({ money: ECONOMY.START_MONEY + ECONOMY.TOURNAMENT_PRIZE, season: s.season + 1, titles: s.titles + 1 }).save();
+    window.location.reload();
+  }
+
+  showChampion() {
+    const root = $('#overlay-root');
+    const s = this.state;
+    const bankroll = ECONOMY.START_MONEY + ECONOMY.TOURNAMENT_PRIZE;
+    root.replaceChildren(el('div', { class: 'result-card result-win champion' },
+      el('h1', {}, 'CHAMPION OF THE GALAXY'),
+      el('p', { class: 'champion-text' }, `You won the Inter-Planetary Tournament${s.season > 1 ? ` in season ${s.season}` : ''} and the ${formatMoney(ECONOMY.TOURNAMENT_PRIZE)} grand prize. Game complete!`),
+      el('p', { class: 'muted' }, `Final record ${s.record.wins}W · ${s.record.losses}L · ${s.record.ties}D${s.titles ? ` · ${s.titles + 1} championships` : ''}`),
+      el('p', {}, `Start again from scratch with a Scrapper Bug — but with ${formatMoney(bankroll)} in the bank.`),
+      el('button', { class: 'btn btn-primary btn-big', onclick: () => this.newSeason() }, `Start season ${s.season + 1} with ${formatMoney(bankroll)}`)));
+    root.classList.add('open');
   }
 
   renderUI() {
@@ -289,6 +310,10 @@ class App {
     const close = () => {
       root.classList.remove('open');
       root.replaceChildren();
+      if (report.champion) {
+        this.showChampion();
+        return;
+      }
       if (report.gameOver) {
         this.showGameOver();
         return;
@@ -301,7 +326,7 @@ class App {
       }
       this.showWorkshop();
     };
-    const buttonText = report.gameOver ? 'Continue'
+    const buttonText = report.gameOver || report.champion ? 'Continue'
       : report.captured ? 'See it on the hoist'
         : !this.state.vehicles.length ? 'Find a replacement'
           : 'Back to the Workshop';

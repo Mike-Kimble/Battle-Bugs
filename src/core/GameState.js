@@ -27,6 +27,8 @@ export class GameState extends EventEmitter {
     this.tournament = { entered: false, vehicleId: null, round: 0, eliminated: false, champion: false };
     this.gameComplete = false;
     this.gameOver = null;
+    this.season = 1;
+    this.titles = 0; // championships won in earlier seasons
     this.managerBetPct = 0;
     this.fixStreak = 0;
     this.fine = null; // { amount, battlesLeft }
@@ -35,8 +37,15 @@ export class GameState extends EventEmitter {
     this.newVehicleIds = new Set(); // captured this session, flagged NEW until put on the hoist
   }
 
-  static newGame() {
+  /**
+   * A fresh game. A champion can start a new season from scratch, carrying
+   * the grand prize as extra starting money.
+   */
+  static newGame({ money = ECONOMY.START_MONEY, season = 1, titles = 0 } = {}) {
     const state = new GameState();
+    state.money = money;
+    state.season = season;
+    state.titles = titles;
     const starter = BattleBug.create({ ...STARTER_BUG });
     state.vehicles.push(starter);
     state.activeVehicleId = starter.id;
@@ -72,6 +81,8 @@ export class GameState extends EventEmitter {
     s.tournament = { ...s.tournament, ...d.tournament };
     s.gameComplete = !!d.gameComplete;
     s.gameOver = d.gameOver || null;
+    s.season = d.season || 1;
+    s.titles = d.titles || 0;
     s.managerBetPct = d.managerBetPct ?? (s.staff.manager ? 0.1 : 0);
     s.fixStreak = d.fixStreak || 0;
     s.fine = d.fine || null;
@@ -97,6 +108,8 @@ export class GameState extends EventEmitter {
       tournament: this.tournament,
       gameComplete: this.gameComplete,
       gameOver: this.gameOver,
+      season: this.season,
+      titles: this.titles,
       managerBetPct: this.managerBetPct,
       fixStreak: this.fixStreak,
       fine: this.fine,

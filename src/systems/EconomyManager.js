@@ -132,7 +132,17 @@ export class EconomyManager {
   }
 
   // ───────────── Trading ─────────────
+  /** In the tournament you're in the field: no buying or selling, only repairs with what you brought. */
+  get inField() {
+    return !!this.state.tournament.entered;
+  }
+
+  assertNotInField() {
+    if (this.inField) throw new Error("You're in the field — no buying or selling until the tournament is over");
+  }
+
   buyPartListing(listingId) {
+    this.assertNotInField();
     const i = this.state.market.parts.findIndex((l) => l.id === listingId);
     if (i < 0) throw new Error('Listing gone');
     const listing = this.state.market.parts[i];
@@ -143,6 +153,7 @@ export class EconomyManager {
   }
 
   buyVehicleListing(listingId) {
+    this.assertNotInField();
     const i = this.state.market.vehicles.findIndex((l) => l.id === listingId);
     if (i < 0) throw new Error('Listing gone');
     const listing = this.state.market.vehicles[i];
@@ -154,6 +165,7 @@ export class EconomyManager {
   }
 
   sellPart(partUid) {
+    this.assertNotInField();
     const part = this.state.getPart(partUid);
     if (!part) throw new Error('Part not in inventory');
     const price = this.partSellPrice(part);
@@ -168,6 +180,7 @@ export class EconomyManager {
   }
 
   sellVehicle(id) {
+    this.assertNotInField();
     const bug = this.state.getVehicle(id);
     if (!bug) throw new Error('No such vehicle');
     this.assertDisposable(bug);
@@ -179,6 +192,7 @@ export class EconomyManager {
 
   /** Strip a vehicle: parts go to inventory, the bare frame is sold as scrap. */
   stripVehicle(id) {
+    this.assertNotInField();
     const bug = this.state.getVehicle(id);
     if (!bug) throw new Error('No such vehicle');
     this.assertDisposable(bug);
@@ -574,6 +588,7 @@ export class EconomyManager {
 
   /** Place the manager's bet for this fight; `pct` is the per-fight limit. */
   placeManagerBet(c, bug, reserved = 0, pct = this.state.managerBetPct) {
+    if (this.inField) return null;
     const plan = this.planManagerBet(c, bug, reserved, pct);
     if (plan.stake < 1) return null;
     this.state.spend(plan.stake);
@@ -716,15 +731,13 @@ export class EconomyManager {
     };
 
     if (tournament) {
+      // No purses and no captured vehicles in the tournament — only the grand prize.
       if (result === 'win') {
-        report.bounty = challenger.bounty;
-        s.earn(challenger.bounty);
-        report.lines.push(`Round purse: ${formatMoney(challenger.bounty)}`);
-        capture();
         s.tournament.round++;
         if (s.tournament.round >= ECONOMY.TOURNAMENT_ROUNDS) {
           s.earn(ECONOMY.TOURNAMENT_PRIZE);
-          report.lines.push(`Tournament prize: ${formatMoney(ECONOMY.TOURNAMENT_PRIZE)}`);
+          report.bounty = ECONOMY.TOURNAMENT_PRIZE;
+          report.lines.push(`Grand prize: ${formatMoney(ECONOMY.TOURNAMENT_PRIZE)}`);
           report.champion = true;
           s.gameComplete = true;
           s.tournament.champion = true;
@@ -818,6 +831,7 @@ export class EconomyManager {
   }
 
   runManager(report) {
+    if (this.inField) return;
     const scrap = this.state.inventory.filter((p) => p.isBroken);
     if (!scrap.length) return;
     let total = 0;

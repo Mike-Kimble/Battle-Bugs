@@ -100,9 +100,10 @@ export class TerminalUI {
         el('div', { class: 'stat' }, el('small', {}, 'Record W·L·D'), el('strong', {}, `${s.record.wins}·${s.record.losses}·${s.record.ties}`)),
         s.fine ? el('div', { class: 'stat fine-chip', title: 'Match-fixing fine' }, el('small', {}, 'Fine due'),
           el('strong', {}, `${formatMoney(s.fine.amount)} · ${s.fine.battlesLeft} left`)) : null,
+        s.season > 1 ? el('div', { class: 'stat' }, el('small', {}, 'Season'), el('strong', {}, `${s.season}${s.titles ? ` · ${'★'.repeat(Math.min(s.titles, 5))}` : ''}`)) : null,
         el('div', { class: 'stat' }, el('small', {}, 'Streak'), el('strong', {}, streakText(s.record.streak))),
         el('div', { class: 'stat' }, el('small', {}, 'Tournament'),
-          el('strong', {}, s.gameComplete ? '★ CHAMPION' : s.tournament.entered ? `Round ${s.tournament.round + 1}/${ECONOMY.TOURNAMENT_ROUNDS}` : `${cw}/${ECONOMY.TOURNAMENT_UNLOCK_WINS} wins`)),
+          el('strong', {}, s.gameComplete ? '★ CHAMPION' : s.tournament.entered ? `IN THE FIELD · R${s.tournament.round + 1}/${ECONOMY.TOURNAMENT_ROUNDS}` : `${cw}/${ECONOMY.TOURNAMENT_UNLOCK_WINS} wins`)),
       ),
     );
   }
@@ -144,7 +145,7 @@ export class TerminalUI {
     let foot;
     if (onFight) {
       foot = el('div', { class: 'card-foot' },
-        el('div', { class: 'bounty' }, el('small', {}, 'Purse'), el('strong', {}, formatMoney(c.bounty))),
+        el('div', { class: 'bounty' }, el('small', {}, 'Grand prize (win the final)'), el('strong', {}, formatMoney(ECONOMY.TOURNAMENT_PRIZE))),
         el('button', { class: 'btn btn-fight', disabled: !ready, onclick: onFight }, 'FIGHT'));
     } else if (deal) {
       const affordable = deal.type !== 'cash' || this.state.money >= deal.amount;
@@ -185,7 +186,8 @@ export class TerminalUI {
   /** With a manager on staff, set this fight's betting limit before the bell. */
   fight(c, opts) {
     const s = this.state;
-    if (!s.staff.manager) {
+    // No betting in the tournament: straight into the ring.
+    if (!s.staff.manager || opts.tournament) {
       this.onFight(c, opts);
       return;
     }
@@ -334,6 +336,11 @@ export class TerminalUI {
   // ───────────── Marketplace ─────────────
   renderMarket() {
     const s = this.state;
+    if (this.economy.inField) {
+      return el('div', { class: 'notice notice-warn' },
+        el('strong', {}, "You're in the field."),
+        "The Marketplace is closed to tournament entrants — no buying or selling until you're champion or knocked out. Field repairs are paid for with the cash you brought.");
+    }
     if (!s.market.parts.length && !s.market.vehicles.length) this.economy.generateMarket();
     const manager = s.staff.manager;
     const active = s.activeBug;
@@ -490,12 +497,10 @@ export class TerminalUI {
     const t = s.tournament;
     const wrap = el('div', { class: 'tournament' },
       el('h3', {}, 'The Inter-Planetary Tournament'),
-      el('p', {}, `${ECONOMY.TOURNAMENT_ROUNDS} rounds against the galaxy's finest. Grand prize ${formatMoney(ECONOMY.TOURNAMENT_PRIZE)} and eternal glory. `,
-        'On entry your vehicle is locked: no upgrades or part swaps — field repairs only.'));
+      el('p', {}, `${ECONOMY.TOURNAMENT_ROUNDS} rounds against the galaxy's finest. Win the final for the ${formatMoney(ECONOMY.TOURNAMENT_PRIZE)} grand prize — and the game. `,
+        'No purses and no captured vehicles along the way.'),
+      el('p', { class: 'small muted' }, "Once you enter you're in the field: your vehicle is locked (no upgrades or part swaps), the Marketplace is closed and your manager can't bet. Field repairs only — with the cash you bring. Can't afford them? Tough luck."));
 
-    if (s.gameComplete) {
-      wrap.append(el('div', { class: 'notice notice-gold' }, '★ You are the reigning Inter-Planetary Champion! The game is complete — keep brawling for fun.'));
-    }
 
     if (!eco.tournamentUnlocked) {
       const n = s.record.challengerWins;
