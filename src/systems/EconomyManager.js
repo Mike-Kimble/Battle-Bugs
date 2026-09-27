@@ -598,9 +598,10 @@ export class EconomyManager {
       report.lines.push(`Manager bet ${formatMoney(bet.stake)} on you ${sideText} — lost it.`);
     }
 
-    // Lose-bets that pay out build suspicion; a win (or a bet on you to win) clears it.
+    // Only bets on you to LOSE count towards match fixing. Winning the fight
+    // clears suspicion; a bet on you to win leaves it untouched.
     if (bet.side === 'lose' && result === 'loss') s.fixStreak = (s.fixStreak || 0) + 1;
-    else if (result === 'win' || bet.side === 'win') s.fixStreak = 0;
+    else if (result === 'win') s.fixStreak = 0;
     if (s.fixStreak >= ECONOMY.FIXING_STREAK && chance(ECONOMY.FIXING_ESCAPE)) {
       report.lines.push(`The stewards are sniffing around (${s.fixStreak} lose-bets paid out running)… your manager got away with it this time.`);
     } else if (s.fixStreak >= ECONOMY.FIXING_STREAK) {

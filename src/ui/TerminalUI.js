@@ -202,7 +202,7 @@ export class TerminalUI {
         plan.stake >= 1
           ? el('div', {}, `Bet: ${formatMoney(plan.stake)} on you to ${side} → pays ${formatMoney(plan.stake * plan.mult)} if right.`)
           : el('div', { class: 'muted' }, pct <= 0 ? 'No bet this fight.' : 'Not confident enough either way to bet.'),
-        s.fixStreak >= ECONOMY.FIXING_WARNING
+        plan.side === 'lose' && plan.stake >= 1 && s.fixStreak >= ECONOMY.FIXING_WARNING
           ? el('div', { class: 'muted small' }, 'Word around the pits is this is starting to look like match-fixing… anyway.') : null,
       ].filter(Boolean));
     };
