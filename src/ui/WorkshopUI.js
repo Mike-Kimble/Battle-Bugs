@@ -595,7 +595,7 @@ export class WorkshopUI {
     }
 
     if (inv.length) {
-      const list = el('div', { class: 'replace-list' }, el('h4', {}, type === 'weapon' ? 'Mount from inventory' : 'Replace from inventory'));
+      const list = el('div', { class: 'replace-list' }, el('h4', {}, type === 'weapon' ? 'Spares — mount or sell' : 'Spares — fit or sell'));
       for (const part of inv) {
         const actions = [];
         if (type === 'weapon') {
@@ -609,6 +609,10 @@ export class WorkshopUI {
         } else {
           actions.push(el('button', { class: 'btn btn-small btn-primary', disabled: locked, onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid), `Fitted ${part.name}`) }, 'Fit'));
         }
+        actions.push(el('button', {
+          class: 'btn btn-small',
+          onclick: () => this.act(() => this.economy.sellPart(part.uid), (v) => `Sold ${part.name} for ${formatMoney(v)}`),
+        }, `${part.isBroken ? 'Scrap' : 'Sell'} ${formatMoney(this.economy.partSellPrice(part))}`));
         list.append(partCard(part, this.economy, { actions, compareTo: counterpart(bug, part) }));
       }
       section.append(list);

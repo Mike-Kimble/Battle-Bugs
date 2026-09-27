@@ -16,7 +16,10 @@ const MARKET_CATEGORIES = [
   ['tires', 'Running Gear', 'Tires & treads. Grip limit and top speed.'],
   ['chassis', 'Chassis', 'Whole vehicles — each frame comes with its fitted parts.'],
   ['armor', 'Armour', 'Plating that soaks impact damage before it reaches the hull.'],
+  ['sell', 'Sell', 'Every spare component in your inventory, ready to sell.'],
 ];
+
+const PART_GROUPS = [['engine', 'Propulsion'], ['weapon', 'Weapons'], ['tires', 'Running Gear'], ['armor', 'Armour']];
 
 function streakText(n = 0) {
   if (n > 0) return `W${n}`;
@@ -338,9 +341,11 @@ export class TerminalUI {
     const [, catLabel, catBlurb] = MARKET_CATEGORIES.find(([k]) => k === cat);
     const dealBadge = (l) => (manager && this.economy.isRareDeal(l) ? el('span', { class: 'badge badge-gold' }, '★ RARE DEAL') : null);
 
-    const countFor = (key) => (key === 'chassis'
-      ? s.market.vehicles.length
-      : s.market.parts.filter((l) => l.part.type === key).length);
+    const countFor = (key) => {
+      if (key === 'sell') return s.inventory.length;
+      if (key === 'chassis') return s.market.vehicles.length;
+      return s.market.parts.filter((l) => l.part.type === key).length;
+    };
     const spares = cat === 'chassis'
       ? s.vehicles.filter((v) => v.id !== s.activeVehicleId && !s.isLocked(v))
       : s.inventory.filter((p) => p.type === cat);
@@ -395,6 +400,16 @@ export class TerminalUI {
           }, `Sell ${formatMoney(this.economy.vehicleSellPrice(bug))}`))))
       : spares.map((p) => this.sellPartCard(p));
 
+    if (cat === 'sell') {
+      const groups = PART_GROUPS.map(([type, label]) => [label, s.inventory.filter((p) => p.type === type)]).filter(([, ps]) => ps.length);
+      return el('div', { class: 'market' },
+        subnav,
+        el('p', { class: 'muted' }, catBlurb, ` Buyers pay ${Math.round(ECONOMY.SELL_RATE * 100)}% of value × condition; broken parts fetch scrap only.`),
+        groups.length
+          ? groups.map(([label, ps]) => [el('h3', {}, `${label} (${ps.length})`), el('div', { class: 'card-grid parts' }, ps.map((p) => this.sellPartCard(p)))])
+          : el('p', { class: 'muted' }, 'No spare components. Remove parts on the hoist or strip a vehicle to sell them here.'));
+    }
+
     return el('div', { class: 'market' },
       subnav,
       el('p', { class: 'muted' }, catBlurb, ' Stock rotates after every bout. ',
@@ -402,12 +417,12 @@ export class TerminalUI {
         manager ? 'Your manager is flagging rare deals.' : 'Hire a manager to have rare deals flagged.'),
       el('h3', {}, `${catLabel} for sale`),
       forSale.childElementCount ? forSale : el('p', { class: 'muted' }, 'Sold out — new stock arrives after your next bout.'),
-      el('h3', {}, cat === 'chassis' ? `Sell your vehicles (${spares.length})` : `Sell your spare ${catLabel.toLowerCase()} (${spares.length})`),
-      spares.length
-        ? el('div', { class: cat === 'chassis' ? 'card-grid' : 'card-grid parts' }, sellCards)
-        : el('p', { class: 'muted small' }, cat === 'chassis'
-          ? 'Only your hoist vehicle is in the hangar. Win or buy more to sell.'
-          : `No spares. Remove parts on the hoist or strip a vehicle to sell them here. Buyers pay ${Math.round(ECONOMY.SELL_RATE * 100)}% of value × condition.`),
+      ...(cat === 'chassis' ? [
+        el('h3', {}, `Sell your vehicles (${spares.length})`),
+        spares.length
+          ? el('div', { class: 'card-grid' }, sellCards)
+          : el('p', { class: 'muted small' }, 'Only your hoist vehicle is in the hangar. Win or buy more to sell.'),
+      ] : []),
     );
   }
 
