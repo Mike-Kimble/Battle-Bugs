@@ -97,10 +97,13 @@ export const ECONOMY = Object.freeze({
   BOUNTY_BASE: 110,          // base stake a challenger expects (scaled by tier)
   BOUNTY_PER_TIER: 120,
   BOARD_SIZE: 5,             // challengers on the board, spread across difficulties
+  MATCHED_CHALLENGERS: 2,    // board slots rating-matched to your best vehicle (≤ 1 star higher)
+  MATCH_TOLERANCE: 0.2,      // an even match stays on the board while within ±20% of your best rating
   ROOKIE_UNTIL_WINS: 2,      // board always offers an easy rookie until this many wins
 
   // Wagers & haggling
-  MIN_WAGER: 10,
+  COUNTER_STEP: 10,          // challenger counter-offers are multiples of this
+  MIN_COUNTER_GAP: 100,      // they won't counter over less than this — they just accept
   WAGER_TOLERANCE: 0.12,     // offer within ±12% of what they want → accepted
   WAGER_PATIENCE: 0.04,      // tolerance widens this much per haggling round
   WAGER_CONCESSION: 0.6,     // counters land this far from your offer toward their target

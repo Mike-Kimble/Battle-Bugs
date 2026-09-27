@@ -299,21 +299,70 @@ export class EconomyManager {
 
   /** A fresh board of BOARD_SIZE challengers spanning the difficulty range. */
   generateChallengers() {
-    const board = [];
-    for (let i = 0; i < ECONOMY.BOARD_SIZE; i++) {
-      board.push(i === 0 && this.wantsRookie ? this.makeRookie() : this.makeBoardChallenger(i));
-    }
-    this.state.challengers = board;
-    this.sortBoard();
+    this.state.challengers = [];
+    this.refillBoard();
   }
 
-  /** Top the board back up to BOARD_SIZE, filling the difficulty gaps. */
+  /**
+   * Top the board back up to BOARD_SIZE: the rookie (while you're new), two
+   * even matches for your best vehicle, then the difficulty ladder.
+   */
   refillBoard() {
     const s = this.state;
     if (this.wantsRookie && !this.hasRookie) s.challengers.push(this.makeRookie());
+    while (s.challengers.filter((c) => c.matched).length < ECONOMY.MATCHED_CHALLENGERS && s.challengers.length < ECONOMY.BOARD_SIZE) {
+      s.challengers.push(this.makeMatchedChallenger());
+    }
     let i = 1;
     while (s.challengers.length < ECONOMY.BOARD_SIZE) s.challengers.push(this.makeBoardChallenger(i++ % ECONOMY.BOARD_SIZE));
     this.sortBoard();
+  }
+
+  // ───────────── Even matches ─────────────
+  /** Star rating (1–5) of a vehicle: the average tier of its parts. */
+  vehicleStars(bug) {
+    const parts = [bug.chassis, bug.engine, bug.tires, bug.armor, ...bug.weapons].filter(Boolean);
+    return clampTier(Math.round(parts.reduce((sum, p) => sum + p.tier, 0) / parts.length));
+  }
+
+  /** Your highest-rated vehicle — even matches are pitched against it. */
+  get bestVehicle() {
+    let best = null;
+    let bestR = -Infinity;
+    for (const v of this.state.vehicles) {
+      const r = this.rating(v);
+      if (r > bestR) { best = v; bestR = r; }
+    }
+    return best;
+  }
+
+  /**
+   * A challenger whose rating is as close as possible to your best vehicle,
+   * at its star level or at most one star higher. These keep the board
+   * winnable after a fall from grace.
+   */
+  makeMatchedChallenger() {
+    const best = this.bestVehicle;
+    if (!best) return this.makeBoardChallenger(1);
+    const target = this.rating(best);
+    const star = this.vehicleStars(best);
+    let pick = null;
+    let err = Infinity;
+    for (let i = 0; i < 24 && err > 0.06; i++) {
+      const c = this.makeChallenger(clampTier(star + (i % 2)));
+      const e = Math.abs(this.rating(c.bug) - target) / target;
+      if (e < err) { pick = c; err = e; }
+    }
+    pick.matched = true;
+    return pick;
+  }
+
+  /** Still a fair fight for your current best vehicle? */
+  isEvenMatch(c) {
+    const best = this.bestVehicle;
+    if (!best) return false;
+    const target = this.rating(best);
+    return c.tier <= this.vehicleStars(best) + 1 && Math.abs(this.rating(c.bug) - target) / target <= ECONOMY.MATCH_TOLERANCE;
   }
 
   generateMarket() {
@@ -362,22 +411,14 @@ export class EconomyManager {
     return 1 / (1 + Math.exp(-x));
   }
 
-  mood(p) {
-    if (p >= 0.75) return { label: 'Cocky', cls: 'bad', blurb: 'expects to crush you — happy to play for big money' };
-    if (p >= 0.55) return { label: 'Confident', cls: 'warn', blurb: 'fancies their chances and wants a decent pot' };
-    if (p >= 0.4) return { label: 'Wary', cls: 'muted', blurb: 'thinks it could go either way' };
-    if (p >= 0.2) return { label: 'Nervous', cls: 'good', blurb: 'would rather keep the stakes low' };
-    return { label: 'Terrified', cls: 'good', blurb: 'will only risk pocket change' };
-  }
-
   /** What the challenger would like to play for. */
   targetStake(c) {
     const p = this.confidence(c);
-    return Math.max(ECONOMY.MIN_WAGER, roundTo(c.bounty * (0.35 + 1.3 * p), 5));
+    return Math.max(ECONOMY.COUNTER_STEP, roundTo(c.bounty * (0.35 + 1.3 * p), ECONOMY.COUNTER_STEP));
   }
 
   bankroll(c) {
-    return roundTo(c.bounty * ECONOMY.BANKROLL_MULT, 5);
+    return roundTo(c.bounty * ECONOMY.BANKROLL_MULT, ECONOMY.COUNTER_STEP);
   }
 
   nego(c) {
@@ -393,7 +434,7 @@ export class EconomyManager {
   offerCash(c, amount) {
     const s = this.state;
     amount = Math.round(amount);
-    if (!(amount >= ECONOMY.MIN_WAGER)) throw new Error(`Minimum wager is ${formatMoney(ECONOMY.MIN_WAGER)}`);
+    if (!(amount >= 1)) throw new Error('Offer something!');
     if (amount > s.money) throw new Error("You can't cover that stake");
     const n = this.nego(c);
     const who = c.bug.pilot?.name || c.bug.name;
@@ -437,8 +478,9 @@ export class EconomyManager {
     if (confident ? amount >= t * (1 - tol) : amount <= t * (1 + tol)) {
       return respond('accept', amount, confident ? `${formatMoney(amount)}. Easy money for me.` : `${formatMoney(amount)}… fine. Deal.`);
     }
-    const counter = roundTo(amount + (t - amount) * ECONOMY.WAGER_CONCESSION, 5);
-    if (counter === amount) return respond('accept', amount, `Fine — ${formatMoney(amount)}.`);
+    const counter = roundTo(amount + (t - amount) * ECONOMY.WAGER_CONCESSION, ECONOMY.COUNTER_STEP);
+    // Not worth haggling over small change — they take your number.
+    if (Math.abs(counter - amount) < ECONOMY.MIN_COUNTER_GAP) return respond('accept', amount, `Not worth arguing over. ${formatMoney(amount)} it is.`);
     return respond('counter', counter, confident
       ? `Pocket change. Make it ${formatMoney(counter)}.`
       : `Too rich for me. ${formatMoney(counter)}, tops.`);
@@ -497,6 +539,9 @@ export class EconomyManager {
     s.board.rejected = [];
     s.board.rejections = 0;
     for (const c of s.challengers) c.nego = null;
+    // Your best vehicle may have changed (lost a title, captured an upgrade):
+    // replace even matches that no longer fit so the board stays winnable.
+    s.challengers = s.challengers.filter((c) => !c.matched || this.isEvenMatch(c));
     this.refillBoard();
   }
 
