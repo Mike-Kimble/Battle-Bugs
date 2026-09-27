@@ -1,3 +1,4 @@
+import { PHYSICS } from '../config/constants.js';
 import { Vector2D } from '../physics/Vector2D.js';
 
 const OUTLINE = '#0b0910';
@@ -66,9 +67,10 @@ export class SpriteRenderer {
     const x = o.x ?? bug.pos.x;
     const y = o.y ?? bug.pos.y;
     const angle = o.angle ?? bug.angle;
-    let scale = o.scale ?? 1;
+    // Drawn at design radius; world bugs are scaled up by BUG_SCALE.
+    let scale = o.scale ?? PHYSICS.BUG_SCALE;
     const time = o.time ?? performance.now() / 1000;
-    const r = bug.radius;
+    const r = bug.designRadius;
     const pal = this.palette(bug);
     const fx = bug.effects || {};
 
@@ -565,7 +567,7 @@ export class SpriteRenderer {
     c.style.width = `${size}px`;
     c.style.height = `${size}px`;
     const ctx = c.getContext('2d');
-    const scale = (px * 0.36) / bug.radius;
+    const scale = (px * 0.36) / bug.designRadius;
     this.drawBug(ctx, bug, { x: px / 2, y: px / 2 + 1, angle: -Math.PI / 2, scale, time: 0, shadow: true });
     return c;
   }

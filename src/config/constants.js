@@ -22,6 +22,7 @@ export const MATCH = Object.freeze({
 });
 
 export const PHYSICS = Object.freeze({
+  BUG_SCALE: 2,             // world size = catalogue (sprite design) radius × this
   GRAVITY: 400,             // px/s² — F_grip = μ · m · g
   RPM_TO_SPEED: 0.0072,     // v_max = rpm · r_tire · k · wear
   TIRE_WEAR_FLOOR: 0.5,     // worn-out tires still deliver 50% top speed
@@ -93,8 +94,8 @@ export const ECONOMY = Object.freeze({
   CHALLENGER_MIN: 3,
   CHALLENGER_MAX: 5,
   ROOKIE_UNTIL_WINS: 2,      // board always offers an easy rookie until this many wins
-  MARKET_PARTS: 7,
-  MARKET_VEHICLES: 2,
+  MARKET_STOCK: { engine: 3, tires: 3, weapon: 4, armor: 3 },
+  MARKET_VEHICLES: 3,
   TOURNAMENT_UNLOCK_WINS: 5,
   TOURNAMENT_ROUNDS: 3,
   TOURNAMENT_PRIZE: 5000,

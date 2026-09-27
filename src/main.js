@@ -31,7 +31,7 @@ class App {
     this.renderer = new CanvasRenderer($('#game-canvas'));
 
     this.workshop = new WorkshopUI($('#hoist-panel'), { state: this.state, economy: this.economy, sprite: this.sprite });
-    this.terminal = new TerminalUI($('#terminal-panel'), $('#topbar'), {
+    this.terminal = new TerminalUI($('#terminal-panel'), $('#topbar'), $('#tabbar'), {
       state: this.state,
       economy: this.economy,
       sprite: this.sprite,
@@ -71,7 +71,7 @@ class App {
   showWorkshop() {
     $('#battle-screen').classList.remove('active');
     $('#workshop-screen').classList.add('active');
-    $('#topbar').classList.remove('hidden');
+    $('#masthead').classList.remove('hidden');
     this.renderUI();
   }
 
@@ -83,6 +83,7 @@ class App {
       return;
     }
     closeModal();
+    this.state.newVehicleIds.clear();
     this.workshop.stop();
     this.sprite.clear();
 
@@ -91,7 +92,7 @@ class App {
     this.wireEngine(this.engine);
 
     $('#workshop-screen').classList.remove('active');
-    $('#topbar').classList.add('hidden');
+    $('#masthead').classList.add('hidden');
     $('#battle-screen').classList.add('active');
     this.renderer.resize();
     this.buildBattleControls();
@@ -262,6 +263,8 @@ class App {
     const close = () => {
       root.classList.remove('open');
       root.replaceChildren();
+      // Captured vehicles are already in the hangar — take the player straight there.
+      if (report.captured) this.terminal.setTab('hangar');
       this.showWorkshop();
     };
     const player = engine.player;
@@ -274,7 +277,7 @@ class App {
       el('div', { class: 'result-status' },
         el('span', {}, `${player.name}: hull ${Math.round(player.chassis.hpRatio * 100)}% · condition ${Math.round(player.condition * 100)}%`),
         el('strong', {}, formatMoney(this.state.money))),
-      el('button', { class: 'btn btn-primary btn-big', onclick: close }, 'Back to the Workshop'),
+      el('button', { class: 'btn btn-primary btn-big', onclick: close }, report.captured ? 'See it in the Hangar' : 'Back to the Workshop'),
     ));
     root.classList.add('open');
   }

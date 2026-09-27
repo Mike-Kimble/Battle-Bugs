@@ -53,7 +53,7 @@ export class PhysicsEngine {
       engineRatio,
       tireRatio,
       gripMod,
-      radius: chassis.stats.radius,
+      radius: chassis.stats.radius * PHYSICS.BUG_SCALE,
       staminaMax: chassis.stats.staminaMax,
       cooling: engine ? engine.stats.cooling : 0,
       turnRate: chassis.stats.turn * (0.55 + 0.45 * tireRatio),

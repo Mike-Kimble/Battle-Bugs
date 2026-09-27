@@ -2,10 +2,11 @@
 #workshop-screen {
   gap: 16px;
   padding: 16px;
-  align-items: flex-start;
+  align-items: stretch;
   max-width: 1400px;
   width: 100%;
   margin: 0 auto;
+  overflow: hidden;
 }
 
 .panel {
@@ -16,11 +17,14 @@
   padding: 16px;
   min-width: 0;
 }
-#hoist-panel { flex: 0 0 400px; position: sticky; top: 76px; }
-#terminal-panel { flex: 1; padding: 0; display: flex; flex-direction: column; min-height: 70vh; }
+#hoist-panel { flex: 0 0 400px; overflow-y: auto; }
+#terminal-panel { flex: 1; padding: 0; display: flex; flex-direction: column; overflow: hidden; }
 
 .panel-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .hoist-name { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.hoist-name-text { flex: 1; min-width: 0; }
+.hoist-name-text .badge { margin-left: 6px; vertical-align: middle; }
+.carousel-btn { flex: none; font-size: 12px; padding: 8px 10px; }
 .bug-swatch { width: 14px; height: 14px; border: 2px solid #000; display: inline-block; }
 
 .hoist-stage { position: relative; }
@@ -54,8 +58,11 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .stat-bar div { height: 100%; background: var(--good); }
 .stat-bar.penalty div { background: var(--warn); }
 
-/* Tabs */
-.tabs { display: flex; border-bottom: 2px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+/* Tabs (menu bar in the masthead) */
+#tabbar { max-width: 1400px; margin: 0 auto; padding: 0 16px; }
+.tabs { display: flex; overflow-x: auto; scrollbar-width: none; }
+.tabs .tab:first-child { border-left: 2px solid var(--line); }
+.tab-count { margin-left: 8px; font-size: 7px; color: #07060d; background: var(--gold); padding: 2px 4px; border-radius: 2px; }
 .tab {
   font-family: var(--pixel); font-size: 9px; color: var(--muted);
   background: transparent; border: none; border-right: 2px solid var(--line);
@@ -66,6 +73,34 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .tab.glow:not(.active) { color: var(--gold); animation: glow 1.4s infinite alternate; }
 @keyframes glow { to { text-shadow: 0 0 8px var(--gold); } }
 .terminal-body { padding: 16px; overflow: auto; flex: 1; }
+
+/* Marketplace categories */
+.subtabs {
+  position: sticky; top: -16px; z-index: 2; margin: -16px -16px 12px; padding: 10px 16px;
+  display: flex; gap: 6px; flex-wrap: wrap; background: var(--panel); border-bottom: 2px solid var(--line);
+}
+.subtab {
+  font-family: var(--pixel); font-size: 8px; color: var(--muted); background: var(--panel-2);
+  border: 2px solid var(--line); border-radius: var(--radius); padding: 8px 10px; cursor: pointer;
+}
+.subtab:hover { color: var(--text); }
+.subtab.active { color: #07060d; background: var(--gold); border-color: var(--gold); }
+.subtab-count { margin-left: 6px; opacity: 0.7; }
+
+/* Comparison bars: fill = this item, white tick = what's on the hoist */
+.cmp { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 12px; }
+.cmp-row { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "label val" "bar bar"; align-items: end; row-gap: 3px; }
+.cmp-label { grid-area: label; color: var(--muted); font-size: 15px; white-space: nowrap; }
+.cmp-val { grid-area: val; font-size: 15px; text-align: right; white-space: nowrap; }
+.cmp-bar { grid-area: bar; position: relative; height: 8px; background: #0e0b16; border: 1px solid var(--line); }
+.cmp-fill { height: 100%; max-width: 100%; }
+.cmp-fill.neutral, .cmp-fill.same { background: #6a6390; }
+.cmp-fill.better { background: var(--good); }
+.cmp-fill.worse { background: var(--bad); }
+.cmp-mark { position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1px; background: #fff; box-shadow: 0 0 0 1px #000; }
+.cmp-legend { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); margin-top: 2px; }
+.cmp-legend-mark { display: inline-block; width: 3px; height: 12px; background: #fff; box-shadow: 0 0 0 1px #000; }
+.card.is-new { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 210, 74, 0.25); }
 
 /* Cards */
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
@@ -142,7 +177,10 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .tournament .card { width: 100%; max-width: 460px; }
 
 @media (max-width: 900px) {
-  #workshop-screen { flex-direction: column; padding: 10px; gap: 10px; }
-  #hoist-panel { flex: none; width: 100%; position: static; }
-  #terminal-panel { width: 100%; min-height: 0; }
+  #workshop-screen { flex-direction: column; padding: 10px; gap: 10px; overflow-y: auto; }
+  #hoist-panel { flex: none; width: 100%; overflow: visible; }
+  #terminal-panel { flex: none; width: 100%; overflow: visible; }
+  .terminal-body { overflow: visible; }
+  .subtabs { top: 0; }
+  #tabbar { padding: 0; }
 }

@@ -64,7 +64,9 @@ export class BattleBug {
     return [this.chassis, this.engine, this.tires, this.armor, ...this.weapons].filter(Boolean);
   }
   get hull() { return this.chassis; }
-  get radius() { return this.chassis.stats.radius; }
+  /** World/collision radius. The catalogue radius is the sprite design size. */
+  get radius() { return this.chassis.stats.radius * PHYSICS.BUG_SCALE; }
+  get designRadius() { return this.chassis.stats.radius; }
   get weaponSlots() { return this.chassis.stats.weaponSlots; }
   get mass() { return this.parts.reduce((s, p) => s + p.mass, 0); }
 

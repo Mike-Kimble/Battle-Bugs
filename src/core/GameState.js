@@ -25,6 +25,7 @@ export class GameState extends EventEmitter {
     this.tournament = { entered: false, vehicleId: null, round: 0, eliminated: false, champion: false };
     this.gameComplete = false;
     this.log = [];
+    this.newVehicleIds = new Set(); // captured this session, flagged NEW until put on the hoist
   }
 
   static newGame() {
@@ -129,6 +130,7 @@ export class GameState extends EventEmitter {
     if (this.tournament.entered) throw new Error('Vehicle is locked in for the tournament');
     if (!this.getVehicle(id)) throw new Error('No such vehicle');
     this.activeVehicleId = id;
+    this.newVehicleIds.delete(id);
   }
 
   /** Tournament entry locks upgrades & part swaps on the entered vehicle. */

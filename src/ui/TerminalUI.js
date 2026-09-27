@@ -1,6 +1,6 @@
 import { ECONOMY, WEAPON_CLASSES } from '../config/constants.js';
 import { formatMoney } from '../systems/EconomyManager.js';
-import { el, toast, hpBar, partCard, openModal, closeModal } from './WorkshopUI.js';
+import { el, toast, hpBar, partCard, openModal, closeModal, counterpart, vehicleCompare } from './WorkshopUI.js';
 
 const TABS = [
   ['challengers', 'Challenger Board'],
@@ -10,14 +10,24 @@ const TABS = [
   ['tournament', 'Tournament'],
 ];
 
+const MARKET_CATEGORIES = [
+  ['engine', 'Propulsion', 'Motors & power cores. Drive force, RPM (top speed) and cooling.'],
+  ['weapon', 'Weapons', 'Hardpoint-mounted weapons. Every activation costs stamina.'],
+  ['tires', 'Running Gear', 'Tires & treads. Grip limit and top speed.'],
+  ['chassis', 'Chassis', 'Whole vehicles — each frame comes with its fitted parts.'],
+  ['armor', 'Armour', 'Plating that soaks impact damage before it reaches the hull.'],
+];
+
 /**
  * The Terminal: hangar, marketplace, challenger board, staff office and
  * tournament desk. Also renders the top status bar.
  */
 export class TerminalUI {
-  constructor(root, header, { state, economy, sprite, onFight, onNewGame }) {
+  constructor(root, header, tabbar, { state, economy, sprite, onFight, onNewGame }) {
     this.root = root;
     this.header = header;
+    this.tabbar = tabbar;
+    this.marketCat = 'engine';
     this.state = state;
     this.economy = economy;
     this.sprite = sprite;
@@ -48,18 +58,24 @@ export class TerminalUI {
     }[this.tab]();
 
     const scroll = this.root.querySelector('.terminal-body')?.scrollTop ?? 0;
-    this.root.replaceChildren(
-      el('nav', { class: 'tabs', role: 'tablist' },
-        TABS.map(([key, label]) => el('button', {
-          class: `tab${this.tab === key ? ' active' : ''}${key === 'tournament' && this.economy.tournamentUnlocked ? ' glow' : ''}`,
-          role: 'tab',
-          'aria-selected': this.tab === key ? 'true' : 'false',
-          onclick: () => { this.tab = key; this.render(); },
-        }, label))),
-      el('div', { class: 'terminal-body' }, body),
-    );
+    const newCount = this.state.newVehicleIds.size;
+    this.tabbar.replaceChildren(el('div', { class: 'tabs', role: 'tablist' },
+      TABS.map(([key, label]) => el('button', {
+        class: `tab${this.tab === key ? ' active' : ''}${key === 'tournament' && this.economy.tournamentUnlocked ? ' glow' : ''}`,
+        role: 'tab',
+        'aria-selected': this.tab === key ? 'true' : 'false',
+        onclick: () => this.setTab(key),
+      }, label, key === 'hangar' && newCount ? el('span', { class: 'tab-count' }, `${newCount} NEW`) : null))));
+    this.root.replaceChildren(el('div', { class: 'terminal-body' }, body));
     const tb = this.root.querySelector('.terminal-body');
-    if (tb) tb.scrollTop = scroll;
+    if (tb) tb.scrollTop = this.keepScroll ? scroll : 0;
+    this.keepScroll = true;
+  }
+
+  setTab(key) {
+    this.tab = key;
+    this.keepScroll = false;
+    this.render();
   }
 
   renderHeader() {
@@ -76,16 +92,6 @@ export class TerminalUI {
     );
   }
 
-  statChips(bug) {
-    const s = bug.getStats();
-    return el('div', { class: 'chips' },
-      el('span', { class: 'chip', title: 'Mass' }, `${s.mass} kg`),
-      el('span', { class: 'chip', title: 'Usable push force' }, `${(s.fUsable / 1000).toFixed(0)} kN push`),
-      el('span', { class: 'chip', title: 'Grip limit' }, `${(s.fGrip / 1000).toFixed(0)} kN grip`),
-      el('span', { class: 'chip', title: 'Top speed' }, `${Math.round(s.vMax)} px/s`),
-      el('span', { class: 'chip', title: 'Stamina' }, `${s.staminaMax} stam`));
-  }
-
   weaponChips(bug) {
     if (!bug.weapons.length) return el('div', { class: 'chips' }, el('span', { class: 'chip chip-dim' }, 'Unarmed'));
     return el('div', { class: 'chips' }, bug.weapons.map((w) => el('span', {
@@ -100,7 +106,7 @@ export class TerminalUI {
     const active = s.activeBug;
     if (s.tournament.entered) {
       return el('div', { class: 'notice' }, 'You are entered in the Inter-Planetary Tournament. Fight your bracket from the Tournament tab.',
-        el('button', { class: 'btn btn-primary', onclick: () => { this.tab = 'tournament'; this.render(); } }, 'Go to Tournament'));
+        el('button', { class: 'btn btn-primary', onclick: () => this.setTab('tournament') }, 'Go to Tournament'));
     }
     if (!s.challengers.length) this.economy.generateChallengers();
     const ready = active?.isBattleReady;
@@ -121,7 +127,7 @@ export class TerminalUI {
           bug.pilot ? el('div', { class: 'muted small' }, `Pilot ${bug.pilot.name} of ${bug.pilot.planet}`) : null,
           el('div', { class: 'tier' }, '★'.repeat(c.tier), el('span', { class: 'dim' }, '★'.repeat(5 - c.tier))),
           el('div', { class: 'small muted' }, `${bug.chassis.name} · ${Math.round(bug.condition * 100)}% condition`))),
-      this.statChips(bug),
+      vehicleCompare(bug, this.state.activeBug, { neutral: true }),
       this.weaponChips(bug),
       el('div', { class: 'card-foot' },
         el('div', { class: 'bounty' }, el('small', {}, 'Bounty'), el('strong', {}, formatMoney(c.bounty))),
@@ -148,6 +154,7 @@ export class TerminalUI {
 
   sellPartCard(p) {
     return partCard(p, this.economy, {
+      compareTo: p.type === 'chassis' ? undefined : counterpart(this.state.activeBug, p),
       actions: [el('button', { class: 'btn btn-small', onclick: () => this.act(() => this.economy.sellPart(p.uid), (v) => `Sold ${p.name} for ${formatMoney(v)}`) },
         `${p.isBroken ? 'Scrap' : 'Sell'} ${formatMoney(this.economy.partSellPrice(p))}`)],
     });
@@ -170,17 +177,19 @@ export class TerminalUI {
       }, el('input', { name: 'name', value: bug.name, maxlength: 24, 'aria-label': 'Vehicle name' }), el('button', { class: 'btn btn-small', type: 'submit' }, 'Save'))
       : el('h3', {}, bug.name);
 
-    const card = el('article', { class: `card vehicle${isActive ? ' active' : ''}` },
+    const isNew = s.newVehicleIds.has(bug.id);
+    const card = el('article', { class: `card vehicle${isActive ? ' active' : ''}${isNew ? ' is-new' : ''}` },
       el('div', { class: 'card-row' },
         this.sprite.renderThumbnail(bug, 80),
         el('div', { class: 'card-info' },
           isActive ? el('span', { class: 'badge' }, 'ACTIVE') : null,
+          isNew ? el('span', { class: 'badge badge-gold' }, 'NEW · CAPTURED') : null,
           locked ? el('span', { class: 'badge badge-lock' }, '🔒 ENTERED') : null,
           nameNode,
           el('div', { class: 'small muted' }, bug.chassis.name),
           hpBar(bug.condition, { label: `Condition ${Math.round(bug.condition * 100)}%` }),
           bug.isBattleReady ? null : el('div', { class: 'small bad' }, bug.battleIssues()[0]))),
-      this.statChips(bug),
+      vehicleCompare(bug, s.activeBug),
       this.weaponChips(bug),
       el('div', { class: 'part-actions' },
         el('button', { class: 'btn btn-small btn-primary', disabled: isActive || s.tournament.entered, onclick: () => this.act(() => s.setActive(bug.id), `${bug.name} is on the hoist`) }, isActive ? 'On hoist' : 'Set active'),
@@ -212,20 +221,28 @@ export class TerminalUI {
     const s = this.state;
     if (!s.market.parts.length && !s.market.vehicles.length) this.economy.generateMarket();
     const manager = s.staff.manager;
+    const active = s.activeBug;
+    const cat = this.marketCat;
+    const [, catLabel, catBlurb] = MARKET_CATEGORIES.find(([k]) => k === cat);
     const dealBadge = (l) => (manager && this.economy.isRareDeal(l) ? el('span', { class: 'badge badge-gold' }, '★ RARE DEAL') : null);
 
-    return el('div', {},
-      el('p', { class: 'muted' }, 'Stock rotates after every bout. ', manager ? 'Your manager is flagging rare deals.' : 'Hire a manager to have rare deals flagged.'),
-      el('h3', {}, 'Parts'),
-      el('div', { class: 'card-grid parts' }, s.market.parts.map((l) => partCard(l.part, this.economy, {
-        extra: dealBadge(l),
-        actions: [el('button', {
-          class: 'btn btn-small btn-primary', disabled: s.money < l.price,
-          onclick: () => this.act(() => this.economy.buyPartListing(l.id), `Bought ${l.part.name}`),
-        }, `Buy ${formatMoney(l.price)}`)],
-      }))),
-      el('h3', {}, 'Whole vehicles'),
-      el('div', { class: 'card-grid' }, s.market.vehicles.map((l) => el('article', { class: 'card vehicle' },
+    const countFor = (key) => (key === 'chassis'
+      ? s.market.vehicles.length
+      : s.market.parts.filter((l) => l.part.type === key).length);
+    const spares = cat === 'chassis'
+      ? s.vehicles.filter((v) => v.id !== s.activeVehicleId && !s.isLocked(v))
+      : s.inventory.filter((p) => p.type === cat);
+
+    const subnav = el('div', { class: 'subtabs', role: 'tablist' }, MARKET_CATEGORIES.map(([key, label]) => el('button', {
+      class: `subtab${key === cat ? ' active' : ''}`,
+      role: 'tab',
+      'aria-selected': key === cat ? 'true' : 'false',
+      onclick: () => { this.marketCat = key; this.keepScroll = false; this.render(); },
+    }, label, el('span', { class: 'subtab-count' }, countFor(key)))));
+
+    let forSale;
+    if (cat === 'chassis') {
+      forSale = el('div', { class: 'card-grid' }, s.market.vehicles.map((l) => el('article', { class: 'card vehicle' },
         el('div', { class: 'card-row' },
           this.sprite.renderThumbnail(l.bug, 80),
           el('div', { class: 'card-info' },
@@ -233,18 +250,50 @@ export class TerminalUI {
             el('h3', {}, l.bug.name),
             el('div', { class: 'small muted' }, l.bug.chassis.name),
             hpBar(l.bug.condition, { label: `Condition ${Math.round(l.bug.condition * 100)}%` }))),
-        this.statChips(l.bug),
+        vehicleCompare(l.bug, active),
         this.weaponChips(l.bug),
         el('div', { class: 'card-foot' },
           el('div', { class: 'bounty' }, el('small', {}, 'Price'), el('strong', {}, formatMoney(l.price))),
-          el('button', { class: 'btn btn-primary', disabled: s.money < l.price, onclick: () => this.act(() => this.economy.buyVehicleListing(l.id), `${l.bug.name} added to your hangar`) }, 'Buy'))),
-      )),
-      el('h3', {}, `Sell your parts (${s.inventory.length})`),
-      s.inventory.length
-        ? el('p', { class: 'muted small' }, `Parts you've removed or stripped. Buyers pay ${Math.round(ECONOMY.SELL_RATE * 100)}% of value × condition; broken parts fetch scrap only.`)
-        : el('p', { class: 'muted small' }, 'No spare parts. Remove parts on the hoist or strip a captured vehicle to sell them here.'),
-      el('div', { class: 'card-grid parts' }, s.inventory.map((p) => this.sellPartCard(p))),
-      el('p', { class: 'muted small' }, 'Whole vehicles can be sold from the Hangar tab.'),
+          el('button', { class: 'btn btn-primary', disabled: s.money < l.price, onclick: () => this.act(() => this.economy.buyVehicleListing(l.id), `${l.bug.name} added to your hangar`) }, 'Buy')))));
+    } else {
+      forSale = el('div', { class: 'card-grid parts' }, s.market.parts.filter((l) => l.part.type === cat).map((l) => partCard(l.part, this.economy, {
+        compareTo: counterpart(active, l.part),
+        extra: dealBadge(l),
+        actions: [el('button', {
+          class: 'btn btn-small btn-primary', disabled: s.money < l.price,
+          onclick: () => this.act(() => this.economy.buyPartListing(l.id), `Bought ${l.part.name}`),
+        }, `Buy ${formatMoney(l.price)}`)],
+      })));
+    }
+
+    const sellCards = cat === 'chassis'
+      ? spares.map((bug) => el('article', { class: 'card vehicle' },
+        el('div', { class: 'card-row' },
+          this.sprite.renderThumbnail(bug, 64),
+          el('div', { class: 'card-info' },
+            el('h3', {}, bug.name),
+            el('div', { class: 'small muted' }, bug.chassis.name),
+            hpBar(bug.condition, { label: `Condition ${Math.round(bug.condition * 100)}%` }))),
+        el('div', { class: 'part-actions' },
+          el('button', {
+            class: 'btn btn-small btn-danger', disabled: s.vehicles.length <= 1,
+            onclick: () => this.confirm(`Sell ${bug.name}?`, `You'll receive ${formatMoney(this.economy.vehicleSellPrice(bug))}.`,
+              () => this.act(() => this.economy.sellVehicle(bug.id), (v) => `Sold for ${formatMoney(v)}`)),
+          }, `Sell ${formatMoney(this.economy.vehicleSellPrice(bug))}`))))
+      : spares.map((p) => this.sellPartCard(p));
+
+    return el('div', { class: 'market' },
+      subnav,
+      el('p', { class: 'muted' }, catBlurb, ' Stock rotates after every bout. ',
+        manager ? 'Your manager is flagging rare deals.' : 'Hire a manager to have rare deals flagged.'),
+      el('h3', {}, `${catLabel} for sale`),
+      forSale.childElementCount ? forSale : el('p', { class: 'muted' }, 'Sold out — new stock arrives after your next bout.'),
+      el('h3', {}, cat === 'chassis' ? `Sell your vehicles (${spares.length})` : `Sell your spare ${catLabel.toLowerCase()} (${spares.length})`),
+      spares.length
+        ? el('div', { class: cat === 'chassis' ? 'card-grid' : 'card-grid parts' }, sellCards)
+        : el('p', { class: 'muted small' }, cat === 'chassis'
+          ? 'Only your hoist vehicle is in the hangar. Win or buy more to sell.'
+          : `No spares. Remove parts on the hoist or strip a vehicle to sell them here. Buyers pay ${Math.round(ECONOMY.SELL_RATE * 100)}% of value × condition.`),
     );
   }
 

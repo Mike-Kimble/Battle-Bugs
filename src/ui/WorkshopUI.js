@@ -1,5 +1,7 @@
 import { HOIST_REGIONS, WEAPON_CLASSES } from '../config/constants.js';
+import { PART_KEYS_BY_TYPE } from '../config/partsData.js';
 import { BattleBug } from '../entities/BattleBug.js';
+import { Part } from '../entities/Part.js';
 import { SpriteRenderer } from '../render/SpriteRenderer.js';
 import { formatMoney } from '../systems/EconomyManager.js';
 
@@ -75,7 +77,115 @@ export function partStatLine(part) {
   }
 }
 
-export function partCard(part, economy, { actions = [], extra = null } = {}) {
+// ───────────── Comparison bars ─────────────
+const kN = (v) => `${(v / 1000).toFixed(1)} kN`;
+const int = (v) => `${Math.round(v)}`;
+
+/**
+ * Comparable stats per part type. `get` reads the part's *effective* value
+ * (damage-scaled where the physics formulae scale it).
+ */
+export const PART_COMPARE = {
+  engine: [
+    { label: 'Drive force', get: (p) => p.stats.force * p.hpRatio, fmt: kN },
+    { label: 'Motor RPM', get: (p) => p.stats.rpm, fmt: int },
+    { label: 'Cooling', get: (p) => p.stats.cooling, fmt: (v) => `${v}/s` },
+    { label: 'Mass', get: (p) => p.mass, fmt: (v) => `${v} kg`, better: 'neutral' },
+  ],
+  tires: [
+    { label: 'Grip μ', get: (p) => p.stats.mu * p.hpRatio, fmt: (v) => v.toFixed(2) },
+    { label: 'Tire radius', get: (p) => p.stats.radius, fmt: int },
+    { label: 'Mass', get: (p) => p.mass, fmt: (v) => `${v} kg`, better: 'neutral' },
+  ],
+  armor: [
+    { label: 'Absorb', get: (p) => p.stats.absorb * p.hpRatio, fmt: (v) => `${Math.round(v * 100)}%` },
+    { label: 'Plating HP', get: (p) => p.hp, fmt: int },
+    { label: 'Mass', get: (p) => p.mass, fmt: (v) => `${v} kg`, better: 'neutral' },
+  ],
+  weapon: [
+    { label: 'Range', get: (p) => p.stats.range, fmt: int },
+    { label: 'Stamina cost', get: (p) => p.stats.cost, fmt: int, better: 'lower' },
+    { label: 'Cooldown', get: (p) => p.stats.cooldown, fmt: (v) => `${v}s`, better: 'lower' },
+    { label: 'Mass', get: (p) => p.mass, fmt: (v) => `${v} kg`, better: 'neutral' },
+  ],
+};
+
+/** Whole-vehicle stats; `get(stats, bug)`. Scales are the bar's full width. */
+export const VEHICLE_COMPARE = [
+  { label: 'Push', get: (s) => s.fUsable, fmt: kN, max: 65000 },
+  { label: 'Grip', get: (s) => s.fGrip, fmt: kN, max: 130000 },
+  { label: 'Top speed', get: (s) => s.vMax, fmt: (v) => `${Math.round(v)} px/s`, max: 380 },
+  { label: 'Accel', get: (s) => s.accel, fmt: (v) => `${Math.round(v)}`, max: 500 },
+  { label: 'Stamina', get: (s) => s.staminaMax, fmt: int, max: 150 },
+  { label: 'Hull', get: (s, bug) => bug.chassis.hp, fmt: int, max: 260 },
+  { label: 'Mass', get: (s) => s.mass, fmt: (v) => `${v} kg`, max: 330, better: 'neutral' },
+];
+
+const partScaleCache = {};
+function partScale(type, row) {
+  const key = `${type}:${row.label}`;
+  if (!(key in partScaleCache)) {
+    partScaleCache[key] = Math.max(...PART_KEYS_BY_TYPE[type].map((k) => row.get(new Part(k))));
+  }
+  return partScaleCache[key];
+}
+
+/**
+ * Stat bars for a candidate, with a vertical marker showing the value of
+ * what's currently on the hoist. Fill turns green/red when better/worse.
+ * @param {Array<{label, value, current, max, fmt, better}>} rows
+ */
+export function compareBars(rows, { neutral = false, legend = null } = {}) {
+  return el('div', { class: 'cmp' },
+    rows.map((r) => {
+      const max = Math.max(r.max, r.value, r.current ?? 0) || 1;
+      const hasCur = r.current != null;
+      let cls = 'neutral';
+      if (hasCur && !neutral && r.better !== 'neutral') {
+        const diff = r.better === 'lower' ? r.current - r.value : r.value - r.current;
+        const eps = Math.abs(r.current) * 0.01 + 1e-9;
+        cls = diff > eps ? 'better' : diff < -eps ? 'worse' : 'same';
+      }
+      return el('div', { class: 'cmp-row', title: hasCur ? `${r.label}: ${r.fmt(r.value)} (on hoist: ${r.fmt(r.current)})` : r.label },
+        el('span', { class: 'cmp-label' }, r.label),
+        el('div', { class: 'cmp-bar' },
+          el('div', { class: `cmp-fill ${cls}`, style: { width: `${(r.value / max) * 100}%` } }),
+          hasCur ? el('div', { class: 'cmp-mark', style: { left: `${(r.current / max) * 100}%` } }) : null),
+        el('span', { class: 'cmp-val' }, r.fmt(r.value)));
+    }),
+    legend ? el('div', { class: 'cmp-legend' }, el('span', { class: 'cmp-legend-mark' }), legend) : null);
+}
+
+export function partCompare(part, current) {
+  const rows = PART_COMPARE[part.type];
+  if (!rows) return null;
+  return compareBars(rows.map((r) => ({
+    label: r.label, fmt: r.fmt, better: r.better,
+    value: r.get(part), current: current ? r.get(current) : null, max: partScale(part.type, r),
+  })), { legend: current ? `on hoist: ${current.name}` : 'nothing fitted in this slot' });
+}
+
+export function vehicleCompare(bug, current, { neutral = false } = {}) {
+  const s = bug.getStats();
+  const cs = current && current !== bug ? current.getStats() : null;
+  return compareBars(VEHICLE_COMPARE.map((r) => ({
+    label: r.label, fmt: r.fmt, better: r.better, max: r.max,
+    value: r.get(s, bug), current: cs ? r.get(cs, current) : null,
+  })), { neutral, legend: cs ? `on hoist: ${current.name}` : null });
+}
+
+/** The fitted part a candidate would be compared against. */
+export function counterpart(bug, part) {
+  if (!bug) return null;
+  if (part.type === 'weapon') {
+    return bug.weapons.find((w) => w.key === part.key)
+      || bug.weapons.find((w) => w.stats.class === part.stats.class)
+      || bug.weapons[0] || null;
+  }
+  return ['engine', 'tires', 'armor'].includes(part.type) ? bug[part.type] : null;
+}
+
+export function partCard(part, economy, { actions = [], extra = null, compareTo } = {}) {
   return el('div', { class: `part-card rarity-${part.rarity}${part.isBroken ? ' broken' : ''}` },
     el('div', { class: 'part-head' },
       el('span', { class: `part-type type-${part.type}` }, part.type),
@@ -83,6 +193,7 @@ export function partCard(part, economy, { actions = [], extra = null } = {}) {
       el('span', { class: 'part-mass' }, `${part.mass} kg`)),
     el('div', { class: 'part-stats' }, partStatLine(part)),
     hpBar(part.hpRatio, { label: part.isBroken ? 'BROKEN' : `${Math.ceil(part.hp)}/${part.maxHp} HP` }),
+    compareTo !== undefined && compareTo !== part ? partCompare(part, compareTo) : null,
     extra,
     actions.length ? el('div', { class: 'part-actions' }, actions) : null);
 }
@@ -136,7 +247,21 @@ export class WorkshopUI {
     this.canvas = el('canvas', { class: 'hoist-canvas', width: 220, height: 190, 'aria-label': 'Vehicle hoist — click a region' });
     this.canvas.addEventListener('pointermove', (e) => this.onHover(e));
     this.canvas.addEventListener('pointerleave', () => { this.hover = null; });
+    // Horizontal swipe on the hoist flips between vehicles; a plain tap inspects a region.
+    let swipe = null;
+    this.canvas.addEventListener('pointerdown', (e) => { swipe = { x: e.clientX, y: e.clientY }; });
+    this.canvas.addEventListener('pointerup', (e) => {
+      if (!swipe) return;
+      const dx = e.clientX - swipe.x;
+      const dy = e.clientY - swipe.y;
+      swipe = null;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        this.suppressClick = true;
+        this.cycle(dx < 0 ? 1 : -1);
+      }
+    });
     this.canvas.addEventListener('click', (e) => {
+      if (this.suppressClick) { this.suppressClick = false; return; }
       const region = this.regionFromEvent(e);
       if (region) this.openRegion(region);
     });
@@ -148,11 +273,9 @@ export class WorkshopUI {
       el('div', { class: 'panel-title' },
         el('h2', {}, 'The Hoist'),
         locked ? el('span', { class: 'badge badge-lock', title: 'Tournament rules' }, '🔒 TOURNAMENT LOCK') : null),
-      el('div', { class: 'hoist-name' },
-        el('span', { class: 'bug-swatch', style: { background: `hsl(${bug.hue} 60% 55%)` } }),
-        el('div', {}, el('strong', {}, bug.name), el('div', { class: 'muted small' }, bug.chassis.name))),
+      this.renderCarousel(bug),
       el('div', { class: 'hoist-stage' }, this.canvas,
-        el('div', { class: 'hoist-hint' }, 'Tap a region of the bug to inspect it')),
+        el('div', { class: 'hoist-hint' }, this.state.vehicles.length > 1 ? 'Tap a region to inspect · swipe to change vehicle' : 'Tap a region of the bug to inspect it')),
       el('div', { class: 'region-buttons' },
         Object.entries(HOIST_REGIONS).map(([key, r]) => el('button', {
           class: 'btn btn-region',
@@ -173,6 +296,34 @@ export class WorkshopUI {
 
     this.startLoop();
     if (this.openRegionKey) this.openRegion(this.openRegionKey, true);
+  }
+
+  renderCarousel(bug) {
+    const vs = this.state.vehicles;
+    const i = vs.indexOf(bug);
+    const many = vs.length > 1;
+    const lockedIn = this.state.tournament.entered;
+    return el('div', { class: 'hoist-name' },
+      many ? el('button', { class: 'btn btn-icon carousel-btn', 'aria-label': 'Previous vehicle', disabled: lockedIn, onclick: () => this.cycle(-1) }, '◀') : null,
+      el('span', { class: 'bug-swatch', style: { background: `hsl(${bug.hue} 60% 55%)` } }),
+      el('div', { class: 'hoist-name-text' },
+        el('strong', {}, bug.name),
+        this.state.newVehicleIds.has(bug.id) ? el('span', { class: 'badge badge-gold' }, 'NEW') : null,
+        el('div', { class: 'muted small' }, bug.chassis.name, many ? ` · ${i + 1} of ${vs.length}` : '')),
+      many ? el('button', { class: 'btn btn-icon carousel-btn', 'aria-label': 'Next vehicle', disabled: lockedIn, onclick: () => this.cycle(1) }, '▶') : null);
+  }
+
+  /** Put the next/previous hangar vehicle on the hoist. */
+  cycle(dir) {
+    const vs = this.state.vehicles;
+    if (vs.length < 2) return;
+    if (this.state.tournament.entered) {
+      toast('Your tournament entrant is locked on the hoist', 'bad');
+      return;
+    }
+    const i = vs.indexOf(this.bug);
+    const next = vs[(i + dir + vs.length) % vs.length];
+    this.act(() => this.state.setActive(next.id));
   }
 
   regionSummary(key) {
@@ -225,7 +376,7 @@ export class WorkshopUI {
   get hoistGeom() {
     const c = this.canvas;
     const bug = this.bug;
-    return { cx: c.width / 2, cy: c.height / 2 + 4, k: 58 / bug.radius };
+    return { cx: c.width / 2, cy: c.height / 2 + 4, k: 58 / bug.designRadius };
   }
 
   regionFromEvent(e) {
@@ -236,7 +387,7 @@ export class WorkshopUI {
     const dx = (px - cx) / k;
     const dy = (py - cy) / k;
     // Bug faces up (angle −π/2): local x = −dy, local y = dx
-    return SpriteRenderer.regionAt(-dy, dx, this.bug.radius);
+    return SpriteRenderer.regionAt(-dy, dx, this.bug.designRadius);
   }
 
   onHover(e) {
@@ -387,7 +538,7 @@ export class WorkshopUI {
         } else {
           actions.push(el('button', { class: 'btn btn-small btn-primary', disabled: locked, onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid), `Fitted ${part.name}`) }, 'Fit'));
         }
-        list.append(partCard(part, this.economy, { actions }));
+        list.append(partCard(part, this.economy, { actions, compareTo: counterpart(bug, part) }));
       }
       section.append(list);
     } else {

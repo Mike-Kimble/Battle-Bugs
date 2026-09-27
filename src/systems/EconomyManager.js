@@ -288,9 +288,8 @@ export class EconomyManager {
   generateMarket() {
     const tierCap = clampTier(this.baseTier + 1);
     const parts = [];
-    const types = ['engine', 'tires', 'armor', 'weapon', 'weapon', 'engine', 'tires', 'armor'];
-    for (let i = 0; i < ECONOMY.MARKET_PARTS; i++) {
-      const type = types[i % types.length];
+    const types = Object.entries(ECONOMY.MARKET_STOCK).flatMap(([type, n]) => Array(n).fill(type));
+    for (const type of types) {
       const t = chance(0.12) ? 5 : tierCap;
       const pool = PART_KEYS_BY_TYPE[type].filter((k) => PARTS[k].tier <= t);
       const key = pick(pool);
@@ -372,6 +371,7 @@ export class EconomyManager {
       opponentBug.pilot = null;
       opponentBug.resetForBattle(opponentBug.pos, 0);
       s.addVehicle(opponentBug);
+      s.newVehicleIds.add(opponentBug.id);
       report.captured = opponentBug;
       report.lines.push(`Captured vehicle: ${opponentBug.name} (${Math.round(opponentBug.condition * 100)}% condition)`);
 

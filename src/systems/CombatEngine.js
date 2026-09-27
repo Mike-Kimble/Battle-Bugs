@@ -249,7 +249,7 @@ export class CombatEngine extends EventEmitter {
       power,
     };
     // Follow through, but never aim past the edge — shove them out, not yourself.
-    bug.control.target = this.clampInside(target.pos.add(dir.scale(ACTIONS.PUSH_THROUGH)), bug.radius * 1.5);
+    bug.control.target = this.clampInside(target.pos.add(dir.scale(ACTIONS.PUSH_THROUGH)), bug.radius * 1.2);
     bug.stamina -= cost;
     bug.actionCooldown = ACTIONS.ACTION_COOLDOWN;
     this.emit(EVENTS.ACTION, { bug, type: power ? 'shove' : 'ram', dir });
@@ -371,7 +371,7 @@ export class AIController {
     const dist = toFoe.length();
 
     // 1. Edge danger: head for the middle.
-    if (myD > R - me.radius * 2.4) {
+    if (myD > R - me.radius * 1.7) {
       engine.moveTo(me, me.pos.scale(0.25));
       if (dist < 120 && sFrac > 0.3 && Math.random() < difficulty * 0.5) {
         engine.dash(me, me.pos.negate().normalize());
@@ -402,7 +402,7 @@ export class AIController {
 
     // 4. Close in, aiming past the opponent to shove them outward.
     const outward = foeD > 1 ? foe.pos.normalize() : toFoe.normalize();
-    engine.moveTo(me, engine.clampInside(foe.pos.add(outward.scale(45)), me.radius * 1.5));
+    engine.moveTo(me, engine.clampInside(foe.pos.add(outward.scale(45)), me.radius * 1.2));
 
     // 5. Rams & shoves when lined up.
     const aligned = Math.abs(wrapAngle(toFoe.angle() - me.angle)) < 0.55;

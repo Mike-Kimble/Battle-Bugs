@@ -38,7 +38,10 @@ body {
     var(--bg);
 }
 
-#app { min-height: 100%; display: flex; flex-direction: column; }
+#app { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Title block + menu bar stay fixed; everything below scrolls. */
+#masthead { flex: none; z-index: 5; background: rgba(10, 8, 18, 0.96); border-bottom: 2px solid var(--line); }
 
 h1, h2, h3, h4 { font-family: var(--pixel); font-weight: normal; margin: 0 0 10px; letter-spacing: 0.02em; }
 h1 { font-size: 28px; }
@@ -61,10 +64,6 @@ p { margin: 6px 0; }
   gap: 16px;
   padding: 10px 16px;
   border-bottom: 2px solid var(--line);
-  background: rgba(10, 8, 18, 0.9);
-  position: sticky;
-  top: 0;
-  z-index: 5;
   flex-wrap: wrap;
 }
 .logo { font-family: var(--pixel); font-size: 18px; color: var(--text); text-shadow: 3px 3px 0 #5a2a8a; }
@@ -76,7 +75,7 @@ p { margin: 6px 0; }
 .stat.money strong { color: var(--good); }
 
 /* ───────────── Screens ───────────── */
-.screen { display: none; flex: 1; }
+.screen { display: none; flex: 1; min-height: 0; }
 .screen.active { display: flex; }
 
 /* ───────────── Buttons ───────────── */
@@ -111,7 +110,7 @@ p { margin: 6px 0; }
 .btn-fight:hover:not(:disabled) { background: #a02828; border-color: #ff8080; }
 
 /* ───────────── Battle screen ───────────── */
-#battle-screen { position: relative; flex-direction: column; height: 100vh; height: 100dvh; }
+#battle-screen { position: relative; flex-direction: column; }
 #game-canvas {
   flex: 1 1 0;
   width: 100%;
