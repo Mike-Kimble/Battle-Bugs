@@ -73,7 +73,7 @@ export const INPUT = Object.freeze({
 });
 
 export const ECONOMY = Object.freeze({
-  CURRENCY: 'AUD',
+  CURRENCY_SYMBOL: '§',
   START_MONEY: 500,
   SELL_RATE: 0.6,            // resale fraction of value × condition
   SCRAP_RATE: 0.2,           // manual sale of broken parts

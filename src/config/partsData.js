@@ -1,7 +1,7 @@
 /**
  * Part catalogue. Every Part instance references one of these definitions by key.
  *
- * Common fields: type, name, mass (kg), maxHp, value ($AUD, pristine), tier (1–5), rarity.
+ * Common fields: type, name, mass (kg), maxHp, value (§, pristine), tier (1–5), rarity.
  * Type-specific `stats`:
  *   chassis: radius, staminaMax, weaponSlots, turn (rad/s), shape
  *   engine:  force (F_base), rpm, cooling (R_cool, stamina/s while idle)

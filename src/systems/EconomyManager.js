@@ -27,7 +27,7 @@ function pickPartKey(type, tier) {
 }
 
 export function formatMoney(n) {
-  return `$${Math.round(n).toLocaleString('en-AU')} ${ECONOMY.CURRENCY}`;
+  return `${ECONOMY.CURRENCY_SYMBOL}${Math.round(n).toLocaleString('en-US')}`;
 }
 
 /**
