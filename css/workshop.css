@@ -242,3 +242,4 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .wager-row { display: flex; align-items: baseline; gap: 8px; }
 .wager-amount { font-family: var(--pixel); font-size: 18px; font-weight: normal; color: var(--good); }
 .wager-slider { width: 100%; accent-color: var(--gold); }
+.fixing-warning { font-weight: bold; border: 2px solid var(--bad); border-radius: var(--radius); padding: 6px 10px; background: rgba(255, 74, 74, 0.08); }

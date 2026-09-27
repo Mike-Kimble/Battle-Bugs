@@ -460,6 +460,12 @@ export class EconomyManager {
 
     if (n.counter != null && amount === n.counter) return respond('accept', amount, `${formatMoney(amount)} it is. See you in the ring.`);
 
+    // They asked for more than you've got and you pushed everything in.
+    if (n.counter != null && n.counter > s.money && amount === s.money) {
+      if (chance(ECONOMY.ALL_IN_ACCEPT)) return respond('accept', amount, `All you've got, eh? …Fine. ${formatMoney(amount)} it is.`);
+      return respond('reject', amount, 'Come back when you have some real money. Now go away.');
+    }
+
     const ridiculous = amount >= ideal * ECONOMY.RIDICULOUS_FACTOR || amount <= ideal / ECONOMY.RIDICULOUS_FACTOR;
     if (ridiculous) {
       if (chance(ECONOMY.RIDICULOUS_ACCEPT)) return respond('accept', amount, `…${formatMoney(amount)}? Ha! You're on.`);
@@ -592,13 +598,17 @@ export class EconomyManager {
       report.lines.push(`Manager bet ${formatMoney(bet.stake)} on you ${sideText} — lost it.`);
     }
 
-    s.fixStreak = bet.side === 'lose' && result === 'loss' ? (s.fixStreak || 0) + 1 : 0;
-    if (s.fixStreak >= ECONOMY.FIXING_STREAK) {
+    // Lose-bets that pay out build suspicion; a win (or a bet on you to win) clears it.
+    if (bet.side === 'lose' && result === 'loss') s.fixStreak = (s.fixStreak || 0) + 1;
+    else if (result === 'win' || bet.side === 'win') s.fixStreak = 0;
+    if (s.fixStreak >= ECONOMY.FIXING_STREAK && chance(ECONOMY.FIXING_ESCAPE)) {
+      report.lines.push(`The stewards are sniffing around (${s.fixStreak} lose-bets paid out running)… your manager got away with it this time.`);
+    } else if (s.fixStreak >= ECONOMY.FIXING_STREAK) {
       s.staff.manager = false;
       s.fixStreak = 0;
       s.fine = { amount: ECONOMY.FIXING_FINE, battlesLeft: ECONOMY.FINE_BATTLES };
       report.arrest = true;
-      report.lines.push(`🚨 Your manager bet on you to lose ${ECONOMY.FIXING_STREAK} times — and you did. Arrested for match fixing!`);
+      report.lines.push('🚨 Your manager kept betting on you to lose — and you kept losing. Arrested for match fixing!');
       report.lines.push(`Fine: ${formatMoney(ECONOMY.FIXING_FINE)}, payable within ${ECONOMY.FINE_BATTLES} battles or it's game over.`);
     }
   }

@@ -202,8 +202,8 @@ export class TerminalUI {
         plan.stake >= 1
           ? el('div', {}, `Bet: ${formatMoney(plan.stake)} on you to ${side} → pays ${formatMoney(plan.stake * plan.mult)} if right.`)
           : el('div', { class: 'muted' }, pct <= 0 ? 'No bet this fight.' : 'Not confident enough either way to bet.'),
-        plan.side === 'lose' && plan.stake >= 1 && s.fixStreak >= ECONOMY.FIXING_STREAK - 1
-          ? el('div', { class: 'bad small' }, `⚠ Suspicion ${s.fixStreak}/${ECONOMY.FIXING_STREAK}: if this lose-bet pays out, your manager gets arrested.`) : null,
+        s.fixStreak >= ECONOMY.FIXING_WARNING
+          ? el('div', { class: 'bad fixing-warning' }, '⚠ This is starting to look like match-fixing.') : null,
       ].filter(Boolean));
     };
     const slider = el('input', {
@@ -216,11 +216,10 @@ export class TerminalUI {
       el('p', {}, 'Stakes: ', el('strong', {}, opts.tournament ? `Tournament purse ${formatMoney(c.bounty)}` : deal?.type === 'titles' ? 'TITLES' : formatMoney(deal?.amount ?? 0))),
       el('h3', {}, "Manager's betting limit for this fight"),
       el('div', { class: 'slider-row' }, slider, pctLabel),
-      el('p', { class: 'small muted' }, `Share of your spare cash (${formatMoney(Math.max(0, s.money - reserved))}) the manager may bet. Default ${Math.round(s.managerBetPct * 100)}% — change it on the Staff tab.`),
+      el('p', { class: 'small muted' }, `Share of your spare cash (${formatMoney(Math.max(0, s.money - reserved))}) the manager may bet — 0% means no bet. Default ${Math.round(s.managerBetPct * 100)}% (Staff tab).`),
       preview,
       el('div', { class: 'part-actions' },
-        el('button', { class: 'btn btn-fight', onclick: () => { closeModal(); this.onFight(c, { ...opts, betPct: pct }); } }, 'FIGHT'),
-        el('button', { class: 'btn', onclick: closeModal }, 'Cancel'))));
+        el('button', { class: 'btn btn-fight', onclick: () => { closeModal(); this.onFight(c, { ...opts, betPct: pct }); } }, 'FIGHT'))));
   }
 
   // ───────────── Stakes ─────────────
@@ -239,6 +238,7 @@ export class TerminalUI {
         const r = this.economy.offerTitles(c);
         this.announce(r);
         this.state.commit();
+        if (r.status === 'accept') this.fight(c, { tournament: false });
       });
   }
 
@@ -267,6 +267,13 @@ export class TerminalUI {
       try {
         const r = eco.offerCash(c, Number(amount));
         s.commit();
+        if (r.status === 'accept') {
+          // Deal struck — straight into the ring (via the manager's window, if any).
+          closeModal();
+          toast(r.message, 'good');
+          this.fight(c, { tournament: false });
+          return;
+        }
         if (r.status === 'reject') this.announce(r);
         this.openNegotiation(c);
       } catch (err) {
@@ -288,11 +295,6 @@ export class TerminalUI {
     if (!onBoard) {
       body.append(el('div', { class: 'notice notice-warn' }, `${who} has walked off the board.`),
         el('button', { class: 'btn', onclick: closeModal }, 'Close'));
-    } else if (n.deal) {
-      body.append(el('div', { class: 'notice notice-gold' }, `Deal agreed: ${n.deal.type === 'cash' ? formatMoney(n.deal.amount) : 'titles'}.`),
-        el('div', { class: 'part-actions' },
-          el('button', { class: 'btn btn-fight', disabled: n.deal.type === 'cash' && s.money < n.deal.amount, onclick: () => { closeModal(); this.fight(c, { tournament: false }); } }, 'FIGHT NOW'),
-          el('button', { class: 'btn', onclick: closeModal }, 'Later')));
     } else {
       if (n.counter != null && n.counter > s.money) {
         body.append(el('p', { class: 'small bad' }, `You can't cover their ${formatMoney(n.counter)} — the slider is set to everything you have.`));
@@ -515,8 +517,8 @@ export class TerminalUI {
       el('h3', {}, 'Default manager betting limit'),
       el('p', { class: 'small' }, 'Before each fight your manager bets up to this share of your spare cash — on you to win, or on you to lose, whichever they believe. The stronger their conviction, the bigger the bet. You can adjust the limit for each fight on the pre-fight screen.'),
       el('div', { class: 'slider-row' }, slider, label),
-      el('p', { class: 'small bad' }, `Warning: if they bet on you to lose ${ECONOMY.FIXING_STREAK} times running and you lose all ${ECONOMY.FIXING_STREAK}, they'll be arrested for match fixing and you'll be fined ${formatMoney(ECONOMY.FIXING_FINE)}.`),
-      s.fixStreak ? el('p', { class: 'small warn-text' }, `Suspicion: ${s.fixStreak}/${ECONOMY.FIXING_STREAK} lose-bets paid out in a row.`) : null);
+      el('p', { class: 'small muted' }, `Set it to 0% and the manager won't bet. Keep betting on you to lose while you keep losing and they may be arrested for match fixing — and you'll be fined ${formatMoney(ECONOMY.FIXING_FINE)}.`),
+      s.fixStreak >= ECONOMY.FIXING_WARNING ? el('p', { class: 'bad fixing-warning' }, '⚠ This is starting to look like match-fixing.') : null);
   }
 
   renderFine() {

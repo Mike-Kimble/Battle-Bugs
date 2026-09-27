@@ -120,6 +120,9 @@ export const ECONOMY = Object.freeze({
   MANAGER_MIN_CONVICTION: 0.1,
   BOOKIE_MARGIN: 0.9,        // profit = stake × (1/P(outcome) − 1) × margin
   FIXING_STREAK: 3,          // bet-on-you-to-lose + lost, this many times running
+  FIXING_ESCAPE: 0.3,        // chance the arrest isn't applied (3rd and each later lose-bet)
+  FIXING_WARNING: 2,         // show the match-fixing warning from this many
+  ALL_IN_ACCEPT: 0.7,        // they countered above your cash and you went all in → they accept
   FIXING_FINE: 500,
   FINE_BATTLES: 3,           // battles allowed to pay the fine
 
