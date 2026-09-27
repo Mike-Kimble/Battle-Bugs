@@ -1,0 +1,12 @@
+{
+  "name": "battle-bugs",
+  "version": "1.0.0",
+  "description": "A modular 2D browser-based vehicle arena battler. Vanilla ES6 modules, HTML5 Canvas, procedural pixel-art.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "npx --yes http-server . -p 8080 -c-1",
+    "check": "node --input-type=module -e \"for (const f of ['config/constants','config/partsData','core/EventEmitter','physics/Vector2D','physics/PhysicsEngine','entities/Part','entities/BattleBug','systems/EconomyManager','systems/CombatEngine']) await import('./src/' + f + '.js'); console.log('modules OK');\""
+  },
+  "license": "MIT"
+}
