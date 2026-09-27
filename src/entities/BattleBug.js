@@ -150,7 +150,7 @@ export class BattleBug {
     this.stallStrikes = 0;
     this.throttle = 0;
     this.odometer = 0;
-    this.control = { target: null };
+    this.control = { target: null, reverse: false, cruise: null };
     this.lunge = null;
     this.actionCooldown = 0;
     this.cooldowns = {};

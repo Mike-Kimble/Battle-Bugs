@@ -501,21 +501,32 @@ export class EconomyManager {
   }
 
   // ───────────── Manager betting ─────────────
-  /** The manager bets (up to the set % of spare cash) on the side they believe in. */
-  placeManagerBet(c, bug, reserved = 0) {
+  /**
+   * What the manager would bet on this fight (no money moves). They back the
+   * side they believe in, sizing the bet by conviction up to `pct` of spare cash.
+   * Returns { side, stake, mult, pWin, conviction } — stake 0 means no bet.
+   */
+  planManagerBet(c, bug, reserved = 0, pct = this.state.managerBetPct) {
     const s = this.state;
-    if (!s.staff.manager || s.managerBetPct <= 0) return null;
     const pWin = 1 - this.confidence(c, bug);
     const conviction = Math.abs(pWin - 0.5) * 2;
-    if (conviction < ECONOMY.MANAGER_MIN_CONVICTION) return null;
     const side = pWin >= 0.5 ? 'win' : 'lose';
     const q = side === 'win' ? pWin : 1 - pWin;
-    const pot = Math.max(0, s.money - reserved);
-    const stake = Math.floor(pot * s.managerBetPct * Math.min(1, conviction * 1.5));
-    if (stake < 1) return null;
-    s.spend(stake);
     // Fair odds are 1/q; the bookie skims a margin off the profit.
-    return { side, stake, mult: 1 + (1 / q - 1) * ECONOMY.BOOKIE_MARGIN };
+    const mult = 1 + (1 / q - 1) * ECONOMY.BOOKIE_MARGIN;
+    const pot = Math.max(0, s.money - reserved);
+    const stake = !s.staff.manager || pct <= 0 || conviction < ECONOMY.MANAGER_MIN_CONVICTION
+      ? 0
+      : Math.floor(pot * pct * Math.min(1, conviction * 1.5));
+    return { side, stake, mult, pWin, conviction };
+  }
+
+  /** Place the manager's bet for this fight; `pct` is the per-fight limit. */
+  placeManagerBet(c, bug, reserved = 0, pct = this.state.managerBetPct) {
+    const plan = this.planManagerBet(c, bug, reserved, pct);
+    if (plan.stake < 1) return null;
+    this.state.spend(plan.stake);
+    return { side: plan.side, stake: plan.stake, mult: plan.mult };
   }
 
   settleManagerBet(bet, result, report) {

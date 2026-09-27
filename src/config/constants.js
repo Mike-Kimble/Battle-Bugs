@@ -31,6 +31,10 @@ export const PHYSICS = Object.freeze({
   OVERSPEED_DECEL: 520,     // px/s² bleed-off above v_max (after lunges/impulses)
   RESTITUTION: 0.15,
   ARRIVE_RADIUS: 14,
+  REVERSE_ANGLE: (120 * Math.PI) / 180, // target this far off the travel direction flips forward/reverse
+  REVERSE_SPEED: 0.65,      // reverse top speed as a share of v_max
+  SWERVE_TURN_MULT: 3.2,    // handbrake-turn steering rate multiplier
+  SWERVE_LATERAL_GRIP: 0.35, // tires slide during the handbrake arc
   SLOW_RADIUS: 70,
   IMPACT_THRESHOLD: 70,     // px/s closing speed before damage is dealt
   IMPACT_DAMAGE_K: 0.00033, // dmg = k · (impact − threshold) · m_other · multipliers
@@ -55,8 +59,9 @@ export const ACTIONS = Object.freeze({
   SHOVE_SPEED_MULT: 1.9,
   SHOVE_IMPACT_MULT: 1.8,
   SHOVE_DURATION: 0.55,
-  DASH_COST: 8,
-  DASH_SPEED: 330,
+  DASH_COST: 8,               // swipe handbrake turn
+  SWERVE_MOVING_SPEED: 25,   // above this, a swipe follows the actual direction of motion
+  SWERVE_SIDE_THRESHOLD: 0.35, // |sin| of swipe vs travel needed for a left/right turn
   ACTION_COOLDOWN: 0.35,
   PUSH_THROUGH: 70,
   VICTORY_BRAKE: 0.25,       // survivor keeps this share of velocity when the foe is eliminated          // after a ram, keep driving this far past the target

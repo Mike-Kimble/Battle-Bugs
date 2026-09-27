@@ -105,6 +105,7 @@ export class SpriteRenderer {
     this.drawHull(ctx, bug, r, pal, time);
     this.drawArmor(ctx, bug, r);
     this.drawDamage(ctx, bug, r);
+    if (bug.control?.reverse && bug.throttle > 0) this.drawReverseLights(ctx, r, time);
     this.drawWeapons(ctx, bug, r, time);
     this.drawEyes(ctx, bug, r, time);
 
@@ -180,6 +181,16 @@ export class SpriteRenderer {
         drawStrip(r * 0.78 - len, len, yTop);
       }
     }
+  }
+
+  /** White reversing lamps on the tail while driving backwards. */
+  drawReverseLights(ctx, r, time) {
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(-r * 0.92 - 1, -r * 0.52 - 1, 6, 6);
+    ctx.fillRect(-r * 0.92 - 1, r * 0.52 - 5, 6, 6);
+    ctx.fillStyle = Math.sin(time * 12) > -0.6 ? '#ffffff' : '#c8c8c8';
+    ctx.fillRect(-r * 0.92, -r * 0.52, 4, 4);
+    ctx.fillRect(-r * 0.92, r * 0.52 - 4, 4, 4);
   }
 
   drawEngine(ctx, bug, r, time) {

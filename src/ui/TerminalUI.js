@@ -147,7 +147,7 @@ export class TerminalUI {
         el('div', { class: 'bounty' }, el('small', {}, 'Agreed stakes'), el('strong', {}, deal.type === 'cash' ? formatMoney(deal.amount) : 'TITLES')),
         el('div', { class: 'part-actions' },
           el('button', { class: 'btn btn-small', onclick: () => this.act(() => eco.cancelDeal(c)) }, 'Renegotiate'),
-          el('button', { class: 'btn btn-fight', disabled: !ready || !affordable, onclick: () => this.onFight(c, { tournament: false }) }, 'FIGHT')));
+          el('button', { class: 'btn btn-fight', disabled: !ready || !affordable, onclick: () => this.fight(c, { tournament: false }) }, 'FIGHT')));
     } else {
       foot = el('div', { class: 'card-foot' },
         el('div', { class: 'bounty' }, el('small', {}, 'Mood'), el('strong', { class: mood.cls }, mood.label)),
@@ -168,6 +168,53 @@ export class TerminalUI {
       this.weaponChips(bug),
       foot,
     );
+  }
+
+  // ───────────── Pre-fight: manager's bet ─────────────
+  /** With a manager on staff, set this fight's betting limit before the bell. */
+  fight(c, opts) {
+    const s = this.state;
+    if (!s.staff.manager) {
+      this.onFight(c, opts);
+      return;
+    }
+    const eco = this.economy;
+    const bug = opts.tournament ? s.getVehicle(s.tournament.vehicleId) : s.activeBug;
+    const deal = opts.tournament ? null : c.nego?.deal;
+    const reserved = deal?.type === 'cash' ? deal.amount : 0;
+    let pct = s.managerBetPct;
+
+    const preview = el('div', { class: 'bet-preview' });
+    const pctLabel = el('strong', {});
+    const update = () => {
+      const plan = eco.planManagerBet(c, bug, reserved, pct);
+      const side = plan.side === 'win' ? 'WIN' : 'LOSE';
+      pctLabel.textContent = `${Math.round(pct * 100)}%`;
+      preview.replaceChildren(...[
+        el('div', {}, 'Your manager fancies you to ', el('strong', { class: plan.side === 'win' ? 'good' : 'bad' }, side),
+          el('span', { class: 'muted' }, ` (${Math.round((plan.side === 'win' ? plan.pWin : 1 - plan.pWin) * 100)}% sure)`)),
+        plan.stake >= 1
+          ? el('div', {}, `Bet: ${formatMoney(plan.stake)} on you to ${side} → pays ${formatMoney(plan.stake * plan.mult)} if right.`)
+          : el('div', { class: 'muted' }, pct <= 0 ? 'No bet this fight.' : 'Not confident enough either way to bet.'),
+        plan.side === 'lose' && plan.stake >= 1 && s.fixStreak >= ECONOMY.FIXING_STREAK - 1
+          ? el('div', { class: 'bad small' }, `⚠ Suspicion ${s.fixStreak}/${ECONOMY.FIXING_STREAK}: if this lose-bet pays out, your manager gets arrested.`) : null,
+      ].filter(Boolean));
+    };
+    const slider = el('input', {
+      type: 'range', min: 0, max: Math.round(ECONOMY.MANAGER_BET_MAX * 100), step: 5, value: Math.round(pct * 100),
+      'aria-label': 'Manager betting limit for this fight',
+      oninput: (e) => { pct = Number(e.target.value) / 100; update(); },
+    });
+    update();
+    openModal(`Pre-fight · ${c.bug.name}`, el('div', { class: 'nego' },
+      el('p', {}, 'Stakes: ', el('strong', {}, opts.tournament ? `Tournament purse ${formatMoney(c.bounty)}` : deal?.type === 'titles' ? 'TITLES' : formatMoney(deal?.amount ?? 0))),
+      el('h3', {}, "Manager's betting limit for this fight"),
+      el('div', { class: 'slider-row' }, slider, pctLabel),
+      el('p', { class: 'small muted' }, `Share of your spare cash (${formatMoney(Math.max(0, s.money - reserved))}) the manager may bet. Default ${Math.round(s.managerBetPct * 100)}% — change it on the Staff tab.`),
+      preview,
+      el('div', { class: 'part-actions' },
+        el('button', { class: 'btn btn-fight', onclick: () => { closeModal(); this.onFight(c, { ...opts, betPct: pct }); } }, 'FIGHT'),
+        el('button', { class: 'btn', onclick: closeModal }, 'Cancel'))));
   }
 
   // ───────────── Stakes ─────────────
@@ -232,7 +279,7 @@ export class TerminalUI {
     } else if (n.deal) {
       body.append(el('div', { class: 'notice notice-gold' }, `Deal agreed: ${n.deal.type === 'cash' ? formatMoney(n.deal.amount) : 'titles'}.`),
         el('div', { class: 'part-actions' },
-          el('button', { class: 'btn btn-fight', disabled: n.deal.type === 'cash' && s.money < n.deal.amount, onclick: () => { closeModal(); this.onFight(c, { tournament: false }); } }, 'FIGHT NOW'),
+          el('button', { class: 'btn btn-fight', disabled: n.deal.type === 'cash' && s.money < n.deal.amount, onclick: () => { closeModal(); this.fight(c, { tournament: false }); } }, 'FIGHT NOW'),
           el('button', { class: 'btn', onclick: closeModal }, 'Later')));
     } else {
       body.append(
@@ -456,8 +503,8 @@ export class TerminalUI {
       onchange: (e) => this.act(() => { s.managerBetPct = Number(e.target.value) / 100; }),
     });
     return el('div', { class: 'card betting' },
-      el('h3', {}, 'Manager betting limit'),
-      el('p', { class: 'small' }, 'Before each fight your manager bets up to this share of your spare cash — on you to win, or on you to lose, whichever they believe. The stronger their conviction, the bigger the bet.'),
+      el('h3', {}, 'Default manager betting limit'),
+      el('p', { class: 'small' }, 'Before each fight your manager bets up to this share of your spare cash — on you to win, or on you to lose, whichever they believe. The stronger their conviction, the bigger the bet. You can adjust the limit for each fight on the pre-fight screen.'),
       el('div', { class: 'slider-row' }, slider, label),
       el('p', { class: 'small bad' }, `Warning: if they bet on you to lose ${ECONOMY.FIXING_STREAK} times running and you lose all ${ECONOMY.FIXING_STREAK}, they'll be arrested for match fixing and you'll be fined ${formatMoney(ECONOMY.FIXING_FINE)}.`),
       s.fixStreak ? el('p', { class: 'small warn-text' }, `Suspicion: ${s.fixStreak}/${ECONOMY.FIXING_STREAK} lose-bets paid out in a row.`) : null);
@@ -518,7 +565,7 @@ export class TerminalUI {
       opp ? this.challengerCard(opp, {
         ready: mine?.isBattleReady,
         label: opp.roundName,
-        onFight: () => this.onFight(opp, { tournament: true }),
+        onFight: () => this.fight(opp, { tournament: true }),
       }) : null,
       el('button', {
         class: 'btn btn-small btn-danger',

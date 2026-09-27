@@ -84,7 +84,7 @@ class App {
   }
 
   // ───────────── Battle lifecycle ─────────────
-  startMatch(challenger, { tournament = false } = {}) {
+  startMatch(challenger, { tournament = false, betPct } = {}) {
     const player = tournament ? this.state.getVehicle(this.state.tournament.vehicleId) : this.state.activeBug;
     if (!player?.isBattleReady) {
       toast(player ? player.battleIssues()[0] : 'No vehicle', 'bad');
@@ -106,7 +106,7 @@ class App {
     this.sprite.clear();
 
     // The manager bets from whatever isn't already staked on the fight.
-    const bet = this.economy.placeManagerBet(challenger, player, stake?.type === 'cash' ? stake.amount : 0);
+    const bet = this.economy.placeManagerBet(challenger, player, stake?.type === 'cash' ? stake.amount : 0, betPct ?? this.state.managerBetPct);
     if (bet) toast(`Your manager bet ${formatMoney(bet.stake)} on you to ${bet.side === 'win' ? 'WIN' : 'LOSE'}`, bet.side === 'win' ? 'good' : 'bad');
     this.state.save();
 
@@ -345,7 +345,7 @@ class App {
     });
     bar.replaceChildren(
       el('div', { class: 'weapon-row' }, this.weaponButtons.map((b) => b.btn)),
-      el('div', { class: 'battle-help' }, 'Tap ground: drive · Tap foe: ram · Double-tap foe: power shove · Swipe: dash · Hold your bug: weapons'),
+      el('div', { class: 'battle-help' }, 'Hold & drag: steer (behind you = reverse) · Tap foe: ram · Double-tap: power shove · Swipe: handbrake turn · Hold your bug: weapons'),
       el('button', { class: 'btn btn-small btn-danger forfeit', onclick: () => this.engine?.forfeit() }, 'Forfeit'),
     );
   }
@@ -379,7 +379,7 @@ class App {
 
   bindInput() {
     const on = (ev, fn) => this.input.on(ev, (p) => { if (this.engine?.live) fn(p); });
-    on('moveTo', ({ world }) => this.engine.moveTo(this.engine.player, world));
+    on('steer', ({ world }) => this.engine.moveTo(this.engine.player, world));
     on('ram', () => this.engine.ram(this.engine.player, false));
     on('shove', () => this.engine.ram(this.engine.player, true));
     on('dash', ({ dir }) => this.engine.dash(this.engine.player, dir));

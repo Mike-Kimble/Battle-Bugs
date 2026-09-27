@@ -4,10 +4,11 @@ import { EventEmitter } from '../core/EventEmitter.js';
 /**
  * Normalises Pointer Events into battle gestures.
  *
- *   Single tap ground     → 'moveTo'      { world }
+ *   Touch/hold ground     → 'steer'       { world }  — repeats as the finger drags,
+ *                                                     so the aim point follows it
  *   Single tap opponent   → 'ram'
  *   Double tap opponent   → 'shove'
- *   Swipe                 → 'dash'        { dir (world unit vector) }
+ *   Swipe (quick flick)   → 'dash'        { dir (world unit vector) } — handbrake turn
  *   Tap player            → 'stop'
  *   Long press player     → 'menuOpen'    { screen }  then 'menuMove' / 'menuRelease'
  *   Keys 1/2 (desktop)    → 'fireWeapon'  { index }
@@ -85,6 +86,8 @@ export class InputManager extends EventEmitter {
       target: this.hooks.hitTest(world),
       moved: false,
     };
+    // Touching open ground starts steering immediately.
+    if (this.down.target === null) this.emit('steer', { world });
     if (this.down.target === 'player') {
       clearTimeout(this.longPressTimer);
       this.longPressTimer = setTimeout(() => {
@@ -104,6 +107,10 @@ export class InputManager extends EventEmitter {
     if (Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y) > INPUT.TAP_SLOP_PX) {
       this.down.moved = true;
       clearTimeout(this.longPressTimer);
+    }
+    // Held finger: the aim point follows it (a drag that began on a bug becomes steering too).
+    if (this.down.moved || this.down.target === null) {
+      this.emit('steer', { world: this.hooks.screenToWorld(e.clientX, e.clientY) });
     }
   }
 
@@ -129,7 +136,7 @@ export class InputManager extends EventEmitter {
       this.emit('dash', { dir: w2.sub(d.world).normalize() });
       return;
     }
-    if (dist > INPUT.TAP_SLOP_PX * 2) return; // slow drag — ignore
+    if (d.moved) return; // drag-steer: the aim point stays where the finger lifted
 
     if (d.target === 'opponent') {
       if (this.pendingTap) {
@@ -146,8 +153,6 @@ export class InputManager extends EventEmitter {
       }
     } else if (d.target === 'player') {
       this.emit('stop');
-    } else {
-      this.emit('moveTo', { world: d.world });
     }
   }
 

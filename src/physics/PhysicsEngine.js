@@ -97,20 +97,40 @@ export class PhysicsEngine {
     bug.tickTimers(dt);
 
     let throttle = 0;
+    let lateralGrip = PHYSICS.LATERAL_GRIP;
     const canDrive = !bug.stalled && s.fDrive > 0;
+    const ctl = bug.control;
+    // Direction of travel: the nose when driving forward, the tail in reverse.
+    const travelAngle = () => bug.angle + (ctl.reverse ? Math.PI : 0);
+    const steer = (diff, rate) => {
+      const maxTurn = rate * dt;
+      bug.angle = wrapAngle(bug.angle + clamp(diff, -maxTurn, maxTurn));
+    };
 
     if (canDrive && bug.lunge) {
-      // Rams/shoves: heading already snapped, full power.
+      // Rams/shoves: heading already snapped, full power forward.
+      ctl.reverse = false;
       throttle = 1;
-    } else if (canDrive && bug.control.target) {
-      const to = bug.control.target.sub(bug.pos);
+    } else if (canDrive && ctl.cruise) {
+      // Swipe: a sharp, drifting 90° arc, then straight on at the new angle.
+      const diff = wrapAngle(ctl.cruise.angle - travelAngle());
+      const turning = Math.abs(diff) > 0.05;
+      steer(diff, s.turnRate * (turning ? PHYSICS.SWERVE_TURN_MULT : 1));
+      if (turning) lateralGrip = PHYSICS.SWERVE_LATERAL_GRIP;
+      throttle = 1;
+    } else if (canDrive && ctl.target) {
+      const to = ctl.target.sub(bug.pos);
       const dist = to.length();
       if (dist < PHYSICS.ARRIVE_RADIUS) {
-        bug.control.target = null;
+        ctl.target = null;
       } else {
-        const diff = wrapAngle(to.angle() - bug.angle);
-        const maxTurn = s.turnRate * dt;
-        bug.angle = wrapAngle(bug.angle + clamp(diff, -maxTurn, maxTurn));
+        // Target more than 120° off the direction of travel → flip forward/reverse.
+        let diff = wrapAngle(to.angle() - travelAngle());
+        if (Math.abs(diff) > PHYSICS.REVERSE_ANGLE) {
+          ctl.reverse = !ctl.reverse;
+          diff = wrapAngle(to.angle() - travelAngle());
+        }
+        steer(diff, s.turnRate);
         const align = Math.cos(diff);
         throttle = align > 0.2 ? align : 0;
         throttle *= clamp(dist / PHYSICS.SLOW_RADIUS, 0.3, 1);
@@ -123,15 +143,19 @@ export class PhysicsEngine {
     let lat = bug.vel.dot(side);
 
     const vCap = s.vMax * (bug.lunge ? bug.lunge.speedMult : 1);
+    const vCapRev = s.vMax * PHYSICS.REVERSE_SPEED;
     const gripDecel = s.mass > 0 ? s.fGrip / s.mass : 0;
 
-    if (throttle > 0) {
+    if (throttle > 0 && !ctl.reverse) {
       if (fwd < vCap) fwd = Math.min(vCap, fwd + s.accel * throttle * dt);
+    } else if (throttle > 0) {
+      if (fwd > -vCapRev) fwd = Math.max(-vCapRev, fwd - s.accel * throttle * dt);
     } else {
       fwd = approach(fwd, 0, gripDecel * PHYSICS.IDLE_BRAKE * dt);
     }
     if (fwd > vCap) fwd = approach(fwd, vCap, PHYSICS.OVERSPEED_DECEL * dt);
-    lat = approach(lat, 0, gripDecel * PHYSICS.LATERAL_GRIP * dt);
+    if (fwd < -vCapRev) fwd = approach(fwd, -vCapRev, PHYSICS.OVERSPEED_DECEL * dt);
+    lat = approach(lat, 0, gripDecel * lateralGrip * dt);
 
     bug.vel = heading.scale(fwd).addInPlace(side, lat);
     bug.pos.addInPlace(bug.vel, dt);
@@ -156,6 +180,7 @@ export class PhysicsEngine {
       bug.stalled = true;
       bug.stallStrikes += 1;
       bug.control.target = null;
+      bug.control.cruise = null;
       bug.lunge = null;
       this.emitter?.emit(EVENTS.STALL, { bug, strikes: bug.stallStrikes });
     } else if (bug.stalled && bug.stamina >= s.staminaMax * STAMINA.RECOVER_FRACTION) {

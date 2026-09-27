@@ -133,6 +133,7 @@ export class CombatEngine extends EventEmitter {
     bug.out = true;
     bug.outReason = reason;
     bug.control.target = null;
+    bug.control.cruise = null;
     bug.lunge = null;
     this.eliminations.push({ bug, reason, time: this.time });
     // The survivor digs in at the tawara: cancel its charge and brake hard so a
@@ -141,6 +142,7 @@ export class CombatEngine extends EventEmitter {
       if (other.out) continue;
       other.lunge = null;
       other.control.target = null;
+      other.control.cruise = null;
       other.vel.scaleInPlace(ACTIONS.VICTORY_BRAKE);
     }
     if (reason === 'ringout') this.emit(EVENTS.RING_OUT, { bug });
@@ -221,13 +223,16 @@ export class CombatEngine extends EventEmitter {
     return true;
   }
 
+  /** Steer toward a point (tap or held/dragged finger). Cancels any swipe cruise. */
   moveTo(bug, point) {
     if (!this.live || bug.out) return;
     bug.control.target = Vector2D.from(point);
+    bug.control.cruise = null;
   }
 
   stop(bug) {
     bug.control.target = null;
+    bug.control.cruise = null;
   }
 
   /** Standard Ram (power=false) or Power Shove (power=true) toward the opponent. */
@@ -250,22 +255,45 @@ export class CombatEngine extends EventEmitter {
     };
     // Follow through, but never aim past the edge — shove them out, not yourself.
     bug.control.target = this.clampInside(target.pos.add(dir.scale(ACTIONS.PUSH_THROUGH)), bug.radius * 1.2);
+    bug.control.cruise = null;
+    bug.control.reverse = false;
     bug.stamina -= cost;
     bug.actionCooldown = ACTIONS.ACTION_COOLDOWN;
     this.emit(EVENTS.ACTION, { bug, type: power ? 'shove' : 'ram', dir });
     return true;
   }
 
-  /** Swipe: instant impulse in a world direction. */
+  /**
+   * Swipe: a handbrake turn. The bug keeps going the way it's actually
+   * moving (forward, or backward if it's being shoved back), carves a sharp
+   * 90° arc toward the swipe side, then drives straight at the new angle
+   * until the next input. A swipe along the line of travel just drives
+   * straight on; a swipe against it flips forward/reverse.
+   */
   dash(bug, dir) {
     if (bug.actionCooldown > 0) return false;
     if (!this.canAct(bug, ACTIONS.DASH_COST)) return false;
     const d = dir.normalize();
-    bug.vel.addInPlace(d, ACTIONS.DASH_SPEED);
+    const heading = Vector2D.fromAngle(bug.angle);
+    const fwd = bug.vel.dot(heading);
+    let reverse = Math.abs(fwd) > ACTIONS.SWERVE_MOVING_SPEED ? fwd < 0 : bug.control.reverse;
+    const travel = heading.scale(reverse ? -1 : 1);
+    const side = travel.cross(d);
+    let angle;
+    if (Math.abs(side) >= ACTIONS.SWERVE_SIDE_THRESHOLD) {
+      angle = travel.angle() + Math.sign(side) * (Math.PI / 2);
+    } else if (travel.dot(d) >= 0) {
+      angle = travel.angle();
+    } else {
+      reverse = !reverse;
+      angle = travel.angle() + Math.PI;
+    }
     bug.control.target = null;
+    bug.control.reverse = reverse;
+    bug.control.cruise = { angle: wrapAngle(angle) };
     bug.stamina -= ACTIONS.DASH_COST;
     bug.actionCooldown = ACTIONS.ACTION_COOLDOWN;
-    this.emit(EVENTS.ACTION, { bug, type: 'dash', dir: d });
+    this.emit(EVENTS.ACTION, { bug, type: 'swerve', dir: travel });
     return true;
   }
 

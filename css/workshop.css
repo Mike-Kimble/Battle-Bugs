@@ -227,3 +227,4 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .bounty strong.muted { color: var(--muted); }
 .captured.lost { opacity: 0.8; }
 .captured.lost small { color: var(--bad); }
+.bet-preview { display: flex; flex-direction: column; gap: 4px; background: #0e0b16; border: 2px solid var(--line); border-radius: var(--radius); padding: 10px; }
