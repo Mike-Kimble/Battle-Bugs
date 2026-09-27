@@ -203,7 +203,7 @@ export class TerminalUI {
           ? el('div', {}, `Bet: ${formatMoney(plan.stake)} on you to ${side} → pays ${formatMoney(plan.stake * plan.mult)} if right.`)
           : el('div', { class: 'muted' }, pct <= 0 ? 'No bet this fight.' : 'Not confident enough either way to bet.'),
         s.fixStreak >= ECONOMY.FIXING_WARNING
-          ? el('div', { class: 'bad fixing-warning' }, '⚠ This is starting to look like match-fixing.') : null,
+          ? el('div', { class: 'muted small' }, 'Word around the pits is this is starting to look like match-fixing… anyway.') : null,
       ].filter(Boolean));
     };
     const slider = el('input', {
@@ -230,16 +230,12 @@ export class TerminalUI {
     if (r.returned) toast(`${r.returned.bug.pilot?.name || r.returned.bug.name} has come back to the board.`, 'good');
   }
 
+  /** Pink slips: straight to the challenger's answer — and the ring if they say yes. */
   askTitles(c) {
-    const bug = this.state.activeBug;
-    this.confirm('Play for titles?',
-      `Winner takes the loser's vehicle. If you lose, ${bug.name} is gone for good. There's a ${Math.round(ECONOMY.TITLE_REFUSAL * 100)}% chance they refuse outright and walk off.`,
-      () => {
-        const r = this.economy.offerTitles(c);
-        this.announce(r);
-        this.state.commit();
-        if (r.status === 'accept') this.fight(c, { tournament: false });
-      });
+    const r = this.economy.offerTitles(c);
+    this.announce(r);
+    this.state.commit();
+    if (r.status === 'accept') this.fight(c, { tournament: false });
   }
 
   openNegotiation(c) {
@@ -517,8 +513,7 @@ export class TerminalUI {
       el('h3', {}, 'Default manager betting limit'),
       el('p', { class: 'small' }, 'Before each fight your manager bets up to this share of your spare cash — on you to win, or on you to lose, whichever they believe. The stronger their conviction, the bigger the bet. You can adjust the limit for each fight on the pre-fight screen.'),
       el('div', { class: 'slider-row' }, slider, label),
-      el('p', { class: 'small muted' }, `Set it to 0% and the manager won't bet. Keep betting on you to lose while you keep losing and they may be arrested for match fixing — and you'll be fined ${formatMoney(ECONOMY.FIXING_FINE)}.`),
-      s.fixStreak >= ECONOMY.FIXING_WARNING ? el('p', { class: 'bad fixing-warning' }, '⚠ This is starting to look like match-fixing.') : null);
+      el('p', { class: 'small muted' }, "Set it to 0% and the manager won't bet."));
   }
 
   renderFine() {
