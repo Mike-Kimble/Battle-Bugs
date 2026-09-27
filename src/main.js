@@ -23,6 +23,7 @@ class App {
     this.economy = new EconomyManager(this.state);
     const needsRookie = this.state.record.challengerWins < ECONOMY.ROOKIE_UNTIL_WINS && !this.economy.hasRookie;
     if (!this.state.challengers.length || needsRookie) this.economy.generateChallengers();
+    else if (this.state.challengers.length < ECONOMY.BOARD_SIZE && !this.state.board.rejected.length) this.economy.refillBoard();
     if (!this.state.market.parts.length) this.economy.generateMarket();
     this.state.save();
 
@@ -38,7 +39,13 @@ class App {
       onFight: (challenger, opts) => this.startMatch(challenger, opts),
       onNewGame: () => this.newGame(),
     });
-    this.state.on(EVENTS.STATE_CHANGE, () => this.renderUI());
+    this.state.on(EVENTS.STATE_CHANGE, () => {
+      if (!this.engine && !this.state.gameOver && this.economy.checkGameOver()) {
+        this.state.save();
+        this.showGameOver();
+      }
+      this.renderUI();
+    });
 
     this.input = new InputManager($('#game-canvas'), {
       screenToWorld: (x, y) => this.renderer.screenToWorld(x, y),
@@ -55,6 +62,7 @@ class App {
 
     window.addEventListener('resize', () => this.engine && this.renderer.resize());
     this.showWorkshop();
+    if (this.economy.checkGameOver()) this.showGameOver();
   }
 
   newGame() {
@@ -82,12 +90,27 @@ class App {
       toast(player ? player.battleIssues()[0] : 'No vehicle', 'bad');
       return;
     }
+    const stake = tournament ? null : challenger.nego?.deal;
+    if (!tournament && !stake) {
+      toast('Agree the stakes first — cash or titles', 'bad');
+      return;
+    }
+    if (stake?.type === 'cash' && this.state.money < stake.amount) {
+      toast(`You can't cover the ${formatMoney(stake.amount)} stake any more`, 'bad');
+      return;
+    }
     closeModal();
     this.state.newVehicleIds.clear();
+    this.state.compareRef = null;
     this.workshop.stop();
     this.sprite.clear();
 
-    this.match = { challenger, tournament, endTimer: null, banner: null };
+    // The manager bets from whatever isn't already staked on the fight.
+    const bet = this.economy.placeManagerBet(challenger, player, stake?.type === 'cash' ? stake.amount : 0);
+    if (bet) toast(`Your manager bet ${formatMoney(bet.stake)} on you to ${bet.side === 'win' ? 'WIN' : 'LOSE'}`, bet.side === 'win' ? 'good' : 'bad');
+    this.state.save();
+
+    this.match = { challenger, tournament, stake, bet, player, endTimer: null, banner: null };
     this.engine = new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty });
     this.wireEngine(this.engine);
 
@@ -241,7 +264,7 @@ class App {
   finishMatch() {
     cancelAnimationFrame(this.raf);
     const engine = this.engine;
-    const { challenger, tournament } = this.match;
+    const { challenger, tournament, stake, bet, player } = this.match;
     const res = engine.result;
     this.engine = null;
     this.input.disable();
@@ -251,7 +274,10 @@ class App {
       reason: res.reason,
       challenger,
       opponentBug: engine.opponent,
+      playerBug: player,
       tournament,
+      stake,
+      bet,
     });
     this.state.commit();
     this.showResults(report, engine);
@@ -263,22 +289,43 @@ class App {
     const close = () => {
       root.classList.remove('open');
       root.replaceChildren();
-      // Captured vehicles are already in the hangar — take the player straight there.
-      if (report.captured) this.terminal.setTab('hangar');
+      if (report.gameOver) {
+        this.showGameOver();
+        return;
+      }
+      if (!this.state.vehicles.length) {
+        this.terminal.marketCat = 'chassis';
+        this.terminal.setTab('market');
+      }
       this.showWorkshop();
     };
+    const buttonText = report.gameOver ? 'Continue'
+      : report.captured ? 'See it on the hoist'
+        : !this.state.vehicles.length ? 'Find a replacement'
+          : 'Back to the Workshop';
     const player = engine.player;
     root.replaceChildren(el('div', { class: `result-card result-${report.result}${report.champion ? ' champion' : ''}` },
       el('h1', {}, title),
       el('p', { class: 'result-reason' }, report.reason, ` · ${Math.floor(engine.time / 60)}:${String(Math.floor(engine.time % 60)).padStart(2, '0')}`),
       report.champion ? el('p', { class: 'champion-text' }, 'You have conquered the Inter-Planetary Tournament. The galaxy bows to your bug. Game complete!') : null,
       report.captured ? el('div', { class: 'captured' }, this.sprite.renderThumbnail(report.captured, 96), el('div', {}, el('small', {}, 'Captured'), el('strong', {}, report.captured.name))) : null,
+      report.lostVehicle ? el('div', { class: 'captured lost' }, this.sprite.renderThumbnail(report.lostVehicle, 96), el('div', {}, el('small', {}, 'Title lost'), el('strong', {}, report.lostVehicle.name))) : null,
       el('ul', { class: 'report' }, report.lines.map((l) => el('li', {}, l))),
       el('div', { class: 'result-status' },
         el('span', {}, `${player.name}: hull ${Math.round(player.chassis.hpRatio * 100)}% · condition ${Math.round(player.condition * 100)}%`),
         el('strong', {}, formatMoney(this.state.money))),
-      el('button', { class: 'btn btn-primary btn-big', onclick: close }, report.captured ? 'See it in the Hangar' : 'Back to the Workshop'),
+      el('button', { class: 'btn btn-primary btn-big', onclick: close }, buttonText),
     ));
+    root.classList.add('open');
+  }
+
+  showGameOver() {
+    const root = $('#overlay-root');
+    root.replaceChildren(el('div', { class: 'result-card result-loss game-over' },
+      el('h1', {}, 'GAME OVER'),
+      el('p', {}, this.state.gameOver),
+      el('p', { class: 'muted' }, `Final record ${this.state.record.wins}W · ${this.state.record.losses}L · ${this.state.record.ties}D`),
+      el('button', { class: 'btn btn-primary btn-big', onclick: () => this.newGame() }, 'Start a new game')));
     root.classList.add('open');
   }
 

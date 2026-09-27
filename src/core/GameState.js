@@ -18,12 +18,19 @@ export class GameState extends EventEmitter {
     this.vehicles = [];
     this.activeVehicleId = null;
     this.inventory = [];
-    this.record = { wins: 0, losses: 0, ties: 0, challengerWins: 0 };
+    this.record = { wins: 0, losses: 0, ties: 0, challengerWins: 0, streak: 0 };
     this.challengers = [];
+    // Walk-offs wait in `rejected` until you next fight; tierShift scrolls the board up in difficulty.
+    this.board = { rejected: [], rejections: 0, tierShift: 0 };
     this.market = { parts: [], vehicles: [] };
     this.staff = { mechanic: false, manager: false };
     this.tournament = { entered: false, vehicleId: null, round: 0, eliminated: false, champion: false };
     this.gameComplete = false;
+    this.gameOver = null;
+    this.managerBetPct = 0;
+    this.fixStreak = 0;
+    this.fine = null; // { amount, battlesLeft }
+    this.compareRef = null; // { id, refId }: captured vehicle vs the vehicle that won it (session only)
     this.log = [];
     this.newVehicleIds = new Set(); // captured this session, flagged NEW until put on the hoist
   }
@@ -54,7 +61,9 @@ export class GameState extends EventEmitter {
     s.activeVehicleId = d.activeVehicleId;
     s.inventory = d.inventory.map(Part.fromJSON);
     s.record = { ...s.record, ...d.record };
-    s.challengers = (d.challengers || []).map((c) => ({ ...c, bug: BattleBug.fromJSON(c.bug) }));
+    const hydrate = (c) => ({ ...c, bug: BattleBug.fromJSON(c.bug) });
+    s.challengers = (d.challengers || []).map(hydrate);
+    s.board = { ...s.board, ...d.board, rejected: (d.board?.rejected || []).map(hydrate) };
     s.market = {
       parts: (d.market?.parts || []).map((l) => ({ ...l, part: Part.fromJSON(l.part) })),
       vehicles: (d.market?.vehicles || []).map((l) => ({ ...l, bug: BattleBug.fromJSON(l.bug) })),
@@ -62,6 +71,10 @@ export class GameState extends EventEmitter {
     s.staff = { ...s.staff, ...d.staff };
     s.tournament = { ...s.tournament, ...d.tournament };
     s.gameComplete = !!d.gameComplete;
+    s.gameOver = d.gameOver || null;
+    s.managerBetPct = d.managerBetPct ?? (s.staff.manager ? 0.1 : 0);
+    s.fixStreak = d.fixStreak || 0;
+    s.fine = d.fine || null;
     s.log = d.log || [];
     return s;
   }
@@ -75,6 +88,7 @@ export class GameState extends EventEmitter {
       inventory: this.inventory.map((p) => p.toJSON()),
       record: this.record,
       challengers: this.challengers.map((c) => ({ ...c, bug: c.bug.toJSON() })),
+      board: { ...this.board, rejected: this.board.rejected.map((c) => ({ ...c, bug: c.bug.toJSON() })) },
       market: {
         parts: this.market.parts.map((l) => ({ ...l, part: l.part.toJSON() })),
         vehicles: this.market.vehicles.map((l) => ({ ...l, bug: l.bug.toJSON() })),
@@ -82,6 +96,10 @@ export class GameState extends EventEmitter {
       staff: this.staff,
       tournament: this.tournament,
       gameComplete: this.gameComplete,
+      gameOver: this.gameOver,
+      managerBetPct: this.managerBetPct,
+      fixStreak: this.fixStreak,
+      fine: this.fine,
       log: this.log.slice(-40),
     };
   }
@@ -130,7 +148,6 @@ export class GameState extends EventEmitter {
     if (this.tournament.entered) throw new Error('Vehicle is locked in for the tournament');
     if (!this.getVehicle(id)) throw new Error('No such vehicle');
     this.activeVehicleId = id;
-    this.newVehicleIds.delete(id);
   }
 
   /** Tournament entry locks upgrades & part swaps on the entered vehicle. */

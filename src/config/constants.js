@@ -89,17 +89,39 @@ export const ECONOMY = Object.freeze({
   MECHANIC_WAGE: 35,
   MANAGER_HIRE: 200,
   MANAGER_WAGE: 30,
-  BOUNTY_BASE: 110,
+  BOUNTY_BASE: 110,          // base stake a challenger expects (scaled by tier)
   BOUNTY_PER_TIER: 120,
-  CHALLENGER_MIN: 3,
-  CHALLENGER_MAX: 5,
+  BOARD_SIZE: 5,             // challengers on the board, spread across difficulties
   ROOKIE_UNTIL_WINS: 2,      // board always offers an easy rookie until this many wins
+
+  // Wagers & haggling
+  MIN_WAGER: 10,
+  WAGER_TOLERANCE: 0.12,     // offer within ±12% of what they want → accepted
+  WAGER_PATIENCE: 0.04,      // tolerance widens this much per haggling round
+  WAGER_CONCESSION: 0.6,     // counters land this far from your offer toward their target
+  RIDICULOUS_FACTOR: 3,      // offers ≥3× or ≤⅓ of their target are ridiculous
+  RIDICULOUS_ACCEPT: 0.1,    // …but they still accept one 10% of the time
+  BANKROLL_MULT: 2.5,        // most a challenger can stake = base stake × this
+  TITLE_REFUSAL: 0.2,        // chance a challenger refuses to play for titles
+  RETURN_AFTER_REJECTIONS: 2,
+  RETURN_CHANCE: 0.5,        // per rejection once the threshold is hit
+
+  // Manager betting & match fixing
+  MANAGER_BET_DEFAULT: 0.1,  // share of cash the manager may bet, set on hire
+  MANAGER_BET_MAX: 0.5,
+  MANAGER_MIN_CONVICTION: 0.1,
+  BOOKIE_MARGIN: 0.9,        // profit = stake × (1/P(outcome) − 1) × margin
+  FIXING_STREAK: 3,          // bet-on-you-to-lose + lost, this many times running
+  FIXING_FINE: 500,
+  FINE_BATTLES: 3,           // battles allowed to pay the fine
+
+  MECHANIC_DISCOUNT: 0.9,    // mechanic gets 10% off parts & repairs
+  MIN_VEHICLE_PRICE: 100,
   MARKET_STOCK: { engine: 3, tires: 3, weapon: 4, armor: 3 },
   MARKET_VEHICLES: 3,
   TOURNAMENT_UNLOCK_WINS: 5,
   TOURNAMENT_ROUNDS: 3,
   TOURNAMENT_PRIZE: 5000,
-  JUNKYARD_THRESHOLD: 250,   // below this with no battle-ready bug → free scrapper offered
 });
 
 export const RENDER = Object.freeze({

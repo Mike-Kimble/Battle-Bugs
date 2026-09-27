@@ -18,6 +18,12 @@ const MARKET_CATEGORIES = [
   ['armor', 'Armour', 'Plating that soaks impact damage before it reaches the hull.'],
 ];
 
+function streakText(n = 0) {
+  if (n > 0) return `W${n}`;
+  if (n < 0) return `L${-n}`;
+  return '—';
+}
+
 /**
  * The Terminal: hangar, marketplace, challenger board, staff office and
  * tournament desk. Also renders the top status bar.
@@ -86,6 +92,9 @@ export class TerminalUI {
       el('div', { class: 'hud-stats' },
         el('div', { class: 'stat money' }, el('small', {}, 'Capital'), el('strong', {}, formatMoney(s.money))),
         el('div', { class: 'stat' }, el('small', {}, 'Record W·L·D'), el('strong', {}, `${s.record.wins}·${s.record.losses}·${s.record.ties}`)),
+        s.fine ? el('div', { class: 'stat fine-chip', title: 'Match-fixing fine' }, el('small', {}, 'Fine due'),
+          el('strong', {}, `${formatMoney(s.fine.amount)} · ${s.fine.battlesLeft} left`)) : null,
+        el('div', { class: 'stat' }, el('small', {}, 'Streak'), el('strong', {}, streakText(s.record.streak))),
         el('div', { class: 'stat' }, el('small', {}, 'Tournament'),
           el('strong', {}, s.gameComplete ? '★ CHAMPION' : s.tournament.entered ? `Round ${s.tournament.round + 1}/${ECONOMY.TOURNAMENT_ROUNDS}` : `${cw}/${ECONOMY.TOURNAMENT_UNLOCK_WINS} wins`)),
       ),
@@ -110,15 +119,43 @@ export class TerminalUI {
     }
     if (!s.challengers.length) this.economy.generateChallengers();
     const ready = active?.isBattleReady;
+    const walked = s.board.rejected;
     return el('div', {},
-      el('p', { class: 'muted' }, `Alien challengers are queuing at the dohyo. Win to claim the bounty AND their entire vehicle. Your fighter: `,
-        el('strong', {}, active ? active.name : '—'), ready ? '' : el('span', { class: 'bad' }, ' (not battle-ready)')),
-      el('div', { class: 'card-grid' }, s.challengers.map((c) => this.challengerCard(c, { ready, label: c.rookie ? 'ROOKIE · EASY' : null, onFight: () => this.onFight(c, { tournament: false }) }))));
+      el('p', { class: 'muted' }, 'Pick a challenger and agree the stakes: haggle over ', el('strong', {}, 'cash'),
+        ', or play for ', el('strong', {}, 'titles'), ' — winner drives off in the loser\'s vehicle. Your fighter: ',
+        el('strong', {}, active ? active.name : '—'), active && !ready ? el('span', { class: 'bad' }, ' (not battle-ready)') : ''),
+      !active ? el('div', { class: 'notice notice-warn' }, 'You have no vehicle. Buy one from Marketplace › Chassis.',
+        el('button', { class: 'btn btn-primary', onclick: () => { this.marketCat = 'chassis'; this.setTab('market'); } }, 'Go to Chassis')) : null,
+      s.board.tierShift ? el('p', { class: 'small warn-text' }, `▲ The board has scrolled up ${s.board.tierShift} difficulty level${s.board.tierShift > 1 ? 's' : ''} after everyone walked off.`) : null,
+      walked.length ? el('p', { class: 'small muted' }, `Walked off (back after your next fight): ${walked.map((c) => c.bug.pilot?.name || c.bug.name).join(', ')}`) : null,
+      el('div', { class: 'card-grid' }, s.challengers.map((c) => this.challengerCard(c, { ready, label: c.rookie ? 'ROOKIE · EASY' : null }))));
   }
 
   challengerCard(c, { ready, onFight, label }) {
     const bug = c.bug;
-    return el('article', { class: 'card challenger' },
+    const eco = this.economy;
+    const mood = eco.mood(eco.confidence(c));
+    const deal = c.nego?.deal;
+    let foot;
+    if (onFight) {
+      foot = el('div', { class: 'card-foot' },
+        el('div', { class: 'bounty' }, el('small', {}, 'Purse'), el('strong', {}, formatMoney(c.bounty))),
+        el('button', { class: 'btn btn-fight', disabled: !ready, onclick: onFight }, 'FIGHT'));
+    } else if (deal) {
+      const affordable = deal.type !== 'cash' || this.state.money >= deal.amount;
+      foot = el('div', { class: 'card-foot' },
+        el('div', { class: 'bounty' }, el('small', {}, 'Agreed stakes'), el('strong', {}, deal.type === 'cash' ? formatMoney(deal.amount) : 'TITLES')),
+        el('div', { class: 'part-actions' },
+          el('button', { class: 'btn btn-small', onclick: () => this.act(() => eco.cancelDeal(c)) }, 'Renegotiate'),
+          el('button', { class: 'btn btn-fight', disabled: !ready || !affordable, onclick: () => this.onFight(c, { tournament: false }) }, 'FIGHT')));
+    } else {
+      foot = el('div', { class: 'card-foot' },
+        el('div', { class: 'bounty' }, el('small', {}, 'Mood'), el('strong', { class: mood.cls }, mood.label)),
+        el('div', { class: 'part-actions' },
+          el('button', { class: 'btn btn-small btn-primary', disabled: !ready, onclick: () => this.openNegotiation(c) }, 'Wager cash'),
+          el('button', { class: 'btn btn-small btn-danger', disabled: !ready, onclick: () => this.askTitles(c) }, 'Play for titles')));
+    }
+    return el('article', { class: `card challenger${deal ? ' has-deal' : ''}` },
       el('div', { class: 'card-row' },
         this.sprite.renderThumbnail(bug, 88),
         el('div', { class: 'card-info' },
@@ -129,20 +166,99 @@ export class TerminalUI {
           el('div', { class: 'small muted' }, `${bug.chassis.name} · ${Math.round(bug.condition * 100)}% condition`))),
       vehicleCompare(bug, this.state.activeBug, { neutral: true }),
       this.weaponChips(bug),
-      el('div', { class: 'card-foot' },
-        el('div', { class: 'bounty' }, el('small', {}, 'Bounty'), el('strong', {}, formatMoney(c.bounty))),
-        el('button', { class: 'btn btn-fight', disabled: !ready, onclick: onFight }, 'FIGHT')),
+      foot,
     );
+  }
+
+  // ───────────── Stakes ─────────────
+  /** Flash the outcome of a rejection (walk-off, board scroll, a return). */
+  announce(r) {
+    toast(r.message, r.status === 'reject' ? 'bad' : 'good');
+    if (r.scrolled) toast('Everyone walked off — the board scrolls up: tougher challengers arrive!', 'bad');
+    if (r.returned) toast(`${r.returned.bug.pilot?.name || r.returned.bug.name} has come back to the board.`, 'good');
+  }
+
+  askTitles(c) {
+    const bug = this.state.activeBug;
+    this.confirm('Play for titles?',
+      `Winner takes the loser's vehicle. If you lose, ${bug.name} is gone for good. There's a ${Math.round(ECONOMY.TITLE_REFUSAL * 100)}% chance they refuse outright and walk off.`,
+      () => {
+        const r = this.economy.offerTitles(c);
+        this.announce(r);
+        this.state.commit();
+      });
+  }
+
+  openNegotiation(c) {
+    const eco = this.economy;
+    const s = this.state;
+    const n = eco.nego(c);
+    const who = c.bug.pilot?.name || c.bug.name;
+    const mood = eco.mood(eco.confidence(c));
+    const onBoard = s.challengers.includes(c);
+    const input = el('input', {
+      type: 'number', min: ECONOMY.MIN_WAGER, max: s.money, step: 5, class: 'wager-input',
+      value: n.counter ?? Math.max(ECONOMY.MIN_WAGER, Math.round(Math.min(s.money, c.bounty) / 5) * 5),
+      'aria-label': 'Wager amount',
+    });
+    const offer = (amount) => {
+      try {
+        const r = eco.offerCash(c, Number(amount));
+        s.commit();
+        if (r.status === 'reject') this.announce(r);
+        this.openNegotiation(c);
+      } catch (err) {
+        toast(err.message, 'bad');
+      }
+    };
+    const quick = [...new Set([50, 100, 250, 500].filter((v) => v <= s.money)
+      .concat([0.25, 0.5].map((f) => Math.floor((s.money * f) / 5) * 5).filter((v) => v >= ECONOMY.MIN_WAGER)))].sort((a, b) => a - b);
+
+    const body = el('div', { class: 'nego' },
+      el('div', { class: 'card-row' },
+        this.sprite.renderThumbnail(c.bug, 64),
+        el('div', { class: 'card-info' },
+          el('h3', {}, c.bug.name),
+          el('div', { class: 'small muted' }, `Pilot ${who}`),
+          el('div', {}, el('strong', { class: mood.cls }, mood.label), el('span', { class: 'muted small' }, ` — ${mood.blurb}.`)))),
+      el('div', { class: 'nego-log' }, n.log.length
+        ? n.log.map((m) => el('div', { class: `msg msg-${m.who}` }, el('small', {}, m.who === 'you' ? 'You' : who), m.text))
+        : el('div', { class: 'muted small' }, 'Name your stake. Confident pilots push the pot up; nervous ones push it down. Lowball or overreach twice and they may walk off.')),
+    );
+
+    if (!onBoard) {
+      body.append(el('div', { class: 'notice notice-warn' }, `${who} has walked off the board.`),
+        el('button', { class: 'btn', onclick: closeModal }, 'Close'));
+    } else if (n.deal) {
+      body.append(el('div', { class: 'notice notice-gold' }, `Deal agreed: ${n.deal.type === 'cash' ? formatMoney(n.deal.amount) : 'titles'}.`),
+        el('div', { class: 'part-actions' },
+          el('button', { class: 'btn btn-fight', disabled: n.deal.type === 'cash' && s.money < n.deal.amount, onclick: () => { closeModal(); this.onFight(c, { tournament: false }); } }, 'FIGHT NOW'),
+          el('button', { class: 'btn', onclick: closeModal }, 'Later')));
+    } else {
+      body.append(
+        n.counter != null ? el('div', { class: 'part-actions' },
+          el('button', { class: 'btn btn-primary', disabled: n.counter > s.money, onclick: () => offer(n.counter) },
+            n.counter > s.money ? `Can't cover ${formatMoney(n.counter)}` : `Accept ${formatMoney(n.counter)}`)) : null,
+        el('form', {
+          class: 'wager-form',
+          onsubmit: (e) => { e.preventDefault(); offer(input.value); },
+        }, el('span', { class: 'muted' }, ECONOMY.CURRENCY_SYMBOL), input, el('button', { class: 'btn btn-primary', type: 'submit' }, n.round ? 'Counter-offer' : 'Make offer')),
+        el('div', { class: 'chips' }, quick.map((v) => el('button', { class: 'chip chip-btn', type: 'button', onclick: () => { input.value = v; } }, formatMoney(v)))),
+        el('p', { class: 'muted small' }, `You have ${formatMoney(s.money)}. Minimum stake ${formatMoney(ECONOMY.MIN_WAGER)}.`),
+      );
+    }
+    openModal(`Stakes · ${c.bug.name}`, body);
+    input.focus?.();
   }
 
   // ───────────── Hangar ─────────────
   renderHangar() {
     const s = this.state;
     const wrap = el('div', {});
-    if (this.economy.needsJunkyard) {
+    if (!s.vehicles.length) {
       wrap.append(el('div', { class: 'notice notice-warn' },
-        'Nothing battle-ready and the coffers are dry. The junkyard will donate a beat-up Scrapper.',
-        el('button', { class: 'btn btn-primary', onclick: () => this.act(() => this.economy.claimJunkyardScrapper(), 'A Junkyard Scrapper rolls into the hangar') }, 'Claim Junkyard Scrapper')));
+        `Your hangar is empty. Buy a replacement from Marketplace › Chassis (from ${formatMoney(ECONOMY.MIN_VEHICLE_PRICE)}). Sell spare parts to raise cash.`,
+        el('button', { class: 'btn btn-primary', onclick: () => { this.marketCat = 'chassis'; this.setTab('market'); } }, 'Go to Chassis')));
     }
     wrap.append(el('h3', {}, `Vehicles (${s.vehicles.length})`));
     wrap.append(el('div', { class: 'card-grid' }, s.vehicles.map((bug) => this.vehicleCard(bug))));
@@ -260,9 +376,10 @@ export class TerminalUI {
         compareTo: counterpart(active, l.part),
         extra: dealBadge(l),
         actions: [el('button', {
-          class: 'btn btn-small btn-primary', disabled: s.money < l.price,
+          class: 'btn btn-small btn-primary', disabled: s.money < this.economy.partPrice(l),
           onclick: () => this.act(() => this.economy.buyPartListing(l.id), `Bought ${l.part.name}`),
-        }, `Buy ${formatMoney(l.price)}`)],
+        }, `Buy ${formatMoney(this.economy.partPrice(l))}`),
+        s.staff.mechanic ? el('span', { class: 'small muted' }, el('s', {}, formatMoney(l.price)), ' mechanic −10%') : null],
       })));
     }
 
@@ -285,6 +402,7 @@ export class TerminalUI {
     return el('div', { class: 'market' },
       subnav,
       el('p', { class: 'muted' }, catBlurb, ' Stock rotates after every bout. ',
+        s.staff.mechanic && cat !== 'chassis' ? 'Your mechanic gets 10% off parts. ' : '',
         manager ? 'Your manager is flagging rare deals.' : 'Hire a manager to have rare deals flagged.'),
       el('h3', {}, `${catLabel} for sale`),
       forSale.childElementCount ? forSale : el('p', { class: 'muted' }, 'Sold out — new stock arrives after your next bout.'),
@@ -312,9 +430,11 @@ export class TerminalUI {
     return el('div', {},
       el('div', { class: 'card-grid' },
         staffCard('mechanic', 'Mechanic', ECONOMY.MECHANIC_HIRE, ECONOMY.MECHANIC_WAGE,
-          'Automatically repairs every part on your active vehicle after each bout, as far as funds allow.', '🔧'),
+          'Repairs your active vehicle after each bout as far as funds allow, and gets you 10% off parts and repairs.', '🔧'),
         staffCard('manager', 'Manager', ECONOMY.MANAGER_HIRE, ECONOMY.MANAGER_WAGE,
-          'Auto-sells broken scrap in your inventory at peak value (double scrap rate) and flags rare Marketplace deals.', '📈')),
+          'Bets on your fights, sells broken scrap at peak value (double scrap rate) and flags rare Marketplace deals.', '📈')),
+      s.staff.manager ? this.renderBetting() : null,
+      s.fine ? this.renderFine() : null,
       el('h3', {}, 'Recent log'),
       el('ul', { class: 'log' }, s.log.slice(-10).reverse().map((l) => el('li', {}, l.msg))),
       el('h3', {}, 'Office'),
@@ -323,6 +443,34 @@ export class TerminalUI {
         onclick: () => this.confirm('Start a new game?', 'This wipes your save: vehicles, money and progress.', () => this.onNewGame()),
       }, 'New game (wipe save)'),
     );
+  }
+
+  renderBetting() {
+    const s = this.state;
+    const pct = Math.round(s.managerBetPct * 100);
+    const label = el('strong', {}, `${pct}% (up to ${formatMoney(s.money * s.managerBetPct)})`);
+    const slider = el('input', {
+      type: 'range', min: 0, max: Math.round(ECONOMY.MANAGER_BET_MAX * 100), step: 5, value: pct,
+      'aria-label': 'Manager betting limit',
+      oninput: (e) => { label.textContent = `${e.target.value}% (up to ${formatMoney((s.money * e.target.value) / 100)})`; },
+      onchange: (e) => this.act(() => { s.managerBetPct = Number(e.target.value) / 100; }),
+    });
+    return el('div', { class: 'card betting' },
+      el('h3', {}, 'Manager betting limit'),
+      el('p', { class: 'small' }, 'Before each fight your manager bets up to this share of your spare cash — on you to win, or on you to lose, whichever they believe. The stronger their conviction, the bigger the bet.'),
+      el('div', { class: 'slider-row' }, slider, label),
+      el('p', { class: 'small bad' }, `Warning: if they bet on you to lose ${ECONOMY.FIXING_STREAK} times running and you lose all ${ECONOMY.FIXING_STREAK}, they'll be arrested for match fixing and you'll be fined ${formatMoney(ECONOMY.FIXING_FINE)}.`),
+      s.fixStreak ? el('p', { class: 'small warn-text' }, `Suspicion: ${s.fixStreak}/${ECONOMY.FIXING_STREAK} lose-bets paid out in a row.`) : null);
+  }
+
+  renderFine() {
+    const f = this.state.fine;
+    return el('div', { class: 'notice notice-warn fine' },
+      el('strong', {}, `🚨 Match-fixing fine: ${formatMoney(f.amount)} outstanding`),
+      el('span', {}, `Pay within ${f.battlesLeft} more battle${f.battlesLeft === 1 ? '' : 's'} or it's game over.`),
+      el('div', { class: 'part-actions' },
+        el('button', { class: 'btn btn-primary', disabled: this.state.money < 1, onclick: () => this.act(() => this.economy.payFine(), (v) => `Paid ${formatMoney(v)} towards the fine`) },
+          this.state.money >= f.amount ? `Pay ${formatMoney(f.amount)}` : `Pay what you can (${formatMoney(this.state.money)})`)));
   }
 
   // ───────────── Tournament ─────────────

@@ -184,3 +184,46 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
   .subtabs { top: 0; }
   #tabbar { padding: 0; }
 }
+
+/* ───────────── Stakes & haggling ───────────── */
+.warn-text { color: var(--warn); }
+.good { color: var(--good); }
+.warn { color: var(--warn); }
+.card.has-deal { border-color: var(--gold); }
+.nego { display: flex; flex-direction: column; gap: 10px; }
+.nego-log {
+  display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto;
+  background: #0e0b16; border: 2px solid var(--line); border-radius: var(--radius); padding: 10px;
+}
+.msg { max-width: 85%; padding: 6px 10px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--line); }
+.msg small { display: block; font-size: 13px; color: var(--muted); }
+.msg-you { align-self: flex-end; background: #203326; border-color: #3f6a48; }
+.msg-them { align-self: flex-start; }
+.wager-form { display: flex; align-items: center; gap: 8px; }
+.wager-input {
+  flex: 1; min-width: 0; font-family: var(--mono); font-size: 22px; color: var(--text);
+  background: #0e0b16; border: 2px solid var(--line); border-radius: 3px; padding: 4px 8px;
+}
+.chip-btn { cursor: pointer; color: var(--text); }
+.chip-btn:hover { border-color: var(--gold); }
+
+/* ───────────── Staff: betting & fines ───────────── */
+.betting { margin-top: 12px; }
+.slider-row { display: flex; align-items: center; gap: 12px; }
+.slider-row input[type="range"] { flex: 1; accent-color: var(--gold); }
+.fine { margin-top: 12px; }
+.fine-chip strong { color: var(--bad); }
+
+/* Hoist stats compared against the winning vehicle */
+.stat-bar { position: relative; }
+.stat-bar.better div { background: var(--good); }
+.stat-bar.worse div { background: var(--bad); }
+.stat-bar .cmp-mark { top: -3px; bottom: -3px; }
+.stats-block .cmp-legend { margin-bottom: 6px; }
+.ref-note { margin: 8px 0; font-size: 16px; padding: 8px 10px; }
+.bounty strong.good { color: var(--good); }
+.bounty strong.warn { color: var(--warn); }
+.bounty strong.bad { color: var(--bad); }
+.bounty strong.muted { color: var(--muted); }
+.captured.lost { opacity: 0.8; }
+.captured.lost small { color: var(--bad); }

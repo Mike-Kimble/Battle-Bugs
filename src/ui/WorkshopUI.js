@@ -102,6 +102,13 @@ export const PART_COMPARE = {
     { label: 'Plating HP', get: (p) => p.hp, fmt: int },
     { label: 'Mass', get: (p) => p.mass, fmt: (v) => `${v} kg`, better: 'neutral' },
   ],
+  chassis: [
+    { label: 'Hull HP', get: (p) => p.hp, fmt: int },
+    { label: 'Stamina', get: (p) => p.stats.staminaMax, fmt: int },
+    { label: 'Hardpoints', get: (p) => p.stats.weaponSlots, fmt: int },
+    { label: 'Turn rate', get: (p) => p.stats.turn, fmt: (v) => v.toFixed(1) },
+    { label: 'Mass', get: (p) => p.mass, fmt: (v) => `${v} kg`, better: 'neutral' },
+  ],
   weapon: [
     { label: 'Range', get: (p) => p.stats.range, fmt: int },
     { label: 'Stamina cost', get: (p) => p.stats.cost, fmt: int, better: 'lower' },
@@ -156,13 +163,13 @@ export function compareBars(rows, { neutral = false, legend = null } = {}) {
     legend ? el('div', { class: 'cmp-legend' }, el('span', { class: 'cmp-legend-mark' }), legend) : null);
 }
 
-export function partCompare(part, current) {
+export function partCompare(part, current, { legend } = {}) {
   const rows = PART_COMPARE[part.type];
   if (!rows) return null;
   return compareBars(rows.map((r) => ({
     label: r.label, fmt: r.fmt, better: r.better,
     value: r.get(part), current: current ? r.get(current) : null, max: partScale(part.type, r),
-  })), { legend: current ? `on hoist: ${current.name}` : 'nothing fitted in this slot' });
+  })), { legend: legend ?? (current ? `on hoist: ${current.name}` : 'nothing fitted in this slot') });
 }
 
 export function vehicleCompare(bug, current, { neutral = false } = {}) {
@@ -182,10 +189,10 @@ export function counterpart(bug, part) {
       || bug.weapons.find((w) => w.stats.class === part.stats.class)
       || bug.weapons[0] || null;
   }
-  return ['engine', 'tires', 'armor'].includes(part.type) ? bug[part.type] : null;
+  return ['chassis', 'engine', 'tires', 'armor'].includes(part.type) ? bug[part.type] : null;
 }
 
-export function partCard(part, economy, { actions = [], extra = null, compareTo } = {}) {
+export function partCard(part, economy, { actions = [], extra = null, compareTo, compareLegend } = {}) {
   return el('div', { class: `part-card rarity-${part.rarity}${part.isBroken ? ' broken' : ''}` },
     el('div', { class: 'part-head' },
       el('span', { class: `part-type type-${part.type}` }, part.type),
@@ -193,7 +200,7 @@ export function partCard(part, economy, { actions = [], extra = null, compareTo 
       el('span', { class: 'part-mass' }, `${part.mass} kg`)),
     el('div', { class: 'part-stats' }, partStatLine(part)),
     hpBar(part.hpRatio, { label: part.isBroken ? 'BROKEN' : `${Math.ceil(part.hp)}/${part.maxHp} HP` }),
-    compareTo !== undefined && compareTo !== part ? partCompare(part, compareTo) : null,
+    compareTo !== undefined && compareTo !== part ? partCompare(part, compareTo, { legend: compareLegend }) : null,
     extra,
     actions.length ? el('div', { class: 'part-actions' }, actions) : null);
 }
@@ -227,6 +234,14 @@ export class WorkshopUI {
     return this.state.activeBug;
   }
 
+  /** The vehicle that won the one on the hoist, if we're inspecting a fresh capture. */
+  get refBug() {
+    const r = this.state.compareRef;
+    const bug = this.bug;
+    if (!r || !bug || r.id !== bug.id) return null;
+    return this.state.getVehicle(r.refId);
+  }
+
   act(fn, success) {
     try {
       const r = fn();
@@ -240,7 +255,8 @@ export class WorkshopUI {
   render() {
     const bug = this.bug;
     if (!bug) {
-      this.root.replaceChildren(el('div', { class: 'empty' }, 'No vehicle in the hangar.'));
+      this.root.replaceChildren(el('div', { class: 'panel-title' }, el('h2', {}, 'The Hoist')),
+        el('div', { class: 'notice notice-warn' }, 'The hoist is empty — you have no vehicles. Buy a replacement from Marketplace › Chassis.'));
       return;
     }
     const locked = this.state.isLocked(bug);
@@ -291,6 +307,8 @@ export class WorkshopUI {
           onclick: () => this.act(() => this.economy.repairAll(bug), (hp) => (hp ? `Repaired ${Math.round(hp)} HP` : 'Nothing repaired')),
         }, repairAll ? `Repair all — ${formatMoney(repairAll)}` : 'Fully repaired'),
       ),
+      this.refBug ? el('div', { class: 'notice notice-gold ref-note' },
+        el('strong', {}, 'Captured! '), `White ticks show ${this.refBug.name}, the bug that won it — green = better, red = worse. Open a region to compare components.`) : null,
       this.renderStats(bug),
     ].filter(Boolean));
 
@@ -343,27 +361,38 @@ export class WorkshopUI {
   renderStats(bug) {
     const s = bug.getStats();
     const p = pristineStats(bug);
-    const row = (label, cur, max, fmt, hint) => {
-      const ratio = max > 0 ? cur / max : 0;
-      return el('tr', { title: hint || '' },
+    const ref = this.refBug;
+    const rs = ref ? ref.getStats() : null;
+    const row = (label, cur, max, fmt, hint, key) => {
+      // Without a reference: bar = current vs pristine (damage penalty).
+      // With the winning vehicle as reference: its value is the white tick.
+      const refVal = rs ? rs[key] : null;
+      const scale = Math.max(max, refVal ?? 0) || 1;
+      const ratio = cur / scale;
+      let cls = ratio < 0.99 * (max / scale) ? 'penalty' : '';
+      if (refVal != null) cls = cur > refVal * 1.01 ? 'better' : cur < refVal * 0.99 ? 'worse' : '';
+      return el('tr', { title: refVal != null ? `${hint} — ${ref.name}: ${fmt(refVal)}` : hint || '' },
         el('th', {}, label),
         el('td', {}, fmt(cur)),
-        el('td', { class: 'stat-bar-cell' }, el('div', { class: `stat-bar ${ratio < 0.99 ? 'penalty' : ''}` },
-          el('div', { style: { width: `${Math.round(Math.min(1, ratio) * 100)}%` } }))));
+        el('td', { class: 'stat-bar-cell' }, el('div', { class: `stat-bar ${cls}` },
+          el('div', { style: { width: `${Math.round(Math.min(1, ratio) * 100)}%` } }),
+          refVal != null ? el('span', { class: 'cmp-mark', style: { left: `${Math.min(100, (refVal / scale) * 100)}%` } }) : null)));
     };
     const kn = (v) => `${(v / 1000).toFixed(1)} kN`;
     return el('div', { class: 'stats-block' },
       el('h3', {}, 'Derived stats'),
+      ref ? el('div', { class: 'cmp-legend' }, el('span', { class: 'cmp-legend-mark' }), `${ref.name} (your winner)`) : null,
       el('table', { class: 'stats' },
         el('tbody', {},
-          el('tr', { title: 'm = m_chassis + Σ m_part' }, el('th', {}, 'Mass'), el('td', {}, `${s.mass} kg`), el('td', {})),
-          row('Drive force', s.fDrive, p.fDrive, kn, 'F_drive = F_base × HP_engine / MaxHP'),
-          row('Grip limit', s.fGrip, p.fGrip, kn, 'F_grip = μ × m × g × HP_tires / MaxHP'),
-          row('Usable force', s.fUsable, p.fUsable, kn, 'F_usable = min(F_drive, F_grip)'),
-          row('Acceleration', s.accel, p.accel, (v) => `${Math.round(v)} px/s²`, 'a = F_usable / m'),
-          row('Top speed', s.vMax, p.vMax, (v) => `${Math.round(v)} px/s`, 'rpm × tire radius × wear'),
-          row('Stamina', s.staminaMax, p.staminaMax, (v) => `${v}`, 'Battery / thermal headroom'),
-          row('Cooling', s.cooling, p.cooling, (v) => `${v}/s`, 'Idle recovery R_cool'),
+          el('tr', { title: 'm = m_chassis + Σ m_part' }, el('th', {}, 'Mass'), el('td', {}, `${s.mass} kg`),
+            el('td', { class: 'muted small' }, rs ? `${ref.name}: ${rs.mass} kg` : '')),
+          row('Drive force', s.fDrive, p.fDrive, kn, 'F_drive = F_base × HP_engine / MaxHP', 'fDrive'),
+          row('Grip limit', s.fGrip, p.fGrip, kn, 'F_grip = μ × m × g × HP_tires / MaxHP', 'fGrip'),
+          row('Usable force', s.fUsable, p.fUsable, kn, 'F_usable = min(F_drive, F_grip)', 'fUsable'),
+          row('Acceleration', s.accel, p.accel, (v) => `${Math.round(v)} px/s²`, 'a = F_usable / m', 'accel'),
+          row('Top speed', s.vMax, p.vMax, (v) => `${Math.round(v)} px/s`, 'rpm × tire radius × wear', 'vMax'),
+          row('Stamina', s.staminaMax, p.staminaMax, (v) => `${v}`, 'Battery / thermal headroom', 'staminaMax'),
+          row('Cooling', s.cooling, p.cooling, (v) => `${v}/s`, 'Idle recovery R_cool', 'cooling'),
         )),
       el('p', { class: 'muted small' },
         s.fDrive > s.fGrip
@@ -481,6 +510,14 @@ export class WorkshopUI {
     openModal(`${region.label} · ${bug.name}`, body, { onClose: () => { this.openRegionKey = null; } });
   }
 
+  /** Compare a component of a fresh capture against the winning vehicle's equivalent. */
+  refCompare(part) {
+    const ref = this.refBug;
+    if (!ref) return {};
+    const cp = counterpart(ref, part);
+    return { compareTo: cp, compareLegend: cp ? `${ref.name}'s ${cp.name} (your winner)` : `${ref.name} (your winner) has none fitted` };
+  }
+
   repairButton(part) {
     const cost = this.economy.repairCost(part);
     if (!cost) return null;
@@ -498,6 +535,7 @@ export class WorkshopUI {
 
     if (type === 'chassis') {
       section.append(partCard(bug.chassis, this.economy, {
+        ...this.refCompare(bug.chassis),
         actions: [this.repairButton(bug.chassis)].filter(Boolean),
         extra: el('p', { class: 'muted small' }, 'The frame IS the vehicle. Hull at 0 HP = catastrophic damage.'),
       }));
@@ -508,6 +546,7 @@ export class WorkshopUI {
     if (!equipped.length) section.append(el('div', { class: 'empty-slot' }, type === 'weapon' && bug.weaponSlots === 0 ? 'No hardpoints on this frame' : 'Empty slot'));
     for (const part of equipped) {
       section.append(partCard(part, this.economy, {
+        ...this.refCompare(part),
         actions: [
           this.repairButton(part),
           el('button', {

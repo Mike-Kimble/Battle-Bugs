@@ -56,8 +56,17 @@ export class EconomyManager {
     return bug.parts.reduce((s, p) => s + p.value * (0.3 + 0.7 * p.hpRatio), 0);
   }
 
+  /** Mechanic on staff → 10% off parts and repairs. */
+  get discount() {
+    return this.state.staff.mechanic ? ECONOMY.MECHANIC_DISCOUNT : 1;
+  }
+
+  partPrice(listing) {
+    return Math.max(1, Math.round(listing.price * this.discount));
+  }
+
   repairCostPerHp(part) {
-    return (part.value / part.maxHp) * ECONOMY.REPAIR_RATE;
+    return (part.value / part.maxHp) * ECONOMY.REPAIR_RATE * this.discount;
   }
 
   repairCost(part) {
@@ -127,7 +136,7 @@ export class EconomyManager {
     const i = this.state.market.parts.findIndex((l) => l.id === listingId);
     if (i < 0) throw new Error('Listing gone');
     const listing = this.state.market.parts[i];
-    this.state.spend(listing.price);
+    this.state.spend(this.partPrice(listing));
     this.state.market.parts.splice(i, 1);
     this.state.addPart(listing.part);
     return listing.part;
@@ -140,6 +149,7 @@ export class EconomyManager {
     this.state.spend(listing.price);
     this.state.market.vehicles.splice(i, 1);
     this.state.addVehicle(listing.bug);
+    if (!this.state.getVehicle(this.state.activeVehicleId)) this.state.activeVehicleId = listing.bug.id;
     return listing.bug;
   }
 
@@ -187,6 +197,10 @@ export class EconomyManager {
     const fee = role === 'mechanic' ? ECONOMY.MECHANIC_HIRE : ECONOMY.MANAGER_HIRE;
     this.state.spend(fee);
     this.state.staff[role] = true;
+    if (role === 'manager') {
+      this.state.managerBetPct = ECONOMY.MANAGER_BET_DEFAULT;
+      this.state.fixStreak = 0;
+    }
   }
 
   dismiss(role) {
@@ -236,7 +250,7 @@ export class EconomyManager {
       id: makeId('ch'),
       tier,
       bounty,
-      difficulty: Math.min(1, 0.1 + tier * 0.16 + rand(-0.05, 0.05)),
+      difficulty: Math.min(1, 0.1 + tier * 0.16 + rand(-0.05, 0.05) + (opts.extraDifficulty || 0)),
       bug,
     };
   }
@@ -269,20 +283,37 @@ export class EconomyManager {
     return this.state.challengers.some((c) => c.rookie);
   }
 
+  get wantsRookie() {
+    return this.state.record.challengerWins < ECONOMY.ROOKIE_UNTIL_WINS && this.state.board.tierShift === 0;
+  }
+
+  /** Challenger at board slot `i` (0 = easiest), after any difficulty scroll. */
+  makeBoardChallenger(i) {
+    const t = this.baseTier - 1 + i + this.state.board.tierShift;
+    return this.makeChallenger(clampTier(t), { extraDifficulty: Math.max(0, t - 5) * 0.08 });
+  }
+
+  sortBoard() {
+    this.state.challengers.sort((a, b) => (b.rookie ? 1 : 0) - (a.rookie ? 1 : 0) || a.tier - b.tier || a.difficulty - b.difficulty);
+  }
+
+  /** A fresh board of BOARD_SIZE challengers spanning the difficulty range. */
   generateChallengers() {
-    const n = randInt(ECONOMY.CHALLENGER_MIN, ECONOMY.CHALLENGER_MAX);
-    const base = this.baseTier;
     const board = [];
-    for (let i = 0; i < n; i++) {
-      if (i === 0 && this.state.record.challengerWins < ECONOMY.ROOKIE_UNTIL_WINS) {
-        board.push(this.makeRookie());
-        continue;
-      }
-      const tier = i === 0 ? Math.max(1, base - 1) : clampTier(base + randInt(-1, 1));
-      board.push(this.makeChallenger(tier));
+    for (let i = 0; i < ECONOMY.BOARD_SIZE; i++) {
+      board.push(i === 0 && this.wantsRookie ? this.makeRookie() : this.makeBoardChallenger(i));
     }
-    board.sort((a, b) => (b.rookie ? 1 : 0) - (a.rookie ? 1 : 0) || a.tier - b.tier || a.bounty - b.bounty);
     this.state.challengers = board;
+    this.sortBoard();
+  }
+
+  /** Top the board back up to BOARD_SIZE, filling the difficulty gaps. */
+  refillBoard() {
+    const s = this.state;
+    if (this.wantsRookie && !this.hasRookie) s.challengers.push(this.makeRookie());
+    let i = 1;
+    while (s.challengers.length < ECONOMY.BOARD_SIZE) s.challengers.push(this.makeBoardChallenger(i++ % ECONOMY.BOARD_SIZE));
+    this.sortBoard();
   }
 
   generateMarket() {
@@ -303,9 +334,228 @@ export class EconomyManager {
       const bug = this.generateBug(clampTier(tierCap - randInt(0, 1)), { alien: chance(0.5), condition: () => rand(0.6, 1) });
       if (!bug.alien) bug.name = `Used ${bug.name}`;
       const markup = chance(0.15) ? rand(0.6, 0.78) : rand(ECONOMY.MARKUP_MIN, ECONOMY.MARKUP_MAX);
-      vehicles.push({ id: makeId('mk'), bug, price: roundTo(this.vehicleValue(bug) * markup, 5) });
+      vehicles.push({ id: makeId('mk'), bug, price: Math.max(ECONOMY.MIN_VEHICLE_PRICE, roundTo(this.vehicleValue(bug) * markup, 5)) });
     }
     this.state.market = { parts, vehicles };
+  }
+
+  // ───────────── Confidence & wagers ─────────────
+  /** Rough fighting strength used for odds, haggling and the manager's bets. */
+  rating(bug) {
+    const s = bug.getStats();
+    const armor = bug.armor && !bug.armor.isBroken ? bug.armor.stats.absorb * bug.armor.hpRatio * 20 : 0;
+    const guns = bug.weapons.filter((w) => !w.isBroken).length * 5;
+    return s.fUsable / 1000 + s.fGrip / 2500 + bug.chassis.hp / 8 + s.staminaMax / 10 + s.vMax / 25 + guns + armor;
+  }
+
+  /**
+   * The challenger's confidence of beating `bug` (0–1): stat difference,
+   * their skill, and your current streak (wins in a row scare them).
+   */
+  confidence(c, bug = this.state.activeBug) {
+    if (!bug) return 0.5;
+    const streak = this.state.record.streak || 0;
+    const x = (this.rating(c.bug) - this.rating(bug)) / 20
+      + (c.difficulty - 0.4) * 1.5
+      - Math.max(0, Math.min(streak, 6)) * 0.25
+      + Math.max(0, Math.min(-streak, 6)) * 0.2;
+    return 1 / (1 + Math.exp(-x));
+  }
+
+  mood(p) {
+    if (p >= 0.75) return { label: 'Cocky', cls: 'bad', blurb: 'expects to crush you — happy to play for big money' };
+    if (p >= 0.55) return { label: 'Confident', cls: 'warn', blurb: 'fancies their chances and wants a decent pot' };
+    if (p >= 0.4) return { label: 'Wary', cls: 'muted', blurb: 'thinks it could go either way' };
+    if (p >= 0.2) return { label: 'Nervous', cls: 'good', blurb: 'would rather keep the stakes low' };
+    return { label: 'Terrified', cls: 'good', blurb: 'will only risk pocket change' };
+  }
+
+  /** What the challenger would like to play for. */
+  targetStake(c) {
+    const p = this.confidence(c);
+    return Math.max(ECONOMY.MIN_WAGER, roundTo(c.bounty * (0.35 + 1.3 * p), 5));
+  }
+
+  bankroll(c) {
+    return roundTo(c.bounty * ECONOMY.BANKROLL_MULT, 5);
+  }
+
+  nego(c) {
+    c.nego ||= { round: 0, target: null, counter: null, deal: null, log: [] };
+    return c.nego;
+  }
+
+  /**
+   * Make a cash offer. Returns { status: 'accept'|'counter'|'reject', amount, message }.
+   * Confident challengers push the pot up, nervous ones push it down; a
+   * ridiculous offer after the first bid can get you told to get lost.
+   */
+  offerCash(c, amount) {
+    const s = this.state;
+    amount = Math.round(amount);
+    if (!(amount >= ECONOMY.MIN_WAGER)) throw new Error(`Minimum wager is ${formatMoney(ECONOMY.MIN_WAGER)}`);
+    if (amount > s.money) throw new Error("You can't cover that stake");
+    const n = this.nego(c);
+    const who = c.bug.pilot?.name || c.bug.name;
+    const p = this.confidence(c);
+    const ideal = this.targetStake(c);
+    n.target ??= ideal;
+    n.round += 1;
+    n.log.push({ who: 'you', text: `I'll fight you for ${formatMoney(amount)}.` });
+
+    const respond = (status, value, text) => {
+      if (status === 'accept') {
+        n.deal = { type: 'cash', amount: value };
+        n.counter = null;
+      } else if (status === 'counter') {
+        n.counter = value;
+        n.target = value;
+      }
+      n.log.push({ who: 'them', text });
+      const out = { status, amount: value, message: `${who}: ${text}` };
+      if (status === 'reject') Object.assign(out, this.reject(c));
+      return out;
+    };
+
+    if (n.counter != null && amount === n.counter) return respond('accept', amount, `${formatMoney(amount)} it is. See you in the ring.`);
+
+    const ridiculous = amount >= ideal * ECONOMY.RIDICULOUS_FACTOR || amount <= ideal / ECONOMY.RIDICULOUS_FACTOR;
+    if (ridiculous) {
+      if (chance(ECONOMY.RIDICULOUS_ACCEPT)) return respond('accept', amount, `…${formatMoney(amount)}? Ha! You're on.`);
+      if (n.round > 1) return respond('reject', amount, amount > ideal ? 'Stop wasting my time. Get lost!' : 'Insulting. Get lost, grub.');
+      return respond('counter', ideal, amount > ideal
+        ? `Whoa, easy. ${formatMoney(ideal)} is more like it.`
+        : `Is that a joke? ${formatMoney(ideal)} or nothing.`);
+    }
+
+    const bank = this.bankroll(c);
+    if (amount > bank) return respond('counter', bank, `My pod only holds ${formatMoney(bank)}. That's my limit.`);
+
+    const tol = ECONOMY.WAGER_TOLERANCE + ECONOMY.WAGER_PATIENCE * (n.round - 1);
+    const confident = p >= 0.5;
+    const t = n.target;
+    if (confident ? amount >= t * (1 - tol) : amount <= t * (1 + tol)) {
+      return respond('accept', amount, confident ? `${formatMoney(amount)}. Easy money for me.` : `${formatMoney(amount)}… fine. Deal.`);
+    }
+    const counter = roundTo(amount + (t - amount) * ECONOMY.WAGER_CONCESSION, 5);
+    if (counter === amount) return respond('accept', amount, `Fine — ${formatMoney(amount)}.`);
+    return respond('counter', counter, confident
+      ? `Pocket change. Make it ${formatMoney(counter)}.`
+      : `Too rich for me. ${formatMoney(counter)}, tops.`);
+  }
+
+  /** Ask to play for titles (pink slips). 20% of challengers refuse. */
+  offerTitles(c) {
+    const n = this.nego(c);
+    n.log.push({ who: 'you', text: 'Let\'s play for titles — winner takes the loser\'s vehicle.' });
+    if (chance(ECONOMY.TITLE_REFUSAL)) {
+      n.log.push({ who: 'them', text: 'My ride? Not a chance. Get lost.' });
+      return { status: 'reject', message: `${c.bug.pilot?.name || c.bug.name}: My ride? Not a chance. Get lost.`, ...this.reject(c) };
+    }
+    n.deal = { type: 'titles' };
+    n.counter = null;
+    n.log.push({ who: 'them', text: 'Titles it is. Say goodbye to your bug.' });
+    return { status: 'accept', message: 'Titles it is.' };
+  }
+
+  cancelDeal(c) {
+    if (c.nego) c.nego.deal = null;
+  }
+
+  /**
+   * A challenger walks off the board until you next fight. If the board
+   * empties it scrolls up in difficulty; after repeated rejections the
+   * first one to walk off may come back (50% per rejection).
+   */
+  reject(c) {
+    const s = this.state;
+    const b = s.board;
+    s.challengers = s.challengers.filter((x) => x.id !== c.id);
+    c.nego = null;
+    b.rejected.push(c);
+    b.rejections += 1;
+    const out = { scrolled: false, returned: null };
+    if (!s.challengers.length) {
+      b.tierShift += 1;
+      this.generateChallengers();
+      out.scrolled = true;
+    }
+    if (b.rejections >= ECONOMY.RETURN_AFTER_REJECTIONS && b.rejected.length && chance(ECONOMY.RETURN_CHANCE)) {
+      const back = b.rejected.shift();
+      s.challengers.push(back);
+      this.sortBoard();
+      out.returned = back;
+    }
+    return out;
+  }
+
+  /** After any bout: remove the fought challenger, bring back the walk-offs, refill. */
+  afterBout(challenger, tournament) {
+    const s = this.state;
+    if (!tournament) s.challengers = s.challengers.filter((x) => x.id !== challenger.id);
+    for (const c of s.board.rejected) s.challengers.push(c);
+    s.board.rejected = [];
+    s.board.rejections = 0;
+    for (const c of s.challengers) c.nego = null;
+    this.refillBoard();
+  }
+
+  // ───────────── Manager betting ─────────────
+  /** The manager bets (up to the set % of spare cash) on the side they believe in. */
+  placeManagerBet(c, bug, reserved = 0) {
+    const s = this.state;
+    if (!s.staff.manager || s.managerBetPct <= 0) return null;
+    const pWin = 1 - this.confidence(c, bug);
+    const conviction = Math.abs(pWin - 0.5) * 2;
+    if (conviction < ECONOMY.MANAGER_MIN_CONVICTION) return null;
+    const side = pWin >= 0.5 ? 'win' : 'lose';
+    const q = side === 'win' ? pWin : 1 - pWin;
+    const pot = Math.max(0, s.money - reserved);
+    const stake = Math.floor(pot * s.managerBetPct * Math.min(1, conviction * 1.5));
+    if (stake < 1) return null;
+    s.spend(stake);
+    // Fair odds are 1/q; the bookie skims a margin off the profit.
+    return { side, stake, mult: 1 + (1 / q - 1) * ECONOMY.BOOKIE_MARGIN };
+  }
+
+  settleManagerBet(bet, result, report) {
+    const s = this.state;
+    if (!bet) {
+      s.fixStreak = 0;
+      return;
+    }
+    const sideText = bet.side === 'win' ? 'to WIN' : 'to LOSE';
+    if (result === 'tie') {
+      s.earn(bet.stake);
+      report.lines.push(`Manager's bet on you ${sideText} refunded (draw).`);
+    } else if ((result === 'win') === (bet.side === 'win')) {
+      const payout = Math.round(bet.stake * bet.mult);
+      s.earn(payout);
+      report.lines.push(`Manager bet ${formatMoney(bet.stake)} on you ${sideText} — collected ${formatMoney(payout)}.`);
+    } else {
+      report.lines.push(`Manager bet ${formatMoney(bet.stake)} on you ${sideText} — lost it.`);
+    }
+
+    s.fixStreak = bet.side === 'lose' && result === 'loss' ? (s.fixStreak || 0) + 1 : 0;
+    if (s.fixStreak >= ECONOMY.FIXING_STREAK) {
+      s.staff.manager = false;
+      s.fixStreak = 0;
+      s.fine = { amount: ECONOMY.FIXING_FINE, battlesLeft: ECONOMY.FINE_BATTLES };
+      report.arrest = true;
+      report.lines.push(`🚨 Your manager bet on you to lose ${ECONOMY.FIXING_STREAK} times — and you did. Arrested for match fixing!`);
+      report.lines.push(`Fine: ${formatMoney(ECONOMY.FIXING_FINE)}, payable within ${ECONOMY.FINE_BATTLES} battles or it's game over.`);
+    }
+  }
+
+  payFine(amount = this.state.money) {
+    const f = this.state.fine;
+    if (!f) throw new Error('No fine outstanding');
+    const pay = Math.min(amount, f.amount, this.state.money);
+    if (pay <= 0) throw new Error('No funds to pay the fine');
+    this.state.spend(pay);
+    f.amount -= pay;
+    if (f.amount <= 0) this.state.fine = null;
+    return pay;
   }
 
   // ───────────── Tournament ─────────────
@@ -340,42 +590,70 @@ export class EconomyManager {
     return o ? { ...o, bug: BattleBug.fromJSON(o.bug) } : null;
   }
 
-  // ───────────── Soft-lock guard ─────────────
-  get needsJunkyard() {
-    return !this.state.vehicles.some((v) => v.isBattleReady) && this.state.money < ECONOMY.JUNKYARD_THRESHOLD;
+  // ───────────── Survival ─────────────
+  /** Cash plus what the parts inventory would fetch. */
+  get liquidWorth() {
+    return this.state.money + this.state.inventory.reduce((sum, p) => sum + this.partSellPrice(p), 0);
   }
 
-  claimJunkyardScrapper() {
-    if (!this.needsJunkyard) throw new Error('The junkyard only helps the truly desperate');
-    const bug = BattleBug.create({ ...STARTER_BUG, name: 'Junkyard Scrapper', armor: null, condition: () => rand(0.6, 0.8) });
-    this.state.addVehicle(bug);
-    if (!this.state.tournament.entered) this.state.activeVehicleId = bug.id;
-    return bug;
+  /** With no vehicle left, make sure something affordable (≥ §100) is for sale. */
+  ensureReplacementListing() {
+    const s = this.state;
+    if (s.vehicles.length || this.liquidWorth < ECONOMY.MIN_VEHICLE_PRICE) return;
+    if (s.market.vehicles.some((l) => l.price <= this.liquidWorth)) return;
+    const bug = BattleBug.create({ ...STARTER_BUG, name: 'Junkyard Scrapper', armor: null, condition: () => rand(0.55, 0.75) });
+    const price = Math.max(ECONOMY.MIN_VEHICLE_PRICE, Math.min(roundTo(this.liquidWorth * 0.8, 5), 150));
+    s.market.vehicles.unshift({ id: makeId('mk'), bug, price });
+  }
+
+  /** Returns a game-over reason, or null. Also records it on the state. */
+  checkGameOver() {
+    const s = this.state;
+    if (s.gameOver) return s.gameOver;
+    if (!s.vehicles.length && this.liquidWorth < ECONOMY.MIN_VEHICLE_PRICE) {
+      s.gameOver = `No vehicles left and only ${formatMoney(this.liquidWorth)} to your name — you can't afford even the cheapest ride (${formatMoney(ECONOMY.MIN_VEHICLE_PRICE)}).`;
+    } else if (s.fine && s.fine.battlesLeft <= 0 && s.fine.amount > 0) {
+      s.gameOver = `You failed to pay the ${formatMoney(ECONOMY.FIXING_FINE)} match-fixing fine in time. The Galactic Sumo Authority has banned you for life.`;
+    }
+    return s.gameOver;
   }
 
   // ───────────── Match settlement ─────────────
   /**
    * Apply the outcome of a bout.
-   * @param {{result:'win'|'loss'|'tie', reason:string, challenger:object, opponentBug:BattleBug, tournament:boolean}} m
+   * @param {{result:'win'|'loss'|'tie', reason:string, challenger:object, opponentBug:BattleBug,
+   *   playerBug:BattleBug, tournament:boolean, stake:{type:'cash'|'titles', amount?:number}|null, bet:object|null}} m
    */
-  settleMatch({ result, reason, challenger, opponentBug, tournament }) {
+  settleMatch({ result, reason, challenger, opponentBug, playerBug, tournament, stake, bet }) {
     const s = this.state;
-    const report = { result, reason, lines: [], bounty: 0, captured: null, champion: false };
+    const report = { result, reason, lines: [], bounty: 0, captured: null, lostVehicle: null, champion: false, arrest: false };
 
-    if (result === 'win') {
-      s.record.wins++;
-      report.bounty = challenger.bounty;
-      s.earn(challenger.bounty);
-      report.lines.push(`Bounty claimed: ${formatMoney(challenger.bounty)}`);
+    if (result === 'win') s.record.wins++;
+    else if (result === 'loss') s.record.losses++;
+    else s.record.ties++;
+    if (result === 'win') s.record.streak = Math.max(0, s.record.streak || 0) + 1;
+    if (result === 'loss') s.record.streak = Math.min(0, s.record.streak || 0) - 1;
 
+    const capture = () => {
       opponentBug.pilot = null;
       opponentBug.resetForBattle(opponentBug.pos, 0);
       s.addVehicle(opponentBug);
       s.newVehicleIds.add(opponentBug.id);
       report.captured = opponentBug;
-      report.lines.push(`Captured vehicle: ${opponentBug.name} (${Math.round(opponentBug.condition * 100)}% condition)`);
+      // Straight onto the hoist, compared against the vehicle that won it.
+      if (!s.tournament.entered) {
+        s.activeVehicleId = opponentBug.id;
+        s.compareRef = { id: opponentBug.id, refId: playerBug.id };
+      }
+      report.lines.push(`Captured vehicle: ${opponentBug.name} (${Math.round(opponentBug.condition * 100)}% condition) — it's on your hoist.`);
+    };
 
-      if (tournament) {
+    if (tournament) {
+      if (result === 'win') {
+        report.bounty = challenger.bounty;
+        s.earn(challenger.bounty);
+        report.lines.push(`Round purse: ${formatMoney(challenger.bounty)}`);
+        capture();
         s.tournament.round++;
         if (s.tournament.round >= ECONOMY.TOURNAMENT_ROUNDS) {
           s.earn(ECONOMY.TOURNAMENT_PRIZE);
@@ -388,37 +666,63 @@ export class EconomyManager {
           s.tournament.opponent = this.tournamentOpponentJSON(s.tournament.round);
           report.lines.push(`Advanced to tournament round ${s.tournament.round + 1} of ${ECONOMY.TOURNAMENT_ROUNDS}`);
         }
-      } else {
-        s.record.challengerWins++;
-        if (s.record.challengerWins === ECONOMY.TOURNAMENT_UNLOCK_WINS) {
-          report.lines.push('★ The Inter-Planetary Tournament is now OPEN to you!');
-        }
-      }
-    } else if (result === 'loss') {
-      s.record.losses++;
-      report.lines.push(`No purse. You keep your battered vehicle.`);
-      if (tournament) {
+      } else if (result === 'loss') {
         s.tournament.eliminated = true;
         this.withdrawTournament();
         report.lines.push('Eliminated from the tournament. Upgrades unlocked — regroup and re-enter.');
+      } else {
+        report.lines.push('Draw — tournament rules: the round will be re-fought.');
       }
-    } else {
-      s.record.ties++;
-      report.lines.push('Draw — neither vehicle is awarded.');
-      if (tournament) report.lines.push('Tournament rules: the round will be re-fought.');
+    } else if (stake?.type === 'titles') {
+      if (result === 'win') {
+        capture();
+      } else if (result === 'loss') {
+        s.removeVehicle(playerBug.id);
+        report.lostVehicle = playerBug;
+        report.lines.push(`You lost the title: ${playerBug.name} now belongs to ${challenger.bug.pilot?.name || 'the challenger'}.`);
+        if (!s.vehicles.length) report.lines.push('You have no vehicles left — find a replacement on the Marketplace.');
+      } else {
+        report.lines.push('Draw — both titles stay put.');
+      }
+    } else if (stake?.type === 'cash') {
+      if (result === 'win') {
+        report.bounty = stake.amount;
+        s.earn(stake.amount);
+        report.lines.push(`Won the wager: +${formatMoney(stake.amount)}`);
+      } else if (result === 'loss') {
+        const paid = Math.min(stake.amount, s.money);
+        s.spend(paid);
+        report.lines.push(`Lost the wager: −${formatMoney(paid)}`);
+      } else {
+        report.lines.push('Draw — the wager is void.');
+      }
     }
+
+    if (!tournament && result === 'win') {
+      s.record.challengerWins++;
+      if (s.record.challengerWins === ECONOMY.TOURNAMENT_UNLOCK_WINS) report.lines.push('★ The Inter-Planetary Tournament is now OPEN to you!');
+    }
+
+    // An outstanding fine counts down before any new arrest is processed.
+    if (s.fine) {
+      s.fine.battlesLeft -= 1;
+      if (s.fine.amount > 0) report.lines.push(`Fine outstanding: ${formatMoney(s.fine.amount)} — ${Math.max(0, s.fine.battlesLeft)} battle${s.fine.battlesLeft === 1 ? '' : 's'} left to pay.`);
+    }
+    this.settleManagerBet(bet, result, report);
 
     this.payStaff(report);
     if (s.staff.mechanic) this.runMechanic(report);
     if (s.staff.manager) this.runManager(report);
 
-    this.generateChallengers();
+    this.afterBout(challenger, tournament);
     this.generateMarket();
+    this.ensureReplacementListing();
     if (s.staff.manager) {
       const deals = [...s.market.parts, ...s.market.vehicles].filter((l) => this.isRareDeal(l));
       if (deals.length) report.lines.push(`Manager: ${deals.length} rare deal${deals.length > 1 ? 's' : ''} flagged on the Marketplace`);
     }
 
+    report.gameOver = this.checkGameOver();
     s.addLog(`${result.toUpperCase()} vs ${challenger.bug?.name ?? opponentBug.name} — ${reason}`);
     return report;
   }
