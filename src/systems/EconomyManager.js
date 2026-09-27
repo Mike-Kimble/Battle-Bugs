@@ -689,11 +689,17 @@ export class EconomyManager {
     return this.rating(clone);
   }
 
-  /** The single best part of `type` for this bug, judged on a pristine example of each. */
-  optimalPart(bug, type) {
+  /** Could you get hold of this part — already in spares, or list price within budget? */
+  affordable(key, budget) {
+    return this.state.inventory.some((p) => p.key === key) || PARTS[key].value * this.discount <= budget;
+  }
+
+  /** The single best part of `type` for this bug within budget, judged on a pristine example of each. */
+  optimalPart(bug, type, budget = Infinity) {
     const base = this.rating(bug);
     let best = null;
     for (const key of PART_KEYS_BY_TYPE[type]) {
+      if (!this.affordable(key, budget)) continue;
       const part = new Part(key);
       // Weapons all add the same raw rating, so break ties by quality (tier, then value).
       const gain = this.ratingWith(bug, part) - base + (type === 'weapon' ? PARTS[key].tier * 0.5 + PARTS[key].value / 1000 : 0);
@@ -731,14 +737,21 @@ export class EconomyManager {
     if (s.cooling < 12) needs.push(['engine', 'your motor runs hot — you\'ll stall in long pushes']);
     needs.push(['engine', 'more push always helps'], ['tires', 'more grip always helps'], ['armor', 'tougher plating']);
 
+    // Stay within budget: the best part you could actually pay for (or already own).
+    const budget = this.state.money;
     for (const [type, reason] of needs) {
-      const key = this.optimalPart(bug, type);
+      const key = this.optimalPart(bug, type, budget);
       if (key) {
         out.pick = { key, type, reason };
         break;
       }
     }
-    if (!out.pick) out.lines.push("Honestly? She's as good as parts can make her.");
+    if (!out.pick) {
+      const anyUpgrade = needs.some(([type]) => this.optimalPart(bug, type));
+      out.lines.push(anyUpgrade
+        ? `Nothing worth buying on ${formatMoney(budget)}. Win some cash and I'll find you something.`
+        : "Honestly? She's as good as parts can make her.");
+    }
     return out;
   }
 
