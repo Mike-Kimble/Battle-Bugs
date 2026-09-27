@@ -296,6 +296,8 @@ class App {
       if (!this.state.vehicles.length) {
         this.terminal.marketCat = 'chassis';
         this.terminal.setTab('market');
+      } else if (report.captured) {
+        this.terminal.setTab('hangar'); // the capture is waiting on the hoist
       }
       this.showWorkshop();
     };

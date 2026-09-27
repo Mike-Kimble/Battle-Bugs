@@ -73,6 +73,8 @@ export class TerminalUI {
         onclick: () => this.setTab(key),
       }, label, key === 'hangar' && newCount ? el('span', { class: 'tab-count' }, `${newCount} NEW`) : null))));
     this.root.replaceChildren(el('div', { class: 'terminal-body' }, body));
+    // The hoist and its stats belong to the Hangar; other tabs get the full width.
+    this.root.closest('#workshop-screen')?.classList.toggle('no-hoist', this.tab !== 'hangar');
     const tb = this.root.querySelector('.terminal-body');
     if (tb) tb.scrollTop = this.keepScroll ? scroll : 0;
     this.keepScroll = true;

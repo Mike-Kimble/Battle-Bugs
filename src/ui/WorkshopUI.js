@@ -429,7 +429,7 @@ export class WorkshopUI {
     cancelAnimationFrame(this.raf);
     const tick = () => {
       if (!this.canvas?.isConnected) return;
-      this.drawHoist();
+      if (this.canvas.offsetParent !== null) this.drawHoist(); // skip while the Hangar is hidden
       this.raf = requestAnimationFrame(tick);
     };
     this.raf = requestAnimationFrame(tick);
