@@ -285,50 +285,82 @@ export class WorkshopUI {
     const repairAll = this.economy.repairAllCost(bug);
     const issues = bug.battleIssues();
 
-    this.root.replaceChildren(...[
-      el('div', { class: 'panel-title' },
-        el('h2', {}, 'The Hoist'),
-        locked ? el('span', { class: 'badge badge-lock', title: 'Tournament rules' }, '🔒 TOURNAMENT LOCK') : null),
-      this.renderCarousel(bug),
-      el('div', { class: 'hoist-stage' }, this.canvas,
-        el('div', { class: 'hoist-hint' }, this.state.vehicles.length > 1 ? 'Tap a region to inspect · swipe to change vehicle' : 'Tap a region of the bug to inspect it')),
-      el('div', { class: 'region-buttons' },
-        Object.entries(HOIST_REGIONS).map(([key, r]) => el('button', {
-          class: 'btn btn-region',
-          onclick: () => this.openRegion(key),
-          onmouseenter: () => { this.hover = key; },
-          onmouseleave: () => { this.hover = null; },
-        }, el('span', {}, r.label), el('small', {}, this.regionSummary(key))))),
-      issues.length ? el('ul', { class: 'issues' }, issues.map((i) => el('li', {}, `⚠ ${i}`))) : null,
-      el('div', { class: 'repair-all' },
-        el('button', {
-          class: 'btn btn-primary',
-          disabled: repairAll === 0 || this.state.money < 1,
-          onclick: () => this.act(() => this.economy.repairAll(bug), (hp) => (hp ? `Repaired ${Math.round(hp)} HP` : 'Nothing repaired')),
-        }, repairAll ? `Repair all — ${formatMoney(repairAll)}` : 'Fully repaired'),
-      ),
-      this.refBug ? el('div', { class: 'notice notice-gold ref-note' },
-        el('strong', {}, 'Captured! '), `White ticks show ${this.refBug.name}, the bug that won it — green = better, red = worse. Open a region to compare components.`) : null,
-      this.renderStats(bug),
-    ].filter(Boolean));
+    const canDispose = !locked && this.state.vehicles.length > 1;
+    this.root.replaceChildren(el('div', { class: 'hoist-layout' },
+      el('div', { class: 'hoist-main' }, ...[
+        this.renderCarousel(bug, locked),
+        el('div', { class: 'hoist-stage' }, this.canvas,
+          el('div', { class: 'hoist-hint' }, this.state.vehicles.length > 1 ? 'Tap a region · swipe for next vehicle' : 'Tap a region to inspect it')),
+        el('div', { class: 'region-buttons' },
+          Object.entries(HOIST_REGIONS).map(([key, r]) => el('button', {
+            class: 'btn btn-region',
+            onclick: () => this.openRegion(key),
+            onmouseenter: () => { this.hover = key; },
+            onmouseleave: () => { this.hover = null; },
+          }, el('span', {}, r.label), el('small', {}, this.regionSummary(key))))),
+        issues.length ? el('ul', { class: 'issues' }, issues.map((i) => el('li', {}, `⚠ ${i}`))) : null,
+        el('div', { class: 'hoist-actions' },
+          el('button', {
+            class: 'btn btn-primary btn-small repair-btn',
+            disabled: repairAll === 0 || this.state.money < 1,
+            onclick: () => this.act(() => this.economy.repairAll(bug), (hp) => (hp ? `Repaired ${Math.round(hp)} HP` : 'Nothing repaired')),
+          }, repairAll ? `Repair all ${formatMoney(repairAll)}` : 'Fully repaired'),
+          el('button', { class: 'btn btn-small', onclick: () => { this.renaming = true; this.render(); } }, 'Rename'),
+          el('button', {
+            class: 'btn btn-small', disabled: !canDispose,
+            onclick: () => this.confirm(`Strip ${bug.name}?`, 'Engine, tires, armour and weapons go to your spares; the bare frame is sold as scrap.',
+              () => this.act(() => this.economy.stripVehicle(bug.id), (r) => `Stripped ${r.parts.length} parts, frame scrapped for ${formatMoney(r.scrap)}`)),
+          }, 'Strip'),
+          el('button', {
+            class: 'btn btn-small btn-danger', disabled: !canDispose,
+            onclick: () => this.confirm(`Sell ${bug.name}?`, `You'll receive ${formatMoney(this.economy.vehicleSellPrice(bug))}.`,
+              () => this.act(() => this.economy.sellVehicle(bug.id), (v) => `Sold for ${formatMoney(v)}`)),
+          }, `Sell ${formatMoney(this.economy.vehicleSellPrice(bug))}`)),
+      ].filter(Boolean)),
+      el('div', { class: 'hoist-side' }, ...[
+        this.refBug ? el('div', { class: 'notice notice-gold ref-note' },
+          el('strong', {}, 'Captured! '), 'White ticks show ', el('span', { class: 'cmp-legend-mark' }), ` ${this.refBug.name}, the bug that won it.`) : null,
+        this.renderStats(bug),
+      ].filter(Boolean))));
 
     this.startLoop();
     if (this.openRegionKey) this.openRegion(this.openRegionKey, true);
   }
 
-  renderCarousel(bug) {
+  renderCarousel(bug, locked) {
     const vs = this.state.vehicles;
     const i = vs.indexOf(bug);
     const many = vs.length > 1;
     const lockedIn = this.state.tournament.entered;
+    const name = this.renaming
+      ? el('form', {
+        class: 'rename',
+        onsubmit: (e) => {
+          e.preventDefault();
+          const v = e.target.elements.name.value.trim().slice(0, 24);
+          this.renaming = false;
+          if (v) this.act(() => { bug.name = v; }, 'Renamed');
+          else this.render();
+        },
+      }, el('input', { name: 'name', value: bug.name, maxlength: 24, 'aria-label': 'Vehicle name' }), el('button', { class: 'btn btn-small', type: 'submit' }, 'Save'))
+      : el('strong', {}, bug.name);
     return el('div', { class: 'hoist-name' },
       many ? el('button', { class: 'btn btn-icon carousel-btn', 'aria-label': 'Previous vehicle', disabled: lockedIn, onclick: () => this.cycle(-1) }, '◀') : null,
       el('span', { class: 'bug-swatch', style: { background: `hsl(${bug.hue} 60% 55%)` } }),
       el('div', { class: 'hoist-name-text' },
-        el('strong', {}, bug.name),
+        name,
         this.state.newVehicleIds.has(bug.id) ? el('span', { class: 'badge badge-gold' }, 'NEW') : null,
+        locked ? el('span', { class: 'badge badge-lock', title: 'Tournament rules' }, '🔒 LOCKED') : null,
         el('div', { class: 'muted small' }, bug.chassis.name, many ? ` · ${i + 1} of ${vs.length}` : '')),
       many ? el('button', { class: 'btn btn-icon carousel-btn', 'aria-label': 'Next vehicle', disabled: lockedIn, onclick: () => this.cycle(1) }, '▶') : null);
+  }
+
+  confirm(title, text, onYes) {
+    openModal(title, el('div', {},
+      el('p', {}, text),
+      el('div', { class: 'part-actions' },
+        el('button', { class: 'btn btn-primary', onclick: () => { closeModal(); onYes(); } }, 'Confirm'),
+        el('button', { class: 'btn', onclick: closeModal }, 'Cancel'))));
   }
 
   /** Put the next/previous hangar vehicle on the hoist. */
@@ -341,6 +373,7 @@ export class WorkshopUI {
     }
     const i = vs.indexOf(this.bug);
     const next = vs[(i + dir + vs.length) % vs.length];
+    this.renaming = false;
     this.act(() => this.state.setActive(next.id));
   }
 
@@ -381,11 +414,10 @@ export class WorkshopUI {
     const kn = (v) => `${(v / 1000).toFixed(1)} kN`;
     return el('div', { class: 'stats-block' },
       el('h3', {}, 'Derived stats'),
-      ref ? el('div', { class: 'cmp-legend' }, el('span', { class: 'cmp-legend-mark' }), `${ref.name} (your winner)`) : null,
       el('table', { class: 'stats' },
         el('tbody', {},
           el('tr', { title: 'm = m_chassis + Σ m_part' }, el('th', {}, 'Mass'), el('td', {}, `${s.mass} kg`),
-            el('td', { class: 'muted small' }, rs ? `${ref.name}: ${rs.mass} kg` : '')),
+            el('td', { class: 'muted small' }, rs ? `vs ${rs.mass} kg` : '')),
           row('Drive force', s.fDrive, p.fDrive, kn, 'F_drive = F_base × HP_engine / MaxHP', 'fDrive'),
           row('Grip limit', s.fGrip, p.fGrip, kn, 'F_grip = μ × m × g × HP_tires / MaxHP', 'fGrip'),
           row('Usable force', s.fUsable, p.fUsable, kn, 'F_usable = min(F_drive, F_grip)', 'fUsable'),
@@ -394,10 +426,10 @@ export class WorkshopUI {
           row('Stamina', s.staminaMax, p.staminaMax, (v) => `${v}`, 'Battery / thermal headroom', 'staminaMax'),
           row('Cooling', s.cooling, p.cooling, (v) => `${v}/s`, 'Idle recovery R_cool', 'cooling'),
         )),
-      el('p', { class: 'muted small' },
+      el('p', { class: 'muted small stats-note' },
         s.fDrive > s.fGrip
-          ? 'Traction-limited: your motor out-muscles your tires. Better grip = more push.'
-          : 'Power-limited: your tires can take more torque than the motor delivers.'),
+          ? 'Traction-limited: better grip = more push.'
+          : 'Power-limited: a stronger motor = more push.'),
     );
   }
 

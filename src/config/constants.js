@@ -116,7 +116,7 @@ export const ECONOMY = Object.freeze({
 
   // Manager betting & match fixing
   MANAGER_BET_DEFAULT: 0.1,  // share of cash the manager may bet, set on hire
-  MANAGER_BET_MAX: 0.5,
+  MANAGER_BET_MAX: 1,        // slider goes up to 100% of spare cash
   MANAGER_MIN_CONVICTION: 0.1,
   BOOKIE_MARGIN: 0.9,        // profit = stake × (1/P(outcome) − 1) × margin
   FIXING_STREAK: 3,          // bet-on-you-to-lose + lost, this many times running

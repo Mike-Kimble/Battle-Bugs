@@ -242,3 +242,51 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .wager-row { display: flex; align-items: baseline; gap: 8px; }
 .wager-amount { font-family: var(--pixel); font-size: 18px; font-weight: normal; color: var(--good); }
 .wager-slider { width: 100%; accent-color: var(--gold); }
+
+/* ───────────── Hangar = the hoist alone ───────────── */
+#workshop-screen.hangar-mode #terminal-panel { display: none; }
+#workshop-screen.hangar-mode #hoist-panel { flex: 1 1 auto; width: 100%; max-width: 1100px; margin: 0 auto; }
+.hoist-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.hoist-canvas { max-width: calc(52vh * 220 / 190); margin: 0 auto; }
+.hoist-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.hoist-actions .repair-btn { flex: 1 1 100%; }
+.hoist-actions .btn:not(.repair-btn) { flex: 1 1 0; }
+.hoist-side .stats-block h3:first-child { margin-top: 0; }
+.hoist-name .rename { flex: 1; }
+
+@media (max-width: 900px) {
+  #workshop-screen.hangar-mode { padding: 6px; }
+  #workshop-screen.hangar-mode #hoist-panel { padding: 8px 10px; box-shadow: none; }
+  .hoist-layout { grid-template-columns: 1fr; gap: 4px; }
+  .hoist-name { margin-bottom: 4px; }
+  .hoist-name-text strong { font-size: 18px; }
+  .hoist-canvas { max-width: calc(27dvh * 220 / 190); }
+  .hoist-hint { bottom: 12px; font-size: 13px; }
+  .region-buttons { margin: 6px 0 0; gap: 4px; }
+  .btn-region { padding: 5px 2px; gap: 2px; }
+  .btn-region small { font-size: 13px; }
+  .issues { margin: 4px 0 0; font-size: 15px; }
+  .hoist-actions { margin-top: 6px; gap: 4px; }
+  .hoist-actions .btn { padding: 6px 6px; }
+  .stats-block h3 { margin: 6px 0 2px; }
+  table.stats th, table.stats td { padding: 0 4px 0 0; font-size: 16px; line-height: 1.15; }
+  .stats-note { display: none; }
+  .ref-note { margin: 4px 0 0; padding: 4px 8px; font-size: 14px; }
+}
+
+/* Compact masthead on phones so the hoist fits below it */
+@media (max-width: 640px) {
+  #topbar { padding: 6px 10px; gap: 6px 12px; }
+  .hud-stats { gap: 10px; }
+  .stat small { font-size: 12px; }
+  .stat strong { font-size: 9px; }
+  .tab { padding: 10px 10px; font-size: 8px; }
+}
+@media (max-width: 900px) and (max-height: 720px) {
+  .hoist-canvas { max-width: calc(21dvh * 220 / 190); }
+  .hoist-hint { display: none; }
+  table.stats th, table.stats td { font-size: 14px; line-height: 1.05; }
+  .btn-region small { display: none; }
+}
+.ref-note { display: block; }
+.ref-note .cmp-legend-mark { vertical-align: middle; margin: 0 2px; }
