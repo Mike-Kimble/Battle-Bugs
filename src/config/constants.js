@@ -103,6 +103,7 @@ export const ECONOMY = Object.freeze({
   POOL_TIERS: [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 5, 5], // the starting pilot pool (plus a rookie)
   POOL_MAX: 18,              // new pilots beyond this retire the worst record
   PILOT_STIPEND: 40,         // sponsors' pocket money per fight cycle
+  RIVAL_EDGE: 1.05,          // your rival keeps their bug rated this far above your best
   MATCHED_CHALLENGERS: 2,    // board slots rating-matched to your best vehicle (≤ 1 star higher)
   MATCH_TOLERANCE: 0.2,      // an even match stays on the board while within ±20% of your best rating
   ROOKIE_UNTIL_WINS: 2,      // board always offers an easy rookie until this many wins

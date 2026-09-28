@@ -141,7 +141,7 @@ export class TerminalUI {
           el('button', { class: 'btn', onclick: () => this.setTab('hangar') }, 'Open the Hangar'))) : null,
       s.board.tierShift ? el('p', { class: 'small warn-text' }, `▲ The board has scrolled up ${s.board.tierShift} difficulty level${s.board.tierShift > 1 ? 's' : ''} after everyone walked off.`) : null,
       walked.length ? el('p', { class: 'small muted' }, `Walked off (back after your next fight): ${walked.map((c) => this.pilotName(c)).join(', ')}`) : null,
-      el('div', { class: 'card-grid' }, s.challengers.map((c) => this.challengerCard(c, { ready, label: c.rookie && this.economy.wantsRookie ? 'ROOKIE · EASY' : null }))));
+      el('div', { class: 'card-grid' }, s.challengers.map((c) => this.challengerCard(c, { ready }))));
   }
 
   challengerCard(c, { ready, onFight, label }) {
@@ -171,17 +171,13 @@ export class TerminalUI {
       el('div', { class: 'card-row challenger-head' },
         this.sprite.renderPortrait(c, 72),
         el('div', { class: 'card-info' },
-          label || c.matched ? el('div', { class: 'badges' },
-            label ? el('span', { class: 'badge badge-gold' }, label) : null,
-            c.matched ? el('span', { class: 'badge badge-match', title: 'Rated close to your best vehicle' }, 'EVEN MATCH') : null) : null,
+          label ? el('div', { class: 'badges' }, el('span', { class: 'badge badge-gold' }, label)) : null,
           el('h2', { class: 'pilot-name' }, this.pilotTitle(c)),
           el('div', { class: 'bug-subtitle' }, bug.name),
-          el('div', { class: 'tier' }, '★'.repeat(c.tier), el('span', { class: 'dim' }, '★'.repeat(5 - c.tier)),
-            c.record ? el('span', { class: 'pilot-record' }, ` ${c.record.w}W–${c.record.l}L`) : null),
-          el('div', { class: 'small muted' }, `${bug.chassis.name} · ${Math.round(bug.condition * 100)}% condition`)),
+          el('div', { class: 'tier', title: 'Ranking' }, '★'.repeat(c.tier), el('span', { class: 'dim' }, '★'.repeat(5 - c.tier))),
+          c.record ? el('div', { class: 'pilot-record' }, `Record ${c.record.w}W – ${c.record.l}L`) : null),
         this.sprite.renderThumbnail(bug, 72)),
       story ? el('p', { class: 'pilot-story' }, story) : null,
-      vehicleCompare(bug, this.state.activeBug, { neutral: true }),
       this.weaponChips(bug),
       foot,
     );

@@ -35,6 +35,7 @@ export class GameState extends EventEmitter {
     this.managerBetPct = 0;
     this.fixStreak = 0;
     this.fine = null; // { amount, battlesLeft }
+    this.rivalId = null; // the first pilot you fought: they follow you to the Grand Final
     this.compareRef = null; // { id, refId }: captured vehicle vs the vehicle that won it (session only)
     this.log = [];
     this.newVehicleIds = new Set(); // captured this session, flagged NEW until put on the hoist
@@ -104,6 +105,7 @@ export class GameState extends EventEmitter {
     s.managerBetPct = d.managerBetPct ?? (s.staff.manager ? 0.1 : 0);
     s.fixStreak = d.fixStreak || 0;
     s.fine = d.fine || null;
+    s.rivalId = d.rivalId || null;
     s.log = d.log || [];
     return s;
   }
@@ -134,6 +136,7 @@ export class GameState extends EventEmitter {
       managerBetPct: this.managerBetPct,
       fixStreak: this.fixStreak,
       fine: this.fine,
+      rivalId: this.rivalId,
       log: this.log.slice(-40),
     };
   }

@@ -279,4 +279,11 @@ export const PILOT_STYLES = Object.freeze({
   },
 });
 
+/** Backstories for your rival — the first pilot you ever fought. */
+export const RIVAL_STORIES = Object.freeze({
+  beaten: '{name} has never forgotten the day you beat them in a junkyard scrapper. Every upgrade since has been about you.',
+  won: '{name} beat you the day you rolled out of the junkyard and has told everyone on {planet} about it. Twice.',
+  final: 'It was always going to be {name}. From the junkyard to the Grand Final — one of you goes home a legend.',
+});
+
 export const FIGHTING_STYLES = Object.freeze(Object.keys(PILOT_STYLES).filter((k) => k !== 'hapless'));
