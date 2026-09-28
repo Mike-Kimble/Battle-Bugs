@@ -133,12 +133,13 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .notice-gold { border-color: var(--gold); color: var(--gold); }
 
 /* HP bars */
-.hpbar { position: relative; height: 16px; background: #0e0b16; border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
+/* The unfilled part of an HP bar is the missing HP, shown in red. */
+.hpbar { position: relative; height: 16px; background: repeating-linear-gradient(135deg, #7a1f2b 0 4px, #5a1620 4px 8px); border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
 .hpbar-fill { height: 100%; }
 .hpbar.good .hpbar-fill { background: #2f7a3a; }
 .hpbar.warn .hpbar-fill { background: #8a6a1f; }
-.hpbar.bad .hpbar-fill { background: #8a2a2a; }
-.hpbar-label { position: absolute; inset: 0; display: flex; align-items: center; padding-left: 6px; font-size: 14px; }
+.hpbar.bad .hpbar-fill { background: #8a4a1f; }
+.hpbar-label { position: absolute; inset: 0; display: flex; align-items: center; padding-left: 6px; font-size: 14px; text-shadow: 0 1px 0 #000, 0 0 3px #000; }
 
 /* Parts */
 .part-card { background: var(--panel-2); border: 2px solid var(--line); border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; gap: 6px; }

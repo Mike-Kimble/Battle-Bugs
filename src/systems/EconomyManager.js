@@ -1212,8 +1212,8 @@ export class EconomyManager {
     if (!tournament && result === 'win') {
       s.record.challengerWins++;
       if (s.record.challengerWins === ECONOMY.TOURNAMENT_UNLOCK_WINS) report.lines.push('★ The Inter-Planetary Tournament is now OPEN to you!');
-      if (s.record.challengerWins === ECONOMY.MECHANIC_SHOWS_AT_WINS) report.lines.push('A mechanic has heard about your wins and is looking for work — see the Staff tab.');
-      if (s.record.challengerWins === ECONOMY.MANAGER_SHOWS_AT_WINS) report.lines.push('A manager wants to represent you — see the Staff tab.');
+      if (s.record.challengerWins === ECONOMY.MECHANIC_SHOWS_AT_WINS) report.lines.push('A mechanic has heard about your wins and is looking for work — see the Admin tab.');
+      if (s.record.challengerWins === ECONOMY.MANAGER_SHOWS_AT_WINS) report.lines.push('A manager wants to represent you — see the Admin tab.');
     }
 
     // An outstanding fine counts down before any new arrest is processed.

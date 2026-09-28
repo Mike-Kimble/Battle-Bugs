@@ -6,7 +6,7 @@ const TABS = [
   ['hangar', 'Hangar'],
   ['market', 'Marketplace'],
   ['challengers', 'Challenger Board'],
-  ['staff', 'Staff'],
+  ['staff', 'Admin'],
   ['tournament', 'Tournament'],
 ];
 
@@ -231,7 +231,7 @@ export class TerminalUI {
       el('p', {}, 'Stakes: ', el('strong', {}, opts.tournament ? `Tournament purse ${formatMoney(c.bounty)}` : deal?.type === 'titles' ? 'TITLES' : formatMoney(deal?.amount ?? 0))),
       el('h3', {}, "Manager's betting limit for this fight"),
       el('div', { class: 'slider-row' }, slider, pctLabel),
-      el('p', { class: 'small muted' }, `Share of the cash left after your wager (${formatMoney(Math.max(0, s.money - reserved))}) the manager may bet — 0% means no bet. Default ${Math.round(s.managerBetPct * 100)}% (Staff tab).`),
+      el('p', { class: 'small muted' }, `Share of the cash left after your wager (${formatMoney(Math.max(0, s.money - reserved))}) the manager may bet — 0% means no bet. Default ${Math.round(s.managerBetPct * 100)}% (Admin tab).`),
       preview,
       el('div', { class: 'part-actions' },
         el('button', { class: 'btn btn-fight', onclick: () => { closeModal(); this.onFight(c, { ...opts, betPct: pct }); } }, 'FIGHT'))));
