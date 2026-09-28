@@ -435,7 +435,7 @@ export class TerminalUI {
       subnav,
       el('p', { class: 'muted' }, catBlurb, ' Stock rotates after every bout. ',
         s.staff.mechanic && cat !== 'chassis' ? 'Your mechanic gets 10% off parts. ' : '',
-        manager ? 'Your manager is flagging rare deals.' : 'Hire a manager to have rare deals flagged.'),
+        manager ? 'Your manager is flagging rare deals.' : ''),
       el('h3', {}, `${catLabel} for sale`),
       forSale.childElementCount ? forSale : el('p', { class: 'muted' }, 'Sold out — new stock arrives after your next bout.'),
       ...(cat === 'chassis' ? [
@@ -459,12 +459,17 @@ export class TerminalUI {
         ? el('button', { class: 'btn btn-small', onclick: () => this.act(() => this.economy.dismiss(role), `${title} dismissed`) }, 'Dismiss')
         : el('button', { class: 'btn btn-small btn-primary', disabled: s.money < hire, onclick: () => this.act(() => this.economy.hire(role), `${title} hired`) }, `Hire ${formatMoney(hire)}`));
 
+    const eco = this.economy;
+    const cards = [
+      eco.staffAvailable('mechanic') ? staffCard('mechanic', 'Mechanic', ECONOMY.MECHANIC_HIRE, ECONOMY.MECHANIC_WAGE,
+        'Repairs your active vehicle after each bout, gets you 10% off parts and repairs, and tells you the one upgrade that would help most.', '🔧') : null,
+      eco.staffAvailable('manager') ? staffCard('manager', 'Manager', ECONOMY.MANAGER_HIRE, ECONOMY.MANAGER_WAGE,
+        'Bets on your fights, sells broken scrap at peak value, flags rare deals — and usually tracks down the part your mechanic wants.', '📈') : null,
+    ].filter(Boolean);
     return el('div', {},
-      el('div', { class: 'card-grid' },
-        staffCard('mechanic', 'Mechanic', ECONOMY.MECHANIC_HIRE, ECONOMY.MECHANIC_WAGE,
-          'Repairs your active vehicle after each bout, gets you 10% off parts and repairs, and tells you the one upgrade that would help most.', '🔧'),
-        staffCard('manager', 'Manager', ECONOMY.MANAGER_HIRE, ECONOMY.MANAGER_WAGE,
-          'Bets on your fights, sells broken scrap at peak value, flags rare deals — and usually tracks down the part your mechanic wants.', '📈')),
+      cards.length
+        ? el('div', { class: 'card-grid' }, cards)
+        : el('p', { class: 'muted' }, "Nobody wants to work for an unknown from the junkyard. Win some fights and people will come looking."),
       s.staff.manager ? this.renderBetting() : null,
       s.fine ? this.renderFine() : null,
       el('h3', {}, 'Recent log'),

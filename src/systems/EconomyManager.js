@@ -206,6 +206,13 @@ export class EconomyManager {
   }
 
   // ───────────── Staff ─────────────
+  /** Staff only come looking for work once you've made a name (or are already on the books). */
+  staffAvailable(role) {
+    const wins = this.state.record.challengerWins;
+    const need = role === 'mechanic' ? ECONOMY.MECHANIC_SHOWS_AT_WINS : ECONOMY.MANAGER_SHOWS_AT_WINS;
+    return this.state.staff[role] || wins >= need;
+  }
+
   hire(role) {
     if (this.state.staff[role]) return;
     const fee = role === 'mechanic' ? ECONOMY.MECHANIC_HIRE : ECONOMY.MANAGER_HIRE;
@@ -906,6 +913,8 @@ export class EconomyManager {
     if (!tournament && result === 'win') {
       s.record.challengerWins++;
       if (s.record.challengerWins === ECONOMY.TOURNAMENT_UNLOCK_WINS) report.lines.push('★ The Inter-Planetary Tournament is now OPEN to you!');
+      if (s.record.challengerWins === ECONOMY.MECHANIC_SHOWS_AT_WINS) report.lines.push('A mechanic has heard about your wins and is looking for work — see the Staff tab.');
+      if (s.record.challengerWins === ECONOMY.MANAGER_SHOWS_AT_WINS) report.lines.push('A manager wants to represent you — see the Staff tab.');
     }
 
     // An outstanding fine counts down before any new arrest is processed.
