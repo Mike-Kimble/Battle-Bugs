@@ -1,6 +1,6 @@
 import { ECONOMY } from '../config/constants.js';
 import {
-  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, CHALLENGER_ROSTER,
+  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, CHALLENGER_ROSTER, RARITY,
 } from '../config/partsData.js';
 import { BattleBug } from '../entities/BattleBug.js';
 import { Part, makeId } from '../entities/Part.js';
@@ -23,12 +23,51 @@ export function alienName() {
   return `${pick(s.start)}${pick(s.mid)}${pick(s.end)}`.replace(/^./, (c) => c.toUpperCase());
 }
 
-/** Pick a part key of `type`, preferring the band [tier-1, tier]. */
+/** Parts the Marketplace stocks as a matter of course (common · uncommon · rare). */
+export function shopKeys(type) {
+  return (PART_KEYS_BY_TYPE[type] || []).filter((k) => RARITY[PARTS[k].rarity].shop);
+}
+
+const weightedPick = (keys) => {
+  const total = keys.reduce((sum, k) => sum + RARITY[PARTS[k].rarity].weight, 0);
+  let roll = Math.random() * total;
+  for (const k of keys) {
+    roll -= RARITY[PARTS[k].rarity].weight;
+    if (roll <= 0) return k;
+  }
+  return keys[keys.length - 1];
+};
+
+/** Roll a rarity for one part on a generated bug; better pilots turn up with better finds. */
+function rollRarity(tier) {
+  const boost = Math.max(0.5, tier / 3);
+  const r = Math.random();
+  if (r < ECONOMY.FIND_CHANCE.legendary * boost) return 'legendary';
+  if (r < (ECONOMY.FIND_CHANCE.legendary + ECONOMY.FIND_CHANCE.epic) * boost) return 'epic';
+  if (r < 0.14) return 'rare';
+  if (r < 0.4) return 'uncommon';
+  return 'common';
+}
+
+/**
+ * Pick a part key of `type` from the band [tier-1, tier]: roll a rarity, then
+ * step down to the next rarity the band actually has.
+ */
 function pickPartKey(type, tier) {
   const all = PART_KEYS_BY_TYPE[type] || [];
-  const band = all.filter((k) => PARTS[k].tier <= tier && PARTS[k].tier >= tier - 1);
-  const pool = band.length ? band : all.filter((k) => PARTS[k].tier <= tier);
-  return pick(pool.length ? pool : all);
+  const t = Math.min(5, tier);
+  let band = all.filter((k) => PARTS[k].tier <= t && PARTS[k].tier >= t - 1);
+  if (!band.length) band = all.filter((k) => PARTS[k].tier <= t);
+  if (!band.length) band = all;
+  const want = RARITY[rollRarity(tier)].rank;
+  // Nearest rarity the band has: step down first, then up (never a free upgrade to a gem).
+  const order = [want, ...[1, 2, 3, 4].flatMap((d) => [want - d, want + d])].filter((r) => r >= 0 && r <= 4);
+  for (const rank of order) {
+    if (rank > want && rank >= RARITY.epic.rank) continue;
+    const keys = band.filter((k) => RARITY[PARTS[k].rarity].rank === rank);
+    if (keys.length) return pick(keys);
+  }
+  return pick(band);
 }
 
 export function formatMoney(n) {
@@ -572,25 +611,59 @@ export class EconomyManager {
     return this.vehicleStars(c.bug) <= this.vehicleStars(best) + 1 && Math.abs(this.rating(c.bug) - target) / target <= ECONOMY.MATCH_TOLERANCE;
   }
 
+  /**
+   * What a vehicle looks worth from the outside. Nobody can see under the
+   * hood, so the motor is priced like an ordinary one of its tier — a rare
+   * engine inside is a bargain waiting to be found.
+   */
+  listingValue(bug) {
+    const e = bug.engine;
+    if (!e) return this.vehicleValue(bug);
+    const same = shopKeys('engine').filter((k) => PARTS[k].tier === e.tier);
+    const typical = same.length ? same.reduce((sum, k) => sum + PARTS[k].value, 0) / same.length : e.value;
+    return this.vehicleValue(bug) - e.value * e.hpRatio + typical * e.hpRatio;
+  }
+
+  /** The rarest find (epic or legendary) on this bug, if any. */
+  hiddenGem(bug) {
+    return bug.parts
+      .filter((p) => RARITY[p.rarity].rank >= RARITY.epic.rank)
+      .sort((a, b) => RARITY[b.rarity].rank - RARITY[a.rarity].rank)[0] || null;
+  }
+
+  /** An epic or legendary part in the shop window, priced beyond what you have right now. */
+  teaserListing() {
+    if (!chance(ECONOMY.TEASER_CHANCE)) return null;
+    const keys = Object.keys(PARTS).filter((k) => !RARITY[PARTS[k].rarity].shop && PARTS[k].type !== 'chassis');
+    const key = weightedPick(keys);
+    const part = Part.create(key, 1);
+    const price = roundTo(part.value * rand(1.2, 1.6), 5);
+    if (price <= this.state.money) return null; // only ever a tease
+    return { id: makeId('mk'), part, price, teaser: true };
+  }
+
   generateMarket() {
     const tierCap = clampTier(this.baseTier + 1);
     const parts = [];
     const types = Object.entries(ECONOMY.MARKET_STOCK).flatMap(([type, n]) => Array(n).fill(type));
     for (const type of types) {
       const t = chance(0.12) ? 5 : tierCap;
-      const pool = PART_KEYS_BY_TYPE[type].filter((k) => PARTS[k].tier <= t);
-      const key = pick(pool);
+      const pool = shopKeys(type).filter((k) => PARTS[k].tier <= t);
+      const key = weightedPick(pool);
       const condition = chance(0.45) ? 1 : rand(0.55, 0.95);
       const part = Part.create(key, condition);
       const markup = chance(0.15) ? rand(0.55, 0.78) : rand(ECONOMY.MARKUP_MIN, ECONOMY.MARKUP_MAX);
       parts.push({ id: makeId('mk'), part, price: roundTo(part.value * part.hpRatio * markup, 5) });
     }
+    // Now and then a dealer puts something special in the window — always just out of reach.
+    const tease = this.teaserListing();
+    if (tease) parts.push(tease);
     const vehicles = [];
     for (let i = 0; i < ECONOMY.MARKET_VEHICLES; i++) {
       const bug = this.generateBug(clampTier(tierCap - randInt(0, 1)), { alien: chance(0.5), condition: () => rand(0.6, 1) });
       if (!bug.alien) bug.name = `Used ${bug.name}`;
       const markup = chance(0.15) ? rand(0.6, 0.78) : rand(ECONOMY.MARKUP_MIN, ECONOMY.MARKUP_MAX);
-      vehicles.push({ id: makeId('mk'), bug, price: Math.max(ECONOMY.MIN_VEHICLE_PRICE, roundTo(this.vehicleValue(bug) * markup, 5)) });
+      vehicles.push({ id: makeId('mk'), bug, price: Math.max(ECONOMY.MIN_VEHICLE_PRICE, roundTo(this.listingValue(bug) * markup, 5)) });
     }
     this.state.market = { parts, vehicles };
   }
@@ -601,7 +674,8 @@ export class EconomyManager {
     const s = bug.getStats();
     const armor = bug.armor && !bug.armor.isBroken ? bug.armor.stats.absorb * bug.armor.hpRatio * 20 : 0;
     const guns = bug.weapons.filter((w) => !w.isBroken).length * 5;
-    return s.fUsable / 1000 + s.fGrip / 2500 + bug.chassis.hp / 8 + s.staminaMax / 10 + s.vMax / 25 + guns + armor;
+    const heat = s.cooling * 0.8 - (s.drainMult - 1) * 30;
+    return s.fUsable / 1000 + s.fGrip / 2500 + bug.chassis.hp / 8 + s.staminaMax / 10 + s.vMax / 25 + guns + armor + heat;
   }
 
   /**
@@ -922,16 +996,17 @@ export class EconomyManager {
    * best motor, tires and armour for it (greedy), armed with the best
    * weapons. Returns catalogue keys and the build's rating.
    */
-  strongestBuild() {
+  strongestBuild({ allow = (k) => RARITY[PARTS[k].rarity].shop } = {}) {
+    const keysOf = (type) => PART_KEYS_BY_TYPE[type].filter(allow);
     const make = (b) => BattleBug.create({ ...b, condition: () => 1 });
-    const weaponsFor = (chassis) => PART_KEYS_BY_TYPE.weapon.slice()
+    const weaponsFor = (chassis) => keysOf('weapon')
       .sort((x, y) => PARTS[y].tier - PARTS[x].tier || PARTS[y].value - PARTS[x].value)
       .slice(0, PARTS[chassis].stats.weaponSlots);
     let best = null;
-    for (const chassis of PART_KEYS_BY_TYPE.chassis) {
+    for (const chassis of keysOf('chassis')) {
       const build = { chassis, engine: 'rust_motor', tires: 'bald_rollers', armor: null, weapons: weaponsFor(chassis) };
       for (const type of ['engine', 'tires', 'armor', 'engine', 'tires']) { // two passes: grip and power depend on each other
-        const ranked = PART_KEYS_BY_TYPE[type]
+        const ranked = keysOf(type)
           .map((k) => [k, this.rating(make({ ...build, [type]: k }))])
           .sort((x, y) => y[1] - x[1]);
         build[type] = ranked[0][0];
@@ -950,12 +1025,13 @@ export class EconomyManager {
    */
   tournamentOpponentJSON(round) {
     const s = this.state;
-    const { build } = this.strongestBuild();
     const n = ECONOMY.TOURNAMENT_ROUNDS;
     const final = round >= n - 1;
+    // Shop-bought best builds; the Grand Final brings out the epic parts too.
+    const { build } = this.strongestBuild(final ? { allow: (k) => RARITY[PARTS[k].rarity].rank <= RARITY.epic.rank } : {});
     const spec = { ...build };
     if (!final) {
-      const pool = PART_KEYS_BY_TYPE.weapon.slice()
+      const pool = shopKeys('weapon')
         .sort((x, y) => PARTS[y].tier - PARTS[x].tier || PARTS[y].value - PARTS[x].value)
         .slice(0, build.weapons.length + 1);
       spec.weapons = pool.sort(() => Math.random() - 0.5).slice(0, build.weapons.length);
@@ -1021,7 +1097,10 @@ export class EconomyManager {
   optimalPart(bug, type, budget = Infinity, opts = {}) {
     const base = this.rating(bug);
     let best = null;
-    for (const key of PART_KEYS_BY_TYPE[type]) {
+    // Only what you own or the shop normally stocks — your mechanic can't conjure rare parts.
+    const owned = opts.owned || this.state.inventory;
+    const keys = new Set([...shopKeys(type), ...owned.filter((p) => p.type === type).map((p) => p.key)]);
+    for (const key of keys) {
       if (!this.affordable(key, budget, opts)) continue;
       const part = new Part(key);
       // Weapons all add the same raw rating, so break ties by quality (tier, then value).
@@ -1061,10 +1140,13 @@ export class EconomyManager {
    * @returns {{lines: string[], pick: {key, type, reason}|null}}
    */
   mechanicAdvice(bug) {
-    const out = { lines: [], pick: null };
+    const out = { lines: [], pick: null, combos: [] };
     if (!bug) return out;
     const hurt = bug.parts.filter((p) => p.hpRatio < 0.5).sort((a, b) => a.hpRatio - b.hpRatio)[0];
     if (hurt) out.lines.push(`Fix your ${hurt.name} first — it's at ${Math.round(hurt.hpRatio * 100)}% and dragging everything down.`);
+    // Combinations: the bad ones first — that's what a mechanic is for.
+    const combos = bug.getStats().interactions.slice().sort((a, b) => a.good - b.good);
+    out.combos = combos.map((c) => ({ good: c.good, text: c.text }));
     if (this.inField) {
       if (!hurt) out.lines.push("We're in the field — no upgrades now. Just keep her patched up.");
       return out;
@@ -1291,6 +1373,8 @@ export class EconomyManager {
     if (s.staff.manager) {
       const deals = [...s.market.parts, ...s.market.vehicles].filter((l) => this.isRareDeal(l));
       if (deals.length) report.lines.push(`Manager: ${deals.length} rare deal${deals.length > 1 ? 's' : ''} flagged on the Marketplace`);
+      const gems = [...s.market.vehicles.map((l) => l.bug), ...s.challengers.map((c) => c.bug)].filter((b) => this.hiddenGem(b));
+      if (gems.length) report.lines.push(`Manager: I've heard whispers about something rare out there — ${gems.length === 1 ? 'one ride' : `${gems.length} rides`} worth a closer look.`);
     }
 
     report.gameOver = this.checkGameOver();

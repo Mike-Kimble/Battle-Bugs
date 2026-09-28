@@ -125,11 +125,12 @@ export const PART_COMPARE = {
 export const VEHICLE_COMPARE = [
   { label: 'Push', get: (s) => s.fUsable, fmt: kN, max: 65000 },
   { label: 'Grip', get: (s) => s.fGrip, fmt: kN, max: 130000 },
-  { label: 'Top speed', get: (s) => s.vMax, fmt: (v) => `${Math.round(v)} px/s`, max: 380 },
+  { label: 'Top speed', get: (s) => s.vMax, fmt: (v) => `${Math.round(v)} px/s`, max: 480 },
   { label: 'Accel', get: (s) => s.accel, fmt: (v) => `${Math.round(v)}`, max: 500 },
-  { label: 'Stamina', get: (s) => s.staminaMax, fmt: int, max: 150 },
-  { label: 'Hull', get: (s, bug, repaired) => (repaired ? bug.chassis.maxHp : bug.chassis.hp), fmt: int, max: 260 },
-  { label: 'Mass', get: (s) => s.mass, fmt: (v) => `${v} kg`, max: 330, better: 'neutral' },
+  { label: 'Stamina', get: (s) => s.staminaMax, fmt: int, max: 180 },
+  { label: 'Cooling', get: (s) => s.cooling, fmt: (v) => `${v}/s`, max: 25 },
+  { label: 'Hull', get: (s, bug, repaired) => (repaired ? bug.chassis.maxHp : bug.chassis.hp), fmt: int, max: 380 },
+  { label: 'Mass', get: (s) => s.mass, fmt: (v) => `${v} kg`, max: 400, better: 'neutral' },
 ];
 
 const partScaleCache = {};
@@ -193,11 +194,15 @@ export function partCompare(part, current, { legend } = {}) {
   })), { legend: legend ?? (current ? `on hoist: ${current.name}` : 'nothing fitted in this slot') });
 }
 
-export function vehicleCompare(bug, current, { neutral = false } = {}) {
+/** Stats you can judge from the outside, without seeing under the hood. */
+const EXTERIOR = new Set(['Hull']);
+
+export function vehicleCompare(bug, current, { neutral = false, exterior = false } = {}) {
   const s = bug.getStats();
   const ps = pristineStats(bug);
   const cs = current && current !== bug ? pristineStats(current) : null;
-  return compareBars(VEHICLE_COMPARE.map((r) => ({
+  const rows = exterior ? VEHICLE_COMPARE.filter((r) => EXTERIOR.has(r.label)) : VEHICLE_COMPARE;
+  return compareBars(rows.map((r) => ({
     label: r.label, fmt: r.fmt, better: r.better, max: r.max,
     value: r.get(s, bug), potential: r.get(ps, bug, true), current: cs ? r.get(cs, current, true) : null,
   })), { neutral, legend: cs ? `on hoist: ${current.name}` : null });
@@ -219,6 +224,7 @@ export function partCard(part, economy, { actions = [], extra = null, compareTo,
     el('div', { class: 'part-head' },
       el('span', { class: `part-type type-${part.type}` }, part.type),
       el('strong', {}, part.name),
+      part.rarity !== 'common' ? el('span', { class: `rarity-tag rarity-${part.rarity}` }, part.rarity) : null,
       el('span', { class: 'part-mass' }, `${part.mass} kg`)),
     el('div', { class: 'part-stats' }, partStatLine(part)),
     hpBar(part.hpRatio, { label: part.isBroken ? 'BROKEN' : `${Math.ceil(part.hp)}/${part.maxHp} HP` }),
@@ -391,6 +397,7 @@ export class WorkshopUI {
     const eco = this.economy;
     const advice = eco.mechanicAdvice(bug);
     const lines = advice.lines.map((l) => el('div', {}, l));
+    for (const c of advice.combos) lines.push(el('div', { class: `interaction ${c.good ? 'good' : 'bad'}` }, `${c.good ? '✓' : '⚠'} ${c.text}`));
     if (advice.pick) {
       const def = PARTS[advice.pick.key];
       const where = eco.pickAvailability(advice.pick.key);

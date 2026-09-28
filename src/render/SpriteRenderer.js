@@ -148,7 +148,7 @@ export class SpriteRenderer {
       ctx.fillRect(r * 0.3, -r * 0.9, 4, r * 1.8);
       return;
     }
-    const style = TIRE_STYLE[tires.key] || TIRE_STYLE.bald_rollers;
+    const style = (typeof tires.def.look === 'object' ? tires.def.look : null) || TIRE_STYLE[tires.key] || TIRE_STYLE.bald_rollers;
     const broken = tires.isBroken;
     const phase = (bug.odometer || 0) % 8;
     const w = r * 0.34;
@@ -202,7 +202,7 @@ export class SpriteRenderer {
     ctx.fillStyle = '#3a3542';
     ctx.fillRect(x, -r * 0.28, r * 0.3, r * 0.56);
     if (e.isBroken) return;
-    const glow = ENGINE_GLOW[e.key] || '#ff8a3d';
+    const glow = e.def.glow || ENGINE_GLOW[e.key] || '#ff8a3d';
     const flick = 0.55 + 0.45 * (bug.throttle || 0) * (0.7 + 0.3 * Math.sin(time * 40));
     ctx.globalAlpha *= flick;
     ctx.fillStyle = glow;
@@ -336,7 +336,7 @@ export class SpriteRenderer {
     this.hullPath(ctx, shape, r);
     ctx.clip();
     ctx.globalAlpha *= 0.35 + 0.65 * a.hpRatio;
-    switch (a.key) {
+    switch (a.def.look || a.key) {
       case 'scrap_plating':
         for (let i = 0; i < 4; i++) {
           ctx.fillStyle = ['#8a7a66', '#6d7580', '#90705a'][i % 3];
@@ -431,7 +431,7 @@ export class SpriteRenderer {
     const dark = broken ? '#2a2530' : '#4a5060';
     ctx.lineWidth = 2;
     ctx.strokeStyle = OUTLINE;
-    switch (w.key) {
+    switch (w.def.look || w.key) {
       case 'emp_pulse': {
         ctx.fillStyle = dark;
         ctx.fillRect(-4, -3, 8, 6);

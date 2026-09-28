@@ -36,6 +36,7 @@ export class GameState extends EventEmitter {
     this.fixStreak = 0;
     this.winBetStreak = 0; // wins in a row with the manager betting on you to win
     this.pendingDM = null; // { pilotId, lines } — a DM waiting for you back in the workshop
+    this.discovered = new Set(); // every part key you've ever owned — the Codex, kept across seasons
     this.fine = null; // { amount, battlesLeft }
     this.rivalId = null; // the first alien you beat in a title match: they follow you to the Grand Final
     this.rivalNextAt = 0; // bout count at which the rival next turns up on the board
@@ -48,7 +49,7 @@ export class GameState extends EventEmitter {
    * A fresh game. A champion can start a new season from scratch, carrying
    * the grand prize as extra starting money.
    */
-  static newGame({ bonus = 0, season = 1, titles = 0 } = {}) {
+  static newGame({ bonus = 0, season = 1, titles = 0, discovered = [] } = {}) {
     const state = new GameState();
     state.fresh = true;
     state.startBonus = bonus;
@@ -56,8 +57,8 @@ export class GameState extends EventEmitter {
     state.titles = titles;
     const [lo, hi] = ECONOMY.JUNK_CONDITION;
     const starter = BattleBug.create({ ...STARTER_BUG, condition: () => lo + Math.random() * (hi - lo) });
-    state.vehicles.push(starter);
-    state.activeVehicleId = starter.id;
+    state.discovered = new Set(discovered);
+    state.addVehicle(starter);
     return state;
   }
 
@@ -109,6 +110,9 @@ export class GameState extends EventEmitter {
     s.fixStreak = d.fixStreak || 0;
     s.winBetStreak = d.winBetStreak || 0;
     s.pendingDM = d.pendingDM || null;
+    s.discovered = new Set(d.discovered || []);
+    for (const v of s.vehicles) s.discover(v.parts);
+    s.discover(s.inventory);
     s.fine = d.fine || null;
     s.rivalId = d.rivalId || null;
     s.rivalNextAt = d.rivalNextAt || 0;
@@ -143,6 +147,7 @@ export class GameState extends EventEmitter {
       fixStreak: this.fixStreak,
       winBetStreak: this.winBetStreak,
       pendingDM: this.pendingDM,
+      discovered: [...this.discovered],
       fine: this.fine,
       rivalId: this.rivalId,
       rivalNextAt: this.rivalNextAt,
@@ -188,7 +193,13 @@ export class GameState extends EventEmitter {
     return this.vehicles.find((v) => v.id === id) || null;
   }
 
+  /** Log parts in the Codex. */
+  discover(parts) {
+    for (const p of parts) if (p) this.discovered.add(p.key);
+  }
+
   addVehicle(bug) {
+    this.discover(bug.parts);
     this.vehicles.push(bug);
     if (!this.activeVehicleId) this.activeVehicleId = bug.id;
   }
@@ -214,6 +225,7 @@ export class GameState extends EventEmitter {
 
   // ───────────── Inventory ─────────────
   addPart(part) {
+    this.discover([part]);
     this.inventory.push(part);
   }
 

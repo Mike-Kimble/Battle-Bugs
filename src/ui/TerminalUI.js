@@ -1,5 +1,6 @@
 import { ECONOMY, WEAPON_CLASSES } from '../config/constants.js';
 import { formatMoney } from '../systems/EconomyManager.js';
+import { PARTS, RARITY } from '../config/partsData.js';
 import { el, toast, hpBar, partCard, openModal, closeModal, counterpart, vehicleCompare } from './WorkshopUI.js';
 
 const TABS = [
@@ -176,9 +177,20 @@ export class TerminalUI {
           c.record ? el('div', { class: 'pilot-record' }, `Record ${c.record.w}W – ${c.record.l}L`) : null),
         this.sprite.renderThumbnail(bug, 72)),
       story ? el('p', { class: 'pilot-story' }, story) : null,
+      onFight ? null : this.managerHunch(bug),
       this.weaponChips(bug),
       foot,
     );
+  }
+
+  /** With a manager, a word in your ear when a bug hides something special. */
+  managerHunch(bug) {
+    if (!this.state.staff.manager) return null;
+    const gem = this.economy.hiddenGem(bug);
+    if (!gem) return null;
+    const where = { engine: 'under the hood', tires: 'in the running gear', armor: 'in the plating', weapon: 'in the weapons', chassis: 'in the frame' }[gem.type];
+    return el('p', { class: `small manager-hunch rarity-${gem.rarity}` },
+      `🕵 Manager: "Word is there's something ${gem.rarity === 'legendary' ? 'legendary' : 'special'} ${where} of this one."`);
   }
 
   pilotName(c) {
@@ -400,6 +412,7 @@ export class TerminalUI {
       const badges = [
         l.part && l.part.key === pickKey ? el('span', { class: 'badge badge-match' }, "🔧 MECHANIC'S PICK") : null,
         l.managerFind ? el('span', { class: 'badge badge-gold' }, '★ MANAGER FOUND') : null,
+        l.teaser ? el('span', { class: `badge rarity-tag rarity-${l.part.rarity}` }, "✦ DEALER'S SHOWPIECE") : null,
         manager && this.economy.isRareDeal(l) ? el('span', { class: 'badge badge-gold' }, '★ RARE DEAL') : null,
       ].filter(Boolean);
       return badges.length ? el('div', { class: 'badges' }, badges) : null;
@@ -431,7 +444,10 @@ export class TerminalUI {
             el('h3', {}, l.bug.name),
             el('div', { class: 'small muted' }, l.bug.chassis.name),
             hpBar(l.bug.condition, { label: `Condition ${Math.round(l.bug.condition * 100)}%` }))),
-        vehicleCompare(l.bug, active),
+        // Sold as seen: you can't look under the hood.
+        vehicleCompare(l.bug, active, { exterior: true }),
+        el('p', { class: 'small muted under-hood' }, 'Under the hood: ???'),
+        this.managerHunch(l.bug),
         this.weaponChips(l.bug),
         el('div', { class: 'card-foot' },
           el('div', { class: 'bounty' }, el('small', {}, 'Price'), el('strong', {}, formatMoney(l.price))),
@@ -515,6 +531,7 @@ export class TerminalUI {
         : el('p', { class: 'muted' }, "Nobody wants to work for an unknown from the junkyard. Win some fights and people will come looking."),
       s.staff.manager ? this.renderBetting() : null,
       s.fine ? this.renderFine() : null,
+      this.renderCodex(),
       el('h3', {}, 'Recent log'),
       el('ul', { class: 'log' }, s.log.slice(-10).reverse().map((l) => el('li', {}, l.msg))),
       el('h3', {}, 'Office'),
@@ -523,6 +540,28 @@ export class TerminalUI {
         onclick: () => this.confirm('Start a new game?', 'This wipes your save: vehicles, money and progress.', () => this.onNewGame()),
       }, 'New game (wipe save)'),
     );
+  }
+
+  /** Every part in the game: the ones you've owned by name, the rest as a rarity-coloured ???. */
+  renderCodex() {
+    const s = this.state;
+    const total = Object.keys(PARTS).length;
+    const found = Object.keys(PARTS).filter((k) => s.discovered.has(k)).length;
+    return el('div', { class: 'card codex' },
+      el('h3', {}, `Parts Codex · ${found}/${total} discovered`),
+      [['chassis', 'Frames'], ...PART_GROUPS].map(([type, label]) => {
+        const keys = Object.keys(PARTS).filter((k) => PARTS[k].type === type)
+          .sort((a, b) => PARTS[a].tier - PARTS[b].tier || RARITY[PARTS[a].rarity].rank - RARITY[PARTS[b].rarity].rank);
+        return [
+          el('div', { class: 'small muted' }, `${label} ${keys.filter((k) => s.discovered.has(k)).length}/${keys.length}`),
+          el('div', { class: 'codex-grid' }, keys.map((k) => {
+            const def = PARTS[k];
+            const known = s.discovered.has(k);
+            return el('span', { class: `codex-item rarity-${def.rarity}${known ? '' : ' unknown'}`, title: known ? `${def.name} — ★${def.tier} ${def.rarity}` : `★${def.tier} ${def.rarity}` },
+              known ? def.name : '???');
+          })),
+        ];
+      }));
   }
 
   renderBetting() {

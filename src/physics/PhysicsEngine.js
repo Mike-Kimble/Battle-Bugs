@@ -1,5 +1,6 @@
 import { PHYSICS, STAMINA, EVENTS } from '../config/constants.js';
 import { Vector2D, clamp, approach, wrapAngle } from './Vector2D.js';
+import { INTERACTIONS } from '../config/partsData.js';
 
 /**
  * Physics & derived-stats engine.
@@ -19,6 +20,20 @@ export class PhysicsEngine {
   }
 
   /**
+   * The part combinations at work on this bug (see INTERACTIONS), each with
+   * its resolved stat multipliers.
+   * @returns {Array<{id, good, text, mods}>}
+   */
+  static interactions(bug) {
+    const out = [];
+    for (const rule of INTERACTIONS) {
+      if (!rule.when(bug)) continue;
+      out.push({ id: rule.id, good: rule.good, text: rule.text, mods: { ...rule.mods, ...(rule.dynamic?.(bug) || {}) } });
+    }
+    return out;
+  }
+
+  /**
    * Derive live stats for a bug from its equipped parts.
    * @param {import('../entities/BattleBug.js').BattleBug} bug
    * @param {{gripMod?: number}} mods
@@ -32,15 +47,19 @@ export class PhysicsEngine {
     const mass = bug.parts.reduce((sum, p) => sum + p.mass, 0);
     const engineRatio = engine ? engine.hpRatio : 0;
     const tireRatio = tires ? tires.hpRatio : 0;
+    // Part combinations that help or hurt.
+    const m = { force: 1, grip: 1, vMax: 1, cooling: 1, staminaMax: 1, drain: 1 };
+    const interactions = PhysicsEngine.interactions(bug);
+    for (const it of interactions) for (const k in it.mods) m[k] *= it.mods[k];
 
-    const fDrive = engine ? engine.stats.force * engineRatio : 0;
-    const fGripBase = tires ? tires.stats.mu * mass * PHYSICS.GRAVITY * tireRatio : 0;
+    const fDrive = engine ? engine.stats.force * engineRatio * m.force : 0;
+    const fGripBase = tires ? tires.stats.mu * mass * PHYSICS.GRAVITY * tireRatio * m.grip : 0;
     const fGrip = fGripBase * gripMod;
     const fUsable = Math.min(fDrive, fGrip);
     const accel = mass > 0 ? fUsable / mass : 0;
 
     const wear = PHYSICS.TIRE_WEAR_FLOOR + (1 - PHYSICS.TIRE_WEAR_FLOOR) * tireRatio;
-    const vMax = engine && tires ? engine.stats.rpm * tires.stats.radius * PHYSICS.RPM_TO_SPEED * wear : 0;
+    const vMax = engine && tires ? engine.stats.rpm * tires.stats.radius * PHYSICS.RPM_TO_SPEED * wear * m.vMax : 0;
 
     return {
       mass,
@@ -54,8 +73,10 @@ export class PhysicsEngine {
       tireRatio,
       gripMod,
       radius: chassis.stats.radius * PHYSICS.BUG_SCALE,
-      staminaMax: chassis.stats.staminaMax,
-      cooling: engine ? engine.stats.cooling : 0,
+      staminaMax: Math.round(chassis.stats.staminaMax * m.staminaMax),
+      cooling: engine ? Math.round(engine.stats.cooling * m.cooling * 10) / 10 : 0,
+      drainMult: m.drain,
+      interactions,
       turnRate: chassis.stats.turn * (0.55 + 0.45 * tireRatio),
       tractionLimited: fGrip < fDrive,
     };
@@ -186,7 +207,7 @@ export class PhysicsEngine {
     // cooling), full R_cool recovery while idle.
     if (throttle > 0) {
       const applied = s.fUsable * throttle;
-      bug.stamina -= STAMINA.DRIVE_DRAIN_K * applied * (Math.abs(fwd) + STAMINA.PUSH_SPEED_FLOOR) * dt;
+      bug.stamina -= STAMINA.DRIVE_DRAIN_K * applied * (Math.abs(fwd) + STAMINA.PUSH_SPEED_FLOOR) * s.drainMult * dt;
       bug.stamina += s.cooling * STAMINA.DRIVING_COOL_FRACTION * dt;
     } else {
       bug.stamina += s.cooling * dt;

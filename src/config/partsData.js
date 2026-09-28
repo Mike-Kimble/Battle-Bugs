@@ -1,155 +1,197 @@
 /**
  * Part catalogue. Every Part instance references one of these definitions by key.
  *
- * Common fields: type, name, mass (kg), maxHp, value (§, pristine), tier (1–5), rarity.
+ * Common fields: type, name, mass (kg), maxHp, value (§, pristine), tier (1–5), rarity, look.
+ * Rarity: common · uncommon · rare are stocked by the Marketplace; epic and
+ * legendary mostly turn up under the hood of other vehicles (won in title
+ * matches or bought whole) — the shop only ever teases one you can't afford.
+ * `look` is the sprite drawn for the part (a base design, recoloured by `glow`/`tint`).
  * Type-specific `stats`:
- *   chassis: radius, staminaMax, weaponSlots, turn (rad/s), shape
- *   engine:  force (F_base), rpm, cooling (R_cool, stamina/s while idle)
- *   tires:   mu (μ), radius (tire radius → top speed)
- *   armor:   absorb (fraction of impact soaked by plating at full HP)
+ *   chassis: radius, staminaMax, weaponSlots, turn (rad/s), shape, bio?
+ *   engine:  force (F_base), rpm, cooling (R_cool, stamina/s while idle), kind
+ *   tires:   mu (μ), radius (tire radius → top speed), kind
+ *   armor:   absorb (fraction of impact soaked by plating at full HP), heat (traps engine heat; <0 vents it)
  *   weapon:  class, effect, cost (stamina), range, arc (deg), cooldown, + effect params
  */
+const C = 'common', U = 'uncommon', R = 'rare', E = 'epic', L = 'legendary';
+const chassis = (name, tier, rarity, value, mass, maxHp, stats, description) => ({ type: 'chassis', name, tier, rarity, value, mass, maxHp, stats, description });
+const engine = (name, tier, rarity, value, mass, maxHp, stats, glow, description) => ({ type: 'engine', name, tier, rarity, value, mass, maxHp, stats, glow, description });
+const tires = (name, tier, rarity, value, mass, maxHp, stats, look, description) => ({ type: 'tires', name, tier, rarity, value, mass, maxHp, stats, look, description });
+const armor = (name, tier, rarity, value, mass, maxHp, stats, look, description) => ({ type: 'armor', name, tier, rarity, value, mass, maxHp, stats, look, description });
+const weapon = (name, tier, rarity, value, mass, maxHp, stats, look, description) => ({ type: 'weapon', name, tier, rarity, value, mass, maxHp, stats, look, description });
+
 export const PARTS = Object.freeze({
-  // ───────────── CHASSIS ─────────────
-  scrapper_frame: {
-    type: 'chassis', name: 'Scrapper Frame', mass: 70, maxHp: 120, value: 120, tier: 1, rarity: 'common',
-    stats: { radius: 26, staminaMax: 100, weaponSlots: 1, turn: 4.2, shape: 'scrapper' },
-    description: 'Bolted-together junk. Honest, if unlovely.',
-  },
-  beetle_shell: {
-    type: 'chassis', name: 'Beetle Shell', mass: 95, maxHp: 180, value: 380, tier: 2, rarity: 'common',
-    stats: { radius: 29, staminaMax: 110, weaponSlots: 1, turn: 3.8, shape: 'beetle' },
-    description: 'Domed elytra plating. Hard to tip, hard to hurt.',
-  },
-  roach_lowrider: {
-    type: 'chassis', name: 'Roach Lowrider', mass: 60, maxHp: 100, value: 420, tier: 2, rarity: 'common',
-    stats: { radius: 24, staminaMax: 130, weaponSlots: 2, turn: 5.0, shape: 'roach' },
-    description: 'Light, twitchy, twin hardpoints.',
-  },
-  mantis_frame: {
-    type: 'chassis', name: 'Mantis Frame', mass: 80, maxHp: 140, value: 560, tier: 3, rarity: 'uncommon',
-    stats: { radius: 27, staminaMax: 120, weaponSlots: 2, turn: 4.6, shape: 'mantis' },
-    description: 'Segmented striker with raptorial fore-mounts.',
-  },
-  scarab_bulwark: {
-    type: 'chassis', name: 'Scarab Bulwark', mass: 130, maxHp: 260, value: 900, tier: 4, rarity: 'rare',
-    stats: { radius: 32, staminaMax: 105, weaponSlots: 2, turn: 3.2, shape: 'scarab' },
-    description: 'A rolling fortress. Slow to turn, slower to die.',
-  },
-  xeno_hornet: {
-    type: 'chassis', name: 'Xeno Hornet', mass: 75, maxHp: 160, value: 1150, tier: 5, rarity: 'rare',
-    stats: { radius: 26, staminaMax: 150, weaponSlots: 2, turn: 5.2, shape: 'hornet' },
-    description: 'Alien bio-alloy frame with a huge power reserve.',
-  },
+  // ───────────── CHASSIS (frames) ─────────────
+  scrapper_frame: chassis('Scrapper Frame', 1, C, 120, 70, 120, { radius: 26, staminaMax: 100, weaponSlots: 1, turn: 4.2, shape: 'scrapper' }, 'Bolted-together junk. Honest, if unlovely.'),
+  shopping_cart: chassis('Shopping-Cart Frame', 1, C, 100, 65, 110, { radius: 25, staminaMax: 95, weaponSlots: 1, turn: 4.4, shape: 'scrapper' }, 'Liberated from a hypermarket on Glorp IV. One wheel still squeaks.'),
+  lawnmower_deck: chassis('Lawnmower Deck', 1, U, 150, 80, 135, { radius: 27, staminaMax: 102, weaponSlots: 1, turn: 3.9, shape: 'beetle' }, 'Heavy steel deck. Smells faintly of grass from a planet nobody remembers.'),
+  beetle_shell: chassis('Beetle Shell', 2, C, 380, 95, 180, { radius: 29, staminaMax: 110, weaponSlots: 1, turn: 3.8, shape: 'beetle' }, 'Domed elytra plating. Hard to tip, hard to hurt.'),
+  roach_lowrider: chassis('Roach Lowrider', 2, C, 420, 60, 100, { radius: 24, staminaMax: 130, weaponSlots: 2, turn: 5.0, shape: 'roach' }, 'Light, twitchy, twin hardpoints.'),
+  tick_pod: chassis('Tick Pod', 2, U, 400, 85, 170, { radius: 26, staminaMax: 115, weaponSlots: 1, turn: 4.2, shape: 'beetle' }, 'Round, stubborn and very hard to get off you.'),
+  cricket_chassis: chassis('Cricket Chassis', 2, R, 470, 58, 108, { radius: 24, staminaMax: 132, weaponSlots: 2, turn: 5.2, shape: 'roach', bio: true }, 'Grown, not built. Chirps when it corners.'),
+  mantis_frame: chassis('Mantis Frame', 3, U, 560, 80, 140, { radius: 27, staminaMax: 120, weaponSlots: 2, turn: 4.6, shape: 'mantis' }, 'Segmented striker with raptorial fore-mounts.'),
+  stag_brawler: chassis('Stag Brawler', 3, C, 620, 110, 210, { radius: 30, staminaMax: 110, weaponSlots: 2, turn: 3.8, shape: 'scarab' }, 'All shoulders. Built for leaning on people.'),
+  weevil_wedge: chassis('Weevil Wedge', 3, U, 640, 90, 175, { radius: 28, staminaMax: 120, weaponSlots: 2, turn: 4.2, shape: 'beetle' }, 'A low nose that gets under things it shouldn\'t.'),
+  wasp_dart: chassis('Wasp Dart', 3, R, 760, 70, 132, { radius: 25, staminaMax: 136, weaponSlots: 2, turn: 5.3, shape: 'hornet', bio: true }, 'Living carapace, all nerve and no patience.'),
+  scarab_bulwark: chassis('Scarab Bulwark', 4, R, 900, 130, 260, { radius: 32, staminaMax: 105, weaponSlots: 2, turn: 3.2, shape: 'scarab' }, 'A rolling fortress. Slow to turn, slower to die.'),
+  rhino_ram: chassis('Rhino Ram', 4, U, 880, 135, 270, { radius: 33, staminaMax: 104, weaponSlots: 2, turn: 3.3, shape: 'scarab' }, 'Horn first, questions never.'),
+  locust_racer: chassis('Locust Racer', 4, R, 1000, 65, 150, { radius: 25, staminaMax: 145, weaponSlots: 2, turn: 5.5, shape: 'roach' }, 'Stripped to the rivets for speed. Swarms well.'),
+  hive_carapace: chassis('Hive Carapace', 4, E, 1300, 85, 200, { radius: 28, staminaMax: 142, weaponSlots: 2, turn: 4.8, shape: 'mantis', bio: true }, 'A frame secreted by ten thousand drones. It hums along with a bio-engine.'),
+  xeno_hornet: chassis('Xeno Hornet', 5, R, 1150, 75, 160, { radius: 26, staminaMax: 150, weaponSlots: 2, turn: 5.2, shape: 'hornet', bio: true }, 'Alien bio-alloy frame with a huge power reserve.'),
+  goliath_hull: chassis('Goliath Hull', 5, R, 1400, 150, 330, { radius: 34, staminaMax: 115, weaponSlots: 2, turn: 3.2, shape: 'scarab' }, 'Less a vehicle, more a postcode.'),
+  widow_frame: chassis('Widow Frame', 5, E, 1800, 80, 190, { radius: 27, staminaMax: 156, weaponSlots: 2, turn: 5.2, shape: 'mantis', bio: true }, 'Elegant, black, and it has eaten previous owners.'),
+  empress_chassis: chassis('Empress Chassis', 5, L, 2600, 78, 230, { radius: 27, staminaMax: 172, weaponSlots: 2, turn: 5.4, shape: 'hornet', bio: true }, 'Grown for a hive queen. Nobody tells you how they got it.'),
+  titan_colossus: chassis('Titan Colossus', 5, L, 2500, 160, 380, { radius: 35, staminaMax: 132, weaponSlots: 2, turn: 3.6, shape: 'scarab' }, 'Salvaged from a war machine the size of a moon. Somehow still turns.'),
 
-  // ───────────── ENGINES ─────────────
-  rust_motor: {
-    type: 'engine', name: 'Rust-Bucket Motor', mass: 30, maxHp: 60, value: 80, tier: 1, rarity: 'common',
-    stats: { force: 26000, rpm: 3800, cooling: 10 },
-    description: 'It turns. Mostly.',
-  },
-  torque_block: {
-    type: 'engine', name: 'Torque Block V4', mass: 45, maxHp: 90, value: 320, tier: 2, rarity: 'common',
-    stats: { force: 42000, rpm: 3400, cooling: 9 },
-    description: 'Low-revving shove monster.',
-  },
-  spinner_x: {
-    type: 'engine', name: 'Spinner-X Turbine', mass: 28, maxHp: 55, value: 380, tier: 2, rarity: 'common',
-    stats: { force: 30000, rpm: 5600, cooling: 12 },
-    description: 'Screams to high RPM. Fast but fragile.',
-  },
-  fusion_core: {
-    type: 'engine', name: 'Fusion Micro-Core', mass: 40, maxHp: 110, value: 1200, tier: 4, rarity: 'rare',
-    stats: { force: 52000, rpm: 5000, cooling: 15 },
-    description: 'Contained star in a tin can.',
-  },
-  plasma_twin: {
-    type: 'engine', name: 'Plasma Twin-Drive', mass: 55, maxHp: 120, value: 1600, tier: 5, rarity: 'rare',
-    stats: { force: 64000, rpm: 4600, cooling: 13 },
-    description: 'Alien twin-plasma drive. Pushes planets.',
-  },
+  // ───────────── ENGINES (propulsion) ─────────────
+  rust_motor: engine('Rust-Bucket Motor', 1, C, 80, 30, 60, { force: 26000, rpm: 3800, cooling: 10, kind: 'combustion' }, '#ff8a3d', 'It turns. Mostly.'),
+  lawn_thumper: engine('Lawn Thumper', 1, C, 90, 26, 55, { force: 24000, rpm: 4100, cooling: 11, kind: 'combustion' }, '#ffa04d', 'Pull-start single. Three pulls on a good day.'),
+  sputter_single: engine('Sputter Single', 1, U, 140, 32, 62, { force: 28500, rpm: 3900, cooling: 9, kind: 'combustion' }, '#ff7a2d', 'Coughs like a smoker, pulls like a mule.'),
+  torque_block: engine('Torque Block V4', 2, C, 320, 45, 90, { force: 42000, rpm: 3400, cooling: 9, kind: 'torque' }, '#ffb03d', 'Low-revving shove monster.'),
+  spinner_x: engine('Spinner-X Turbine', 2, C, 380, 28, 55, { force: 30000, rpm: 5600, cooling: 12, kind: 'turbine' }, '#ffe14a', 'Screams to high RPM. Fast but fragile.'),
+  volt_hub: engine('Volt-Hub Electric', 2, U, 420, 34, 70, { force: 36000, rpm: 4400, cooling: 14, kind: 'electric' }, '#5ad8ff', 'Silent, cool and very good at sharing its battery.'),
+  grub_diesel: engine('Grub-Diesel Twin', 2, R, 520, 52, 100, { force: 46000, rpm: 3500, cooling: 8, kind: 'torque' }, '#ffc03d', 'Runs on larva oil. Pushes like it means it.'),
+  hive_v6: engine('Hive V6', 3, C, 620, 44, 95, { force: 46000, rpm: 4300, cooling: 11, kind: 'combustion' }, '#ff9a3d', 'The workhorse of the outer rings.'),
+  whine_turbine: engine('Whine-Jet Turbine', 3, U, 720, 32, 65, { force: 36000, rpm: 6200, cooling: 13, kind: 'turbine' }, '#fff06a', 'You\'ll hear it two arenas away.'),
+  magnetar_hub: engine('Magnetar Hub-Motor', 3, R, 880, 38, 85, { force: 44000, rpm: 4900, cooling: 16, kind: 'electric' }, '#6ae8ff', 'Magnets from a dead star. Runs cold as space.'),
+  thorax_bigblock: engine('Thorax Big-Block', 3, E, 1100, 60, 120, { force: 56000, rpm: 3900, cooling: 9, kind: 'torque' }, '#ffcf3d', 'Illegal in four systems. Makes the ring shake.'),
+  fusion_core: engine('Fusion Micro-Core', 4, R, 1200, 40, 110, { force: 52000, rpm: 5000, cooling: 15, kind: 'fusion' }, '#7dfcff', 'Contained star in a tin can.'),
+  ion_screamer: engine('Ion Screamer', 4, U, 1050, 34, 75, { force: 44000, rpm: 6400, cooling: 14, kind: 'turbine' }, '#e8ff7a', 'Ion-fed turbine. The top speed is frankly irresponsible.'),
+  tectonic_v12: engine('Tectonic V12', 4, R, 1300, 64, 130, { force: 60000, rpm: 4000, cooling: 10, kind: 'torque' }, '#ffb85d', 'Twelve cylinders of continental drift.'),
+  nebula_cell: engine('Nebula Cell', 4, E, 1500, 38, 115, { force: 56000, rpm: 5400, cooling: 18, kind: 'electric' }, '#9ad8ff', 'A battery charged by a nebula. Doesn\'t like being asked to share.'),
+  plasma_twin: engine('Plasma Twin-Drive', 5, R, 1600, 55, 120, { force: 64000, rpm: 4600, cooling: 13, kind: 'plasma' }, '#c77dff', 'Alien twin-plasma drive. Pushes planets.'),
+  quasar_turbine: engine('Quasar Turbine', 5, E, 1800, 36, 90, { force: 54000, rpm: 6600, cooling: 15, kind: 'turbine' }, '#fffaa0', 'Spins at the speed of gossip.'),
+  hive_heart: engine('Hive-Heart Bio-Engine', 5, E, 1900, 48, 150, { force: 66000, rpm: 5000, cooling: 19, kind: 'bio' }, '#8aff7a', 'A living heart the size of a beach ball. It purrs in a bio-frame.'),
+  singularity_drive: engine('Singularity Drive', 5, L, 2600, 50, 140, { force: 72000, rpm: 5300, cooling: 16, kind: 'fusion' }, '#ffffff', 'A pinhole of collapsed star. Do not look directly at the exhaust.'),
+  queen_engine: engine("The Queen's Engine", 5, L, 2800, 52, 160, { force: 70000, rpm: 5100, cooling: 22, kind: 'bio' }, '#ff7ad8', 'Stolen from the royal hive. It still expects to be obeyed.'),
 
-  // ───────────── TIRES ─────────────
-  bald_rollers: {
-    type: 'tires', name: 'Bald Rollers', mass: 12, maxHp: 50, value: 40, tier: 1, rarity: 'common',
-    stats: { mu: 0.8, radius: 7 },
-    description: 'Tread is a distant memory.',
-  },
-  knobby_treads: {
-    type: 'tires', name: 'Knobby Treads', mass: 18, maxHp: 70, value: 160, tier: 2, rarity: 'common',
-    stats: { mu: 1.05, radius: 7 },
-    description: 'Chunky lugs that bite the dohyo.',
-  },
-  racing_slicks: {
-    type: 'tires', name: 'Racing Slicks', mass: 14, maxHp: 50, value: 200, tier: 2, rarity: 'common',
-    stats: { mu: 0.9, radius: 9 },
-    description: 'Big diameter, big top speed.',
-  },
-  crawler_tracks: {
-    type: 'tires', name: 'Crawler Tracks', mass: 30, maxHp: 110, value: 420, tier: 3, rarity: 'uncommon',
-    stats: { mu: 1.3, radius: 6 },
-    description: 'Tank treads. Grip for days, speed for minutes.',
-  },
-  gecko_pads: {
-    type: 'tires', name: 'Gecko Grip Pads', mass: 20, maxHp: 80, value: 900, tier: 4, rarity: 'rare',
-    stats: { mu: 1.5, radius: 8 },
-    description: 'Setae-lined alien pads. Sticks to anything.',
-  },
+  // ───────────── TIRES (running gear) ─────────────
+  bald_rollers: tires('Bald Rollers', 1, C, 40, 12, 50, { mu: 0.8, radius: 7, kind: 'wheel' }, { kind: 'wheels', body: '#4a4552', stripe: '#5d5866', gap: 0 }, 'Tread is a distant memory.'),
+  junk_casters: tires('Junk Casters', 1, C, 45, 10, 45, { mu: 0.76, radius: 7.5, kind: 'wheel' }, { kind: 'wheels', body: '#5a5462', stripe: '#77707e', gap: 0 }, 'Office-chair wheels. They go where they like.'),
+  rubber_nubs: tires('Rubber Nubs', 1, U, 70, 14, 55, { mu: 0.88, radius: 6.5, kind: 'knobby' }, { kind: 'wheels', body: '#2a2630', stripe: '#46404e', gap: 4 }, 'Stubby lugs that bite a little.'),
+  knobby_treads: tires('Knobby Treads', 2, C, 160, 18, 70, { mu: 1.05, radius: 7, kind: 'knobby' }, { kind: 'wheels', body: '#1d1a22', stripe: '#3a3542', gap: 5 }, 'Chunky lugs that bite the dohyo.'),
+  racing_slicks: tires('Racing Slicks', 2, C, 200, 14, 50, { mu: 0.9, radius: 9, kind: 'slick' }, { kind: 'wheels', body: '#141218', stripe: '#c83a3a', gap: 0, big: true }, 'Big diameter, big top speed.'),
+  balloon_wheels: tires('Balloon Wheels', 2, U, 180, 15, 55, { mu: 0.95, radius: 8.5, kind: 'wheel' }, { kind: 'wheels', body: '#3a3050', stripe: '#8a7ad0', gap: 0, big: true }, 'Bouncy. Forgiving. Mildly ridiculous.'),
+  mud_paddles: tires('Mud Paddles', 2, R, 260, 20, 75, { mu: 1.12, radius: 7, kind: 'knobby' }, { kind: 'wheels', body: '#2a2218', stripe: '#6a5638', gap: 6 }, 'Paddle-lugs from the swamp moons. Dig in and shove.'),
+  crawler_tracks: tires('Crawler Tracks', 3, U, 420, 30, 110, { mu: 1.3, radius: 6, kind: 'track' }, { kind: 'track', body: '#23202a', stripe: '#55505e', gap: 5 }, 'Tank treads. Grip for days, speed for minutes.'),
+  street_slicks: tires('Street Slicks', 3, C, 450, 15, 60, { mu: 1.0, radius: 9.5, kind: 'slick' }, { kind: 'wheels', body: '#18161c', stripe: '#e0c040', gap: 0, big: true }, 'Road-legal on at least one planet.'),
+  chitin_cleats: tires('Chitin Cleats', 3, U, 480, 20, 85, { mu: 1.2, radius: 7.5, kind: 'knobby' }, { kind: 'wheels', body: '#2a3a24', stripe: '#6a8a50', gap: 5 }, 'Shed claws, bolted on. Grippy and a bit gross.'),
+  silk_slicks: tires('Silk Slicks', 3, R, 620, 13, 55, { mu: 1.05, radius: 10, kind: 'slick' }, { kind: 'wheels', body: '#1a1822', stripe: '#e8e0ff', gap: 0, big: true }, 'Spun by moth-worms. Whisper-quiet and very quick.'),
+  gecko_pads: tires('Gecko Grip Pads', 4, R, 900, 20, 80, { mu: 1.5, radius: 8, kind: 'pads' }, { kind: 'track', body: '#1f3a22', stripe: '#6bff7a', gap: 7 }, 'Setae-lined alien pads. Sticks to anything.'),
+  war_tracks: tires('War Tracks', 4, U, 850, 34, 140, { mu: 1.45, radius: 6.5, kind: 'track' }, { kind: 'track', body: '#2a2622', stripe: '#7a6a50', gap: 5 }, 'Ex-military. Still has the paperwork.'),
+  mag_rollers: tires('Mag Rollers', 4, R, 950, 18, 80, { mu: 1.3, radius: 9, kind: 'wheel' }, { kind: 'wheels', body: '#20202a', stripe: '#5ad8ff', gap: 0, big: true }, 'Magnetised rims that hug the ring.'),
+  hover_skids: tires('Hover Skids', 4, E, 1100, 12, 60, { mu: 1.15, radius: 10, kind: 'slick' }, { kind: 'wheels', body: '#1a1a2a', stripe: '#ff7ad8', gap: 0, big: true }, 'Barely touch the ground. That\'s the point, and the problem.'),
+  titan_tracks: tires('Titan Tracks', 5, R, 1400, 38, 170, { mu: 1.6, radius: 7, kind: 'track' }, { kind: 'track', body: '#2a2a30', stripe: '#a0a0b0', gap: 6 }, 'Each link weighs more than you do.'),
+  setae_pads: tires('Setae Pads', 5, E, 1500, 18, 90, { mu: 1.65, radius: 8.5, kind: 'pads' }, { kind: 'track', body: '#1a3a2a', stripe: '#9affb0', gap: 7 }, 'A million microscopic hairs. Sticks to the ring, and to fingers.'),
+  comet_slicks: tires('Comet Slicks', 5, E, 1600, 14, 70, { mu: 1.25, radius: 10, kind: 'slick' }, { kind: 'wheels', body: '#101018', stripe: '#7afcff', gap: 0, big: true }, 'Leave a little tail of sparks. Very fast.'),
+  void_grip: tires('Void-Grip Pads', 5, L, 2400, 16, 100, { mu: 1.8, radius: 9, kind: 'pads' }, { kind: 'track', body: '#10081a', stripe: '#c77dff', gap: 7 }, 'They grip the ring by bending space slightly. Probably fine.'),
+  phase_wheels: tires('Phase Wheels', 5, L, 2300, 15, 100, { mu: 1.5, radius: 9.5, kind: 'wheel' }, { kind: 'wheels', body: '#141024', stripe: '#ffffff', gap: 0, big: true }, 'Half here, half somewhere else. The half here grips beautifully.'),
 
   // ───────────── ARMOUR ─────────────
-  scrap_plating: {
-    type: 'armor', name: 'Scrap Plating', mass: 20, maxHp: 60, value: 60, tier: 1, rarity: 'common',
-    stats: { absorb: 0.3 },
-    description: 'Hubcaps and hope.',
-  },
-  steel_plate: {
-    type: 'armor', name: 'Steel Plate', mass: 40, maxHp: 120, value: 220, tier: 2, rarity: 'common',
-    stats: { absorb: 0.45 },
-    description: 'Heavy, dependable, dull.',
-  },
-  titan_weave: {
-    type: 'armor', name: 'Titan Weave', mass: 30, maxHp: 140, value: 600, tier: 3, rarity: 'uncommon',
-    stats: { absorb: 0.55 },
-    description: 'Woven titanium mesh. Light and tough.',
-  },
-  ablative_shell: {
-    type: 'armor', name: 'Ablative Shell', mass: 55, maxHp: 200, value: 850, tier: 4, rarity: 'rare',
-    stats: { absorb: 0.6 },
-    description: 'Sheds layers so your hull doesn\'t.',
-  },
+  tin_foil_wrap: armor('Tin-Foil Wrap', 1, C, 50, 8, 40, { absorb: 0.22, heat: 0 }, 'scrap_plating', 'Blocks mind-rays. Blocks very little else.'),
+  scrap_plating: armor('Scrap Plating', 1, C, 60, 20, 60, { absorb: 0.3, heat: 0 }, 'scrap_plating', 'Hubcaps and hope.'),
+  hubcap_mail: armor('Hubcap Mail', 1, U, 90, 24, 70, { absorb: 0.33, heat: 0.05 }, 'scrap_plating', 'Chain mail, but hubcaps. Clanks with pride.'),
+  steel_plate: armor('Steel Plate', 2, C, 220, 40, 120, { absorb: 0.45, heat: 0.1 }, 'steel_plate', 'Heavy, dependable, dull.'),
+  rubber_bumpers: armor('Rubber Bumpers', 2, C, 200, 22, 100, { absorb: 0.38, heat: 0 }, 'steel_plate', 'Boing. Surprisingly effective.'),
+  chitin_plates: armor('Chitin Plates', 2, U, 300, 26, 110, { absorb: 0.42, heat: 0 }, 'titan_weave', 'Moulted shell plates. Light, and they breathe.'),
+  lead_skirt: armor('Lead Skirt', 2, R, 340, 55, 150, { absorb: 0.5, heat: 0.2 }, 'steel_plate', 'Thick, heavy, radiation-proof. Traps heat like a duvet.'),
+  titan_weave: armor('Titan Weave', 3, U, 600, 30, 140, { absorb: 0.55, heat: 0.05 }, 'titan_weave', 'Woven titanium mesh. Light and tough.'),
+  boiler_plate: armor('Boiler Plate', 3, C, 560, 60, 190, { absorb: 0.6, heat: 0.25 }, 'steel_plate', 'Cut from an actual boiler. Keeps the heat in, as boilers do.'),
+  vented_carapace: armor('Vented Carapace', 3, R, 650, 28, 130, { absorb: 0.5, heat: -0.1 }, 'titan_weave', 'Louvred shell plates that draw air over the motor.'),
+  ceramic_tiles: armor('Ceramic Tiles', 3, R, 700, 34, 150, { absorb: 0.56, heat: 0.08 }, 'ablative_shell', 'Re-entry tiles. Shrug off hits, crack eventually.'),
+  ablative_shell: armor('Ablative Shell', 4, R, 850, 55, 200, { absorb: 0.6, heat: 0.15 }, 'ablative_shell', 'Sheds layers so your hull doesn\'t.'),
+  mirror_mesh: armor('Mirror Mesh', 4, R, 900, 30, 170, { absorb: 0.58, heat: 0 }, 'titan_weave', 'Reflective weave. Also great for checking your antennae.'),
+  fortress_slab: armor('Fortress Slab', 4, U, 950, 80, 260, { absorb: 0.7, heat: 0.3 }, 'steel_plate', 'Nothing gets through. Including air.'),
+  gel_armour: armor('Gel Armour', 4, E, 1250, 36, 190, { absorb: 0.62, heat: -0.05 }, 'ablative_shell', 'Wobbly, self-healing goo in a skin. Soaks hits and heat alike.'),
+  bulwark_plate: armor('Bulwark Plate', 5, R, 1300, 95, 320, { absorb: 0.75, heat: 0.35 }, 'steel_plate', 'The thickest plate money can buy. Your motor will hate it.'),
+  nano_scale: armor('Nano-Scale Mail', 5, E, 1500, 28, 210, { absorb: 0.66, heat: 0 }, 'titan_weave', 'Scales the size of atoms, arranged by very patient robots.'),
+  dragon_hide: armor('Dragon Hide', 5, E, 1700, 40, 240, { absorb: 0.7, heat: -0.1 }, 'ablative_shell', 'From a creature that breathed fire, and so knew all about cooling.'),
+  queen_carapace: armor("Queen's Carapace", 5, L, 2400, 34, 260, { absorb: 0.74, heat: -0.1 }, 'titan_weave', 'Royal shell. Light as silk, hard as a grudge.'),
+  aegis_field: armor('Aegis Field', 5, L, 2600, 26, 230, { absorb: 0.78, heat: 0 }, 'ablative_shell', 'Not armour so much as a strongly worded force field.'),
 
   // ───────────── WEAPONS ─────────────
-  emp_pulse: {
-    type: 'weapon', name: 'EMP Pulse Dish', mass: 15, maxHp: 50, value: 350, tier: 2, rarity: 'common',
-    stats: { class: 'neutralizer', effect: 'drain', cost: 30, range: 120, arc: 360, cooldown: 4, drain: 48 },
-    description: 'Radial pulse. Drains opponent stamina, no structural damage.',
-  },
-  tesla_coil: {
-    type: 'weapon', name: 'Tesla Induction Coil', mass: 22, maxHp: 60, value: 450, tier: 3, rarity: 'uncommon',
-    stats: { class: 'neutralizer', effect: 'drain', cost: 22, range: 190, arc: 60, cooldown: 3, drain: 32 },
-    description: 'Long forward arc bolt. Induces thermal stall.',
-  },
-  pneumatic_ram: {
-    type: 'weapon', name: 'Pneumatic Ram', mass: 40, maxHp: 90, value: 400, tier: 2, rarity: 'common',
-    stats: { class: 'strength', effect: 'ram', cost: 18, range: 50, arc: 70, cooldown: 2.5, engineDamage: 26, impulse: 220 },
-    description: 'Piston punch to the drivetrain. Permanently lowers F_drive.',
-  },
-  spike_array: {
-    type: 'weapon', name: 'Spike Array', mass: 30, maxHp: 80, value: 300, tier: 1, rarity: 'common',
-    stats: { class: 'strength', effect: 'spikes', cost: 14, range: 12, arc: 100, cooldown: 4, duration: 2.2, engineDamage: 7, tick: 0.25 },
-    description: 'Deploys drill-spikes. Front contact shreds engines.',
-  },
-  wedge_lifter: {
-    type: 'weapon', name: 'Wedge Lifter', mass: 35, maxHp: 90, value: 380, tier: 2, rarity: 'common',
-    stats: { class: 'grip', effect: 'lift', cost: 16, range: 45, arc: 80, cooldown: 3, liftTime: 1.8, gripMod: 0.1, exposeTime: 1.2 },
-    description: 'Hydraulic wedge lifts drive wheels. μ → 0.',
-  },
-  slick_sprayer: {
-    type: 'weapon', name: 'Slick Sprayer', mass: 25, maxHp: 60, value: 420, tier: 3, rarity: 'uncommon',
-    stats: { class: 'grip', effect: 'slick', cost: 20, range: 150, arc: 360, cooldown: 5, puddleRadius: 60, puddleTime: 7, gripMod: 0.2, exposeTime: 1.0 },
-    description: 'Lays an oil slick ahead. Anything on it loses grip.',
-  },
+  // Stamina neutralizers
+  static_zapper: weapon('Static Zapper', 1, C, 200, 12, 40, { class: 'neutralizer', effect: 'drain', cost: 22, range: 90, arc: 360, cooldown: 4.5, drain: 30 }, 'emp_pulse', 'A carpet, a balloon and a lot of rubbing.'),
+  emp_pulse: weapon('EMP Pulse Dish', 2, C, 350, 15, 50, { class: 'neutralizer', effect: 'drain', cost: 30, range: 120, arc: 360, cooldown: 4, drain: 48 }, 'emp_pulse', 'Radial pulse. Drains opponent stamina, no structural damage.'),
+  tesla_coil: weapon('Tesla Induction Coil', 3, U, 450, 22, 60, { class: 'neutralizer', effect: 'drain', cost: 22, range: 190, arc: 60, cooldown: 3, drain: 32 }, 'tesla_coil', 'Long forward arc bolt. Induces thermal stall.'),
+  arc_lance: weapon('Arc Lance', 4, R, 900, 24, 70, { class: 'neutralizer', effect: 'drain', cost: 24, range: 230, arc: 40, cooldown: 3, drain: 40 }, 'tesla_coil', 'A narrow bolt from very far away. Rude.'),
+  brainwave_jammer: weapon('Brainwave Jammer', 5, E, 1500, 18, 70, { class: 'neutralizer', effect: 'drain', cost: 26, range: 160, arc: 360, cooldown: 3.5, drain: 56 }, 'emp_pulse', 'Makes the other pilot forget which pedal is which.'),
+  void_siphon: weapon('Void Siphon', 5, L, 2400, 20, 80, { class: 'neutralizer', effect: 'drain', cost: 20, range: 210, arc: 90, cooldown: 2.6, drain: 50 }, 'tesla_coil', 'Drinks energy straight out of the air between you.'),
+  // Strength destroyers
+  nail_bristles: weapon('Nail Bristles', 1, C, 150, 20, 60, { class: 'strength', effect: 'spikes', cost: 12, range: 12, arc: 90, cooldown: 4.5, duration: 1.8, engineDamage: 5, tick: 0.3 }, 'spike_array', 'A plank with nails in it. Classic.'),
+  spike_array: weapon('Spike Array', 1, U, 300, 30, 80, { class: 'strength', effect: 'spikes', cost: 14, range: 12, arc: 100, cooldown: 4, duration: 2.2, engineDamage: 7, tick: 0.25 }, 'spike_array', 'Deploys drill-spikes. Front contact shreds engines.'),
+  pneumatic_ram: weapon('Pneumatic Ram', 2, C, 400, 40, 90, { class: 'strength', effect: 'ram', cost: 18, range: 50, arc: 70, cooldown: 2.5, engineDamage: 26, impulse: 220 }, 'pneumatic_ram', 'Piston punch to the drivetrain. Permanently lowers F_drive.'),
+  piston_punch: weapon('Piston Punch', 3, U, 620, 44, 100, { class: 'strength', effect: 'ram', cost: 18, range: 55, arc: 70, cooldown: 2.3, engineDamage: 32, impulse: 250 }, 'pneumatic_ram', 'A bigger piston. Subtlety not included.'),
+  drill_crown: weapon('Drill Crown', 3, R, 680, 32, 90, { class: 'strength', effect: 'spikes', cost: 15, range: 14, arc: 110, cooldown: 3.6, duration: 2.6, engineDamage: 9, tick: 0.22 }, 'spike_array', 'A ring of spinning drills. Motors fear it.'),
+  hammerhead: weapon('Hammerhead', 4, R, 1100, 50, 120, { class: 'strength', effect: 'ram', cost: 20, range: 60, arc: 80, cooldown: 2.2, engineDamage: 40, impulse: 300 }, 'pneumatic_ram', 'A sledgehammer on a spring. Knocks engines out of alignment.'),
+  gravity_hammer: weapon('Gravity Hammer', 5, E, 1700, 48, 130, { class: 'strength', effect: 'ram', cost: 22, range: 65, arc: 80, cooldown: 2, engineDamage: 50, impulse: 360 }, 'pneumatic_ram', 'Hits with the weight of a small moon.'),
+  mandible_shredder: weapon('Mandible Shredder', 5, L, 2500, 34, 120, { class: 'strength', effect: 'spikes', cost: 14, range: 16, arc: 120, cooldown: 3, duration: 3, engineDamage: 13, tick: 0.2 }, 'spike_array', 'Jaws from something that should have stayed extinct.'),
+  // Grip destroyers
+  scoop_plow: weapon('Scoop Plow', 1, C, 180, 30, 80, { class: 'grip', effect: 'lift', cost: 16, range: 40, arc: 70, cooldown: 3.5, liftTime: 1.2, gripMod: 0.2, exposeTime: 1.4 }, 'wedge_lifter', 'A snow plough from a planet without snow.'),
+  wedge_lifter: weapon('Wedge Lifter', 2, C, 380, 35, 90, { class: 'grip', effect: 'lift', cost: 16, range: 45, arc: 80, cooldown: 3, liftTime: 1.8, gripMod: 0.1, exposeTime: 1.2 }, 'wedge_lifter', 'Hydraulic wedge lifts drive wheels. μ → 0.'),
+  grease_gun: weapon('Grease Gun', 2, U, 300, 20, 55, { class: 'grip', effect: 'slick', cost: 18, range: 120, arc: 360, cooldown: 5.5, puddleRadius: 50, puddleTime: 6, gripMod: 0.3, exposeTime: 1.1 }, 'slick_sprayer', 'Squirts. Aim is optional.'),
+  slick_sprayer: weapon('Slick Sprayer', 3, U, 420, 25, 60, { class: 'grip', effect: 'slick', cost: 20, range: 150, arc: 360, cooldown: 5, puddleRadius: 60, puddleTime: 7, gripMod: 0.2, exposeTime: 1.0 }, 'slick_sprayer', 'Lays an oil slick ahead. Anything on it loses grip.'),
+  flipper_wedge: weapon('Flipper Wedge', 4, R, 1000, 38, 100, { class: 'grip', effect: 'lift', cost: 18, range: 50, arc: 90, cooldown: 2.8, liftTime: 2.2, gripMod: 0.05, exposeTime: 1.1 }, 'wedge_lifter', 'Gets under them and keeps them there.'),
+  frost_cannon: weapon('Frost Cannon', 4, E, 1400, 28, 80, { class: 'grip', effect: 'slick', cost: 20, range: 180, arc: 360, cooldown: 4.5, puddleRadius: 75, puddleTime: 8, gripMod: 0.12, exposeTime: 0.9 }, 'slick_sprayer', 'Freezes a patch of ring solid. Skating lessons not provided.'),
 });
+
+/** Rarity order, how often each turns up on a generated bug, and where it can be found. */
+export const RARITY = Object.freeze({
+  common: { rank: 0, weight: 1, label: 'Common', shop: true },
+  uncommon: { rank: 1, weight: 0.6, label: 'Uncommon', shop: true },
+  rare: { rank: 2, weight: 0.3, label: 'Rare', shop: true },
+  epic: { rank: 3, weight: 0.12, label: 'Epic', shop: false },
+  legendary: { rank: 4, weight: 0.05, label: 'Legendary', shop: false },
+});
+
+/**
+ * Part combinations that help or hurt. Each rule's `when(bug)` checks the build;
+ * `mods` multiply derived stats: force, grip, vMax, cooling, staminaMax, drain.
+ * Only a mechanic will point these out — without one you just see the numbers.
+ */
+export const INTERACTIONS = Object.freeze([
+  { id: 'turbine_tracks', good: false, mods: { force: 0.75 },
+    when: (b) => b.engine?.stats.kind === 'turbine' && b.tires?.stats.kind === 'track',
+    text: 'That turbine bogs down in heavy tracks — it needs revs, tracks give it none. −25% drive.' },
+  { id: 'turbine_pads', good: false, mods: { force: 0.85 },
+    when: (b) => b.engine?.stats.kind === 'turbine' && b.tires?.stats.kind === 'pads',
+    text: 'Grip pads drag on a turbine. −15% drive.' },
+  { id: 'turbine_slicks', good: true, mods: { vMax: 1.08 },
+    when: (b) => b.engine?.stats.kind === 'turbine' && b.tires?.stats.kind === 'slick',
+    text: 'Turbine on slicks — lets it rev out. +8% top speed.' },
+  { id: 'torque_slicks', good: false, mods: { grip: 0.85 },
+    when: (b) => b.engine?.stats.kind === 'torque' && b.tires?.stats.kind === 'slick',
+    text: 'All that torque just spins those slicks. −15% grip.' },
+  { id: 'torque_tracks', good: true, mods: { force: 1.1 },
+    when: (b) => b.engine?.stats.kind === 'torque' && b.tires?.stats.kind === 'track',
+    text: 'Big torque through tracks — a proper bulldozer. +10% drive.' },
+  { id: 'electric_zappers', good: false, mods: { staminaMax: 0.85 },
+    when: (b) => b.engine?.stats.kind === 'electric' && b.weapons.some((w) => w.stats.class === 'neutralizer'),
+    text: 'Your electric motor shares its battery with the zapper. −15% stamina.' },
+  { id: 'hot_armour', good: false, mods: {},
+    when: (b) => (b.armor?.stats.heat || 0) > 0.12,
+    dynamic: (b) => ({ cooling: 1 - b.armor.stats.heat, drain: 1 + b.armor.stats.heat }),
+    text: 'That thick plating traps engine heat — slower cooling and hotter running.' },
+  { id: 'hot_armour_hot_motor', good: false, mods: { cooling: 0.85, drain: 1.1 },
+    when: (b) => (b.armor?.stats.heat || 0) > 0.12 && (b.engine?.stats.cooling ?? 99) <= 10,
+    text: 'A hot-running motor under thick plating — they make each other worse.' },
+  { id: 'vented', good: true, mods: {},
+    when: (b) => (b.armor?.stats.heat || 0) < 0,
+    dynamic: (b) => ({ cooling: 1 - b.armor.stats.heat }),
+    text: 'Vented armour pulls air over the motor. Better cooling.' },
+  { id: 'bio_pair', good: true, mods: { cooling: 1.25, staminaMax: 1.05 },
+    when: (b) => b.engine?.stats.kind === 'bio' && b.chassis.stats.bio,
+    text: 'A bio-engine in a living frame — they sync up. +25% cooling, +5% stamina.' },
+  { id: 'bio_engine_dead_frame', good: false, mods: { cooling: 0.9 },
+    when: (b) => b.engine?.stats.kind === 'bio' && !b.chassis.stats.bio,
+    text: 'That bio-engine is sulking in a metal frame. −10% cooling.' },
+  { id: 'plasma_heavy', good: false, mods: { vMax: 0.92 },
+    when: (b) => b.engine?.stats.kind === 'plasma' && (b.tires?.stats.kind === 'track'),
+    text: 'Plasma drive through tracks wastes its top end. −8% top speed.' },
+  { id: 'fusion_mag', good: true, mods: { force: 1.06 },
+    when: (b) => b.engine?.stats.kind === 'fusion' && b.tires?.key && ['mag_rollers', 'phase_wheels'].includes(b.tires.key),
+    text: 'Fusion field couples with magnetic rims. +6% drive.' },
+]);
 
 export const PART_KEYS_BY_TYPE = Object.freeze(
   Object.entries(PARTS).reduce((acc, [key, def]) => {

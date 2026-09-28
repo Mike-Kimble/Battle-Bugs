@@ -77,7 +77,7 @@ class App {
   /** Champion's reward: a fresh game from scratch, bankrolled by the grand prize. */
   newSeason() {
     const s = this.state;
-    GameState.newGame({ bonus: ECONOMY.TOURNAMENT_PRIZE, season: s.season + 1, titles: s.titles + 1 }).save();
+    GameState.newGame({ bonus: ECONOMY.TOURNAMENT_PRIZE, season: s.season + 1, titles: s.titles + 1, discovered: [...s.discovered] }).save();
     window.location.reload();
   }
 

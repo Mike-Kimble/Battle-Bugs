@@ -143,8 +143,10 @@ export const ECONOMY = Object.freeze({
   MECHANIC_DISCOUNT: 0.9,    // mechanic gets 10% off parts & repairs
   MANAGER_FINDS_PICK: 0.8,   // chance the manager stocks the mechanic's pick after a fight
   MIN_VEHICLE_PRICE: 100,
-  MARKET_STOCK: { engine: 3, tires: 3, weapon: 4, armor: 3 },
-  MARKET_VEHICLES: 3,
+  FIND_CHANCE: { epic: 0.016, legendary: 0.003 }, // per part on a generated bug (scaled up for better pilots)
+  TEASER_CHANCE: 0.25,       // a restock shows off an epic/legendary part you can't afford
+  MARKET_STOCK: { engine: 5, tires: 5, weapon: 6, armor: 5 },
+  MARKET_VEHICLES: 4,
   TOURNAMENT_UNLOCK_WINS: 5,
   TOURNAMENT_ROUNDS: 5,
   TOURNAMENT_ROUND_NAMES: ['Round One', 'Round Two', 'Quarter-Final', 'Semi-Final', 'Grand Final'],
