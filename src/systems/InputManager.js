@@ -4,11 +4,12 @@ import { EventEmitter } from '../core/EventEmitter.js';
 /**
  * Normalises Pointer Events into battle gestures.
  *
- *   Touch/hold ground     → 'steer'       { world }  — repeats as the finger drags,
+ *   Touch/drag ON the ring → 'steer'      { world }  — repeats as the finger drags,
  *                                                     so the aim point follows it
- *   Single tap opponent   → 'ram'
- *   Double tap opponent   → 'shove'
- *   Swipe (quick flick)   → 'dash'        { dir (world unit vector) } — handbrake turn
+ *   Tap anywhere           → 'steer'      { world }
+ *   Swipe OFF the ring     → 'dash'       { dir (world unit vector) } — handbrake turn
+ *   Single tap opponent    → 'ram'
+ *   Double tap opponent    → 'shove'
  *   Tap player            → 'stop'
  *   Long press player     → 'menuOpen'    { screen }  then 'menuMove' / 'menuRelease'
  *   Keys 1/2 (desktop)    → 'fireWeapon'  { index }
@@ -85,9 +86,11 @@ export class InputManager extends EventEmitter {
       world,
       target: this.hooks.hitTest(world),
       moved: false,
+      // Off the ring is the swipe pad: nothing there moves your aim point except a tap.
+      offRing: !this.hooks.onRing(world),
     };
-    // Touching open ground starts steering immediately.
-    if (this.down.target === null) this.emit('steer', { world });
+    // Touching open ground on the ring starts steering immediately.
+    if (this.down.target === null && !this.down.offRing) this.emit('steer', { world });
     if (this.down.target === 'player') {
       clearTimeout(this.longPressTimer);
       this.longPressTimer = setTimeout(() => {
@@ -108,8 +111,8 @@ export class InputManager extends EventEmitter {
       this.down.moved = true;
       clearTimeout(this.longPressTimer);
     }
-    // Held finger: the aim point follows it (a drag that began on a bug becomes steering too).
-    if (this.down.moved || this.down.target === null) {
+    // Held finger on the ring: the aim point follows it (a drag that began on a bug steers too).
+    if (!this.down.offRing && (this.down.moved || this.down.target === null)) {
       this.emit('steer', { world: this.hooks.screenToWorld(e.clientX, e.clientY) });
     }
   }
@@ -129,11 +132,14 @@ export class InputManager extends EventEmitter {
     const dx = e.clientX - d.x;
     const dy = e.clientY - d.y;
     const dist = Math.hypot(dx, dy);
-    const dur = performance.now() - d.t;
 
-    if (dist >= INPUT.SWIPE_MIN_PX && dur <= INPUT.SWIPE_MAX_MS) {
-      const w2 = this.hooks.screenToWorld(e.clientX, e.clientY);
-      this.emit('dash', { dir: w2.sub(d.world).normalize() });
+    if (d.offRing) {
+      if (dist >= INPUT.SWIPE_MIN_PX) {
+        const w2 = this.hooks.screenToWorld(e.clientX, e.clientY);
+        this.emit('dash', { dir: w2.sub(d.world).normalize() });
+      } else if (!d.moved) {
+        this.emit('steer', { world: d.world }); // a tap off the ring still sets the destination
+      }
       return;
     }
     if (d.moved) return; // drag-steer: the aim point stays where the finger lifted

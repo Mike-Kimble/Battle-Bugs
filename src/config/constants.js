@@ -33,6 +33,9 @@ export const PHYSICS = Object.freeze({
   ARRIVE_RADIUS: 14,
   REVERSE_ANGLE: (120 * Math.PI) / 180, // target this far off the travel direction flips forward/reverse
   REVERSE_SPEED: 0.65,      // reverse top speed as a share of v_max
+  PUSHED_SPEED: 25,         // moving this fast against your drive direction = being pushed
+  PUSH_BACK_ARC: Math.PI / 4, // while pushed, aim within 45° of the pusher to keep pushing back
+  PULL_OUT_HOLD: 0.8,       // seconds spent rolling with the push while steering out
   SWERVE_TURN_MULT: 3.2,    // handbrake-turn steering rate multiplier
   SWERVE_LATERAL_GRIP: 0.35, // tires slide during the handbrake arc
   SLOW_RADIUS: 70,
@@ -73,7 +76,6 @@ export const INPUT = Object.freeze({
   LONG_PRESS_MS: 420,
   TAP_SLOP_PX: 12,
   SWIPE_MIN_PX: 38,
-  SWIPE_MAX_MS: 450,
   HIT_PADDING: 16,
   MENU_RADIUS: 78,
   MENU_DEADZONE: 26,

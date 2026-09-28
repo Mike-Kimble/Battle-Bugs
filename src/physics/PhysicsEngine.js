@@ -124,15 +124,35 @@ export class PhysicsEngine {
       if (dist < PHYSICS.ARRIVE_RADIUS) {
         ctl.target = null;
       } else {
-        // Target more than 120° off the direction of travel → flip forward/reverse.
-        let diff = wrapAngle(to.angle() - travelAngle());
-        if (Math.abs(diff) > PHYSICS.REVERSE_ANGLE) {
-          ctl.reverse = !ctl.reverse;
-          diff = wrapAngle(to.angle() - travelAngle());
+        // Being pushed? (moving against the way we're driving — backwards while
+        // driving forward, or forwards while reversing.)
+        const along = bug.vel.dot(Vector2D.fromAngle(bug.angle));
+        const pushed = ctl.reverse ? along > PHYSICS.PUSHED_SPEED : along < -PHYSICS.PUSHED_SPEED;
+        if (pushed && ctl.pushHold <= 0) {
+          // The push comes from the direction we're driving. Aim within 45° of it
+          // to keep pushing back; aim anywhere else to go with the push and pull out.
+          const fromPush = Math.abs(wrapAngle(to.angle() - travelAngle()));
+          if (fromPush > PHYSICS.PUSH_BACK_ARC) {
+            ctl.reverse = !ctl.reverse;
+            ctl.pushHold = PHYSICS.PULL_OUT_HOLD;
+          }
         }
-        steer(diff, s.turnRate);
-        const align = Math.cos(diff);
-        throttle = align > 0.2 ? align : 0;
+        let diff = wrapAngle(to.angle() - travelAngle());
+        if (ctl.pushHold > 0) {
+          // Pulling out: keep rolling with the push while steering to the new heading.
+          ctl.pushHold -= dt;
+          steer(diff, s.turnRate);
+          throttle = Math.max(0.6, Math.cos(diff));
+        } else {
+          // Target more than 120° off the direction of travel → flip forward/reverse.
+          if (!pushed && Math.abs(diff) > PHYSICS.REVERSE_ANGLE) {
+            ctl.reverse = !ctl.reverse;
+            diff = wrapAngle(to.angle() - travelAngle());
+          }
+          steer(diff, s.turnRate);
+          const align = Math.cos(diff);
+          throttle = align > 0.2 ? align : 0;
+        }
         throttle *= clamp(dist / PHYSICS.SLOW_RADIUS, 0.3, 1);
       }
     }

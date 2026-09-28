@@ -53,6 +53,7 @@ class App {
       screenToWorld: (x, y) => this.renderer.screenToWorld(x, y),
       clientToCss: (x, y) => this.renderer.clientToCss(x, y),
       hitTest: (w) => this.hitTest(w),
+      onRing: (w) => !this.engine || w.length() <= this.engine.arenaRadius,
     });
     this.bindInput();
 
@@ -373,7 +374,7 @@ class App {
     });
     bar.replaceChildren(
       el('div', { class: 'weapon-row' }, this.weaponButtons.map((b) => b.btn)),
-      el('div', { class: 'battle-help' }, 'Hold & drag: steer (behind you = reverse) · Tap foe: ram · Double-tap: power shove · Swipe: handbrake turn · Hold your bug: weapons'),
+      el('div', { class: 'battle-help' }, 'On the ring: touch & drag to steer (behind you = reverse) · Off the ring: swipe for a handbrake turn · Tap foe: ram · Double-tap: shove · Hold your bug: weapons'),
       el('button', { class: 'btn btn-small btn-danger forfeit', onclick: () => this.engine?.forfeit() }, 'Forfeit'),
     );
   }
