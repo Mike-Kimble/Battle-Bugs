@@ -55,8 +55,6 @@ table.stats th { text-align: left; font-weight: normal; color: var(--muted); pad
 table.stats td { padding: 3px 6px; white-space: nowrap; }
 .stat-bar-cell { width: 30%; }
 .stat-bar { height: 8px; background: #0e0b16; border: 1px solid var(--line); }
-.stat-bar div { height: 100%; background: var(--good); }
-.stat-bar.penalty div { background: var(--warn); }
 
 /* Tabs (menu bar in the masthead) */
 #tabbar { max-width: 1400px; margin: 0 auto; padding: 0 16px; }
@@ -96,7 +94,9 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .cmp-fill { height: 100%; max-width: 100%; }
 .cmp-fill.neutral, .cmp-fill.same { background: #6a6390; }
 .cmp-fill.better { background: var(--good); }
-.cmp-fill.worse { background: var(--bad); }
+.cmp-fill.worse { background: var(--warn); }
+.cmp-dmg { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(135deg, var(--bad) 0 3px, #8a2433 3px 6px); }
+.stat-bar .cmp-fill.neutral { background: var(--good); }
 .cmp-mark { position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1px; background: #fff; box-shadow: 0 0 0 1px #000; }
 .cmp-legend { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); margin-top: 2px; }
 .cmp-legend-mark { display: inline-block; width: 3px; height: 12px; background: #fff; box-shadow: 0 0 0 1px #000; }
@@ -216,8 +216,6 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 
 /* Hoist stats compared against the winning vehicle */
 .stat-bar { position: relative; }
-.stat-bar.better div { background: var(--good); }
-.stat-bar.worse div { background: var(--bad); }
 .stat-bar .cmp-mark { top: -3px; bottom: -3px; }
 .stats-block .cmp-legend { margin-bottom: 6px; }
 .ref-note { margin: 8px 0; font-size: 16px; padding: 8px 10px; }

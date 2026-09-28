@@ -128,7 +128,7 @@ export const VEHICLE_COMPARE = [
   { label: 'Top speed', get: (s) => s.vMax, fmt: (v) => `${Math.round(v)} px/s`, max: 380 },
   { label: 'Accel', get: (s) => s.accel, fmt: (v) => `${Math.round(v)}`, max: 500 },
   { label: 'Stamina', get: (s) => s.staminaMax, fmt: int, max: 150 },
-  { label: 'Hull', get: (s, bug) => bug.chassis.hp, fmt: int, max: 260 },
+  { label: 'Hull', get: (s, bug, repaired) => (repaired ? bug.chassis.maxHp : bug.chassis.hp), fmt: int, max: 260 },
   { label: 'Mass', get: (s) => s.mass, fmt: (v) => `${v} kg`, max: 330, better: 'neutral' },
 ];
 
@@ -142,26 +142,42 @@ function partScale(type, row) {
 }
 
 /**
- * Stat bars for a candidate, with a vertical marker showing the value of
- * what's currently on the hoist. Fill turns green/red when better/worse.
- * @param {Array<{label, value, current, max, fmt, better}>} rows
+ * One stat bar: the fill is the current value, a red segment runs on to the
+ * value once fully repaired, and the white marker is the reference (fully repaired).
+ * The fill is green/amber when the repaired value beats / trails the reference.
+ */
+export function statBar({ value, potential = value, ref = null, max, better, neutral = false, cls = '' }) {
+  const scale = Math.max(max, value, potential, ref ?? 0) || 1;
+  const pct = (v) => `${Math.max(0, Math.min(1, v / scale)) * 100}%`;
+  let tone = 'neutral';
+  if (ref != null && !neutral && better !== 'neutral') {
+    const diff = better === 'lower' ? ref - potential : potential - ref;
+    const eps = Math.abs(ref) * 0.01 + 1e-9;
+    tone = diff > eps ? 'better' : diff < -eps ? 'worse' : 'same';
+  }
+  // For "lower is better" stats damage doesn't apply, so potential ≈ value.
+  const lo = Math.min(value, potential);
+  const hi = Math.max(value, potential);
+  return el('div', { class: `cmp-bar ${cls}` },
+    el('div', { class: `cmp-fill ${tone}`, style: { width: pct(lo) } }),
+    hi - lo > scale * 0.002 ? el('div', { class: 'cmp-dmg', style: { left: pct(lo), width: `calc(${pct(hi)} - ${pct(lo)})` } }) : null,
+    ref != null ? el('div', { class: 'cmp-mark', style: { left: pct(ref) } }) : null);
+}
+
+/**
+ * Stat bars for a candidate against what's on the hoist.
+ * @param {Array<{label, value, potential?, current, max, fmt, better}>} rows
+ *   value = as it is now, potential = fully repaired, current = the reference (fully repaired)
  */
 export function compareBars(rows, { neutral = false, legend = null } = {}) {
   return el('div', { class: 'cmp' },
     rows.map((r) => {
-      const max = Math.max(r.max, r.value, r.current ?? 0) || 1;
       const hasCur = r.current != null;
-      let cls = 'neutral';
-      if (hasCur && !neutral && r.better !== 'neutral') {
-        const diff = r.better === 'lower' ? r.current - r.value : r.value - r.current;
-        const eps = Math.abs(r.current) * 0.01 + 1e-9;
-        cls = diff > eps ? 'better' : diff < -eps ? 'worse' : 'same';
-      }
-      return el('div', { class: 'cmp-row', title: hasCur ? `${r.label}: ${r.fmt(r.value)} (on hoist: ${r.fmt(r.current)})` : r.label },
+      const pot = r.potential ?? r.value;
+      const repairedNote = pot !== r.value ? ` → ${r.fmt(pot)} repaired` : '';
+      return el('div', { class: 'cmp-row', title: `${r.label}: ${r.fmt(r.value)}${repairedNote}${hasCur ? ` (on hoist, repaired: ${r.fmt(r.current)})` : ''}` },
         el('span', { class: 'cmp-label' }, r.label),
-        el('div', { class: 'cmp-bar' },
-          el('div', { class: `cmp-fill ${cls}`, style: { width: `${(r.value / max) * 100}%` } }),
-          hasCur ? el('div', { class: 'cmp-mark', style: { left: `${(r.current / max) * 100}%` } }) : null),
+        statBar({ value: r.value, potential: pot, ref: r.current, max: r.max, better: r.better, neutral }),
         el('span', { class: 'cmp-val' }, r.fmt(r.value)));
     }),
     legend ? el('div', { class: 'cmp-legend' }, el('span', { class: 'cmp-legend-mark' }), legend) : null);
@@ -170,18 +186,20 @@ export function compareBars(rows, { neutral = false, legend = null } = {}) {
 export function partCompare(part, current, { legend } = {}) {
   const rows = PART_COMPARE[part.type];
   if (!rows) return null;
+  const full = (p) => new Part(p.key, { uid: p.uid });
   return compareBars(rows.map((r) => ({
     label: r.label, fmt: r.fmt, better: r.better,
-    value: r.get(part), current: current ? r.get(current) : null, max: partScale(part.type, r),
+    value: r.get(part), potential: r.get(full(part)), current: current ? r.get(full(current)) : null, max: partScale(part.type, r),
   })), { legend: legend ?? (current ? `on hoist: ${current.name}` : 'nothing fitted in this slot') });
 }
 
 export function vehicleCompare(bug, current, { neutral = false } = {}) {
   const s = bug.getStats();
-  const cs = current && current !== bug ? current.getStats() : null;
+  const ps = pristineStats(bug);
+  const cs = current && current !== bug ? pristineStats(current) : null;
   return compareBars(VEHICLE_COMPARE.map((r) => ({
     label: r.label, fmt: r.fmt, better: r.better, max: r.max,
-    value: r.get(s, bug), current: cs ? r.get(cs, current) : null,
+    value: r.get(s, bug), potential: r.get(ps, bug, true), current: cs ? r.get(cs, current, true) : null,
   })), { neutral, legend: cs ? `on hoist: ${current.name}` : null });
 }
 
@@ -431,21 +449,15 @@ export class WorkshopUI {
     const s = bug.getStats();
     const p = pristineStats(bug);
     const ref = this.refBug;
-    const rs = ref ? ref.getStats() : null;
-    const row = (label, cur, max, fmt, hint, key) => {
-      // Without a reference: bar = current vs pristine (damage penalty).
-      // With the winning vehicle as reference: its value is the white tick.
+    // The reference vehicle is compared fully repaired.
+    const rs = ref ? pristineStats(ref) : null;
+    const row = (label, cur, full, fmt, hint, key) => {
+      // Bar = current value, red = what repairs would restore, white tick = reference.
       const refVal = rs ? rs[key] : null;
-      const scale = Math.max(max, refVal ?? 0) || 1;
-      const ratio = cur / scale;
-      let cls = ratio < 0.99 * (max / scale) ? 'penalty' : '';
-      if (refVal != null) cls = cur > refVal * 1.01 ? 'better' : cur < refVal * 0.99 ? 'worse' : '';
-      return el('tr', { title: refVal != null ? `${hint} — ${ref.name}: ${fmt(refVal)}` : hint || '' },
+      return el('tr', { title: refVal != null ? `${hint} — ${ref.name} (repaired): ${fmt(refVal)}` : hint || '' },
         el('th', {}, label),
         el('td', {}, fmt(cur)),
-        el('td', { class: 'stat-bar-cell' }, el('div', { class: `stat-bar ${cls}` },
-          el('div', { style: { width: `${Math.round(Math.min(1, ratio) * 100)}%` } }),
-          refVal != null ? el('span', { class: 'cmp-mark', style: { left: `${Math.min(100, (refVal / scale) * 100)}%` } }) : null)));
+        el('td', { class: 'stat-bar-cell' }, statBar({ value: cur, potential: full, ref: refVal, max: full, cls: 'stat-bar' })));
     };
     const kn = (v) => `${(v / 1000).toFixed(1)} kN`;
     return el('div', { class: 'stats-block' },
