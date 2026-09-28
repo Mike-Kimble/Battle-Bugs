@@ -367,7 +367,8 @@ export class EconomyManager {
   get availablePilots() {
     const s = this.state;
     const taken = new Set([...s.challengers, ...s.board.rejected].map((c) => c.id));
-    return s.pool.filter((p) => !taken.has(p.id));
+    // The rival only turns up every few bouts.
+    return s.pool.filter((p) => !taken.has(p.id) && (p.id !== s.rivalId || this.rivalDue));
   }
 
   sortBoard() {
@@ -394,9 +395,9 @@ export class EconomyManager {
       const rookie = this.availablePilots.find((p) => p.rookie) || this.recruit(this.makeRookie());
       s.challengers.push(rookie);
     }
-    // Your rival is always around (unless they've just walked off on you).
+    // Your rival turns up every few bouts (unless they've just walked off on you).
     const rival = this.rival;
-    if (rival && !s.challengers.includes(rival) && this.availablePilots.includes(rival)) s.challengers.push(rival);
+    if (rival && this.rivalDue && !s.challengers.includes(rival) && this.availablePilots.includes(rival)) s.challengers.push(rival);
     while (s.challengers.filter((c) => c.matched).length < ECONOMY.MATCHED_CHALLENGERS && s.challengers.length < ECONOMY.BOARD_SIZE) {
       const target = this.bestVehicle ? this.rating(this.bestVehicle) : 0;
       const even = this.availablePilots
@@ -433,6 +434,23 @@ export class EconomyManager {
     if (this.state.rivalId || !pilot?.record) return;
     this.state.rivalId = pilot.id;
     pilot.rivalOrigin = result === 'loss' ? 'won' : 'beaten';
+    this.scheduleRival();
+  }
+
+  get boutsPlayed() {
+    const r = this.state.record;
+    return r.wins + r.losses + r.ties;
+  }
+
+  /** The rival vanishes for a while and turns up again in 4–6 bouts. */
+  scheduleRival() {
+    const [lo, hi] = ECONOMY.RIVAL_GAP;
+    this.state.rivalNextAt = this.boutsPlayed + randInt(lo, hi);
+  }
+
+  /** Is it the rival's turn to show up on the board? */
+  get rivalDue() {
+    return !!this.state.rivalId && this.boutsPlayed >= this.state.rivalNextAt;
   }
 
   /**
@@ -725,6 +743,12 @@ export class EconomyManager {
     if (!tournament) s.challengers = s.challengers.filter((x) => x.id !== challenger.id);
     for (const c of s.board.rejected) s.challengers.push(c);
     s.board.rejected = [];
+    // The rival stays for one round only: fought or not, they vanish again for a while.
+    const rival = this.rival;
+    if (rival && (challenger === rival || s.challengers.includes(rival))) {
+      s.challengers = s.challengers.filter((c) => c !== rival);
+      this.scheduleRival();
+    }
     s.board.rejections = 0;
     // Old haggling is void after a bout — including the pilot just fought, who may come straight back.
     challenger.nego = null;

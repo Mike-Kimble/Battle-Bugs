@@ -36,6 +36,7 @@ export class GameState extends EventEmitter {
     this.fixStreak = 0;
     this.fine = null; // { amount, battlesLeft }
     this.rivalId = null; // the first pilot you fought: they follow you to the Grand Final
+    this.rivalNextAt = 0; // bout count at which the rival next turns up on the board
     this.compareRef = null; // { id, refId }: captured vehicle vs the vehicle that won it (session only)
     this.log = [];
     this.newVehicleIds = new Set(); // captured this session, flagged NEW until put on the hoist
@@ -106,6 +107,7 @@ export class GameState extends EventEmitter {
     s.fixStreak = d.fixStreak || 0;
     s.fine = d.fine || null;
     s.rivalId = d.rivalId || null;
+    s.rivalNextAt = d.rivalNextAt || 0;
     s.log = d.log || [];
     return s;
   }
@@ -137,6 +139,7 @@ export class GameState extends EventEmitter {
       fixStreak: this.fixStreak,
       fine: this.fine,
       rivalId: this.rivalId,
+      rivalNextAt: this.rivalNextAt,
       log: this.log.slice(-40),
     };
   }
