@@ -302,7 +302,7 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
   .advice { font-size: 15px; padding: 5px 8px; margin: 4px 0; gap: 2px; }
 }
 @media (max-width: 900px) and (max-height: 720px) {
-  .advice { font-size: 14px; line-height: 1.05; }
+  .advice { font-size: 13px; line-height: 1; padding: 3px 6px; gap: 1px; }
   .advice-head { display: none; }
 }
 
