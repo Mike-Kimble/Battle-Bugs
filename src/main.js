@@ -128,12 +128,13 @@ class App {
     this.workshop.stop();
     this.sprite.clear();
 
+    const moneyBefore = this.state.money;
     // The manager bets from whatever isn't already staked on the fight.
     const bet = this.economy.placeManagerBet(challenger, player, stake?.type === 'cash' ? stake.amount : 0, betPct ?? this.state.managerBetPct);
     if (bet) toast(`Your manager bet ${formatMoney(bet.stake)} on you to ${bet.side === 'win' ? 'WIN' : 'LOSE'}`, bet.side === 'win' ? 'good' : 'bad');
     this.state.save();
 
-    this.match = { challenger, tournament, stake, bet, player, endTimer: null, banner: null };
+    this.match = { challenger, tournament, stake, bet, player, moneyBefore, endTimer: null, banner: null };
     this.engine = new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty, style: challenger.style });
     this.wireEngine(this.engine);
 
@@ -302,6 +303,7 @@ class App {
       stake,
       bet,
     });
+    report.moneyBefore = this.match.moneyBefore;
     this.state.commit();
     this.showResults(report, engine);
   }
@@ -340,6 +342,7 @@ class App {
       report.captured ? el('div', { class: 'captured' }, this.sprite.renderThumbnail(report.captured, 96), el('div', {}, el('small', {}, 'Captured'), el('strong', {}, report.captured.name))) : null,
       report.lostVehicle ? el('div', { class: 'captured lost' }, this.sprite.renderThumbnail(report.lostVehicle, 96), el('div', {}, el('small', {}, 'Title lost'), el('strong', {}, report.lostVehicle.name))) : null,
       el('ul', { class: 'report' }, report.lines.map((l) => el('li', {}, l))),
+      report.moneyBefore != null ? el('p', { class: 'cash-change' }, `Cash ${formatMoney(report.moneyBefore)} → ${formatMoney(this.state.money)} (${this.state.money >= report.moneyBefore ? '+' : '−'}${formatMoney(Math.abs(this.state.money - report.moneyBefore))})`) : null,
       el('div', { class: 'result-status' },
         el('span', {}, `${player.name}: hull ${Math.round(player.chassis.hpRatio * 100)}% · condition ${Math.round(player.condition * 100)}%`),
         el('strong', {}, formatMoney(this.state.money))),

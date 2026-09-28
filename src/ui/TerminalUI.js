@@ -195,15 +195,15 @@ export class TerminalUI {
   /** With a manager on staff, set this fight's betting limit before the bell. */
   fight(c, opts) {
     const s = this.state;
-    // No betting in the tournament: straight into the ring.
-    if (!s.staff.manager || opts.tournament) {
+    const deal = opts.tournament ? null : c.nego?.deal;
+    const reserved = deal?.type === 'cash' ? deal.amount : 0;
+    // No betting in the tournament, and nothing to bet once the wager takes all your cash.
+    if (!s.staff.manager || opts.tournament || s.money - reserved < 1) {
       this.onFight(c, opts);
       return;
     }
     const eco = this.economy;
-    const bug = opts.tournament ? s.getVehicle(s.tournament.vehicleId) : s.activeBug;
-    const deal = opts.tournament ? null : c.nego?.deal;
-    const reserved = deal?.type === 'cash' ? deal.amount : 0;
+    const bug = s.activeBug;
     let pct = s.managerBetPct;
 
     const preview = el('div', { class: 'bet-preview' });
@@ -231,7 +231,7 @@ export class TerminalUI {
       el('p', {}, 'Stakes: ', el('strong', {}, opts.tournament ? `Tournament purse ${formatMoney(c.bounty)}` : deal?.type === 'titles' ? 'TITLES' : formatMoney(deal?.amount ?? 0))),
       el('h3', {}, "Manager's betting limit for this fight"),
       el('div', { class: 'slider-row' }, slider, pctLabel),
-      el('p', { class: 'small muted' }, `Share of your spare cash (${formatMoney(Math.max(0, s.money - reserved))}) the manager may bet — 0% means no bet. Default ${Math.round(s.managerBetPct * 100)}% (Staff tab).`),
+      el('p', { class: 'small muted' }, `Share of the cash left after your wager (${formatMoney(Math.max(0, s.money - reserved))}) the manager may bet — 0% means no bet. Default ${Math.round(s.managerBetPct * 100)}% (Staff tab).`),
       preview,
       el('div', { class: 'part-actions' },
         el('button', { class: 'btn btn-fight', onclick: () => { closeModal(); this.onFight(c, { ...opts, betPct: pct }); } }, 'FIGHT'))));
@@ -265,12 +265,6 @@ export class TerminalUI {
     // Their answer: accept → into the ring; reject → the chat ends; counter → keep talking.
     const handle = (r) => {
       s.commit();
-      if (r.status === 'accept') {
-        closeModal();
-        toast(r.message, 'good');
-        this.fight(c, { tournament: false });
-        return;
-      }
       if (r.status === 'reject') {
         if (r.scrolled) toast('Everyone walked off — the board scrolls up: tougher challengers arrive!', 'bad');
         if (r.returned) toast(`${this.pilotName(r.returned)} has come back to the board.`, 'good');
@@ -284,7 +278,12 @@ export class TerminalUI {
       try { handle(fn()); } catch (err) { toast(err.message, 'bad'); }
     };
 
-    if (!endedLog) {
+    if (!endedLog && n.deal) {
+      // They've said yes: the only thing left to do is fight.
+      body.append(el('div', { class: 'chat-controls chat-go' },
+        el('span', { class: 'muted small' }, `Stakes: ${n.deal.type === 'cash' ? formatMoney(n.deal.amount) : 'TITLES'}`),
+        el('button', { class: 'btn btn-fight', onclick: () => { closeModal(); this.fight(c, { tournament: false }); } }, 'Go Battle')));
+    } else if (!endedLog) {
       const max = Math.max(1, s.money);
       // Slider starts on their counter-offer, or everything you have if you can't cover it.
       const start = n.counter != null ? Math.min(n.counter, max) : Math.min(max, Math.round(c.bounty / 10) * 10 || 10);

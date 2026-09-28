@@ -9,6 +9,11 @@ import { Part, makeId } from '../entities/Part.js';
 const rand = (a = 0, b = 1) => a + Math.random() * (b - a);
 const randInt = (a, b) => Math.floor(rand(a, b + 1));
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+/** What a challenger says once a fight is on. */
+const ACCEPT_LINES = [
+  "You're on!", "Let's do it!", "Sure, I wasn't doing much this afternoon anyway.", 'Hold my Cola.',
+  'Hell yeah!', "Ok, let's go.", 'Sure thing, slick.',
+];
 const chance = (p) => Math.random() < p;
 const clampTier = (t) => Math.max(1, Math.min(5, t));
 const roundTo = (n, step) => Math.max(step, Math.round(n / step) * step);
@@ -658,17 +663,17 @@ export class EconomyManager {
       return out;
     };
 
-    if (n.counter != null && amount === n.counter) return respond('accept', amount, `${formatMoney(amount)} it is. See you in the ring.`);
+    if (n.counter != null && amount === n.counter) return respond('accept', amount, pick(ACCEPT_LINES));
 
     // They asked for more than you've got and you pushed everything in.
     if (n.counter != null && n.counter > s.money && amount === s.money) {
-      if (chance(ECONOMY.ALL_IN_ACCEPT)) return respond('accept', amount, `All you've got, eh? …Fine. ${formatMoney(amount)} it is.`);
+      if (chance(ECONOMY.ALL_IN_ACCEPT)) return respond('accept', amount, pick(ACCEPT_LINES));
       return respond('reject', amount, 'Come back when you have some real money. Now go away.');
     }
 
     const ridiculous = amount >= ideal * ECONOMY.RIDICULOUS_FACTOR || amount <= ideal / ECONOMY.RIDICULOUS_FACTOR;
     if (ridiculous) {
-      if (chance(ECONOMY.RIDICULOUS_ACCEPT)) return respond('accept', amount, `…${formatMoney(amount)}? Ha! You're on.`);
+      if (chance(ECONOMY.RIDICULOUS_ACCEPT)) return respond('accept', amount, pick(ACCEPT_LINES));
       if (n.round > 1) return respond('reject', amount, amount > ideal ? 'Stop wasting my time. Get lost!' : 'Insulting. Get lost, grub.');
       return respond('counter', ideal, amount > ideal
         ? `Whoa, easy. ${formatMoney(ideal)} is more like it.`
@@ -682,11 +687,11 @@ export class EconomyManager {
     const confident = p >= 0.5;
     const t = n.target;
     if (confident ? amount >= t * (1 - tol) : amount <= t * (1 + tol)) {
-      return respond('accept', amount, confident ? `${formatMoney(amount)}. Easy money for me.` : `${formatMoney(amount)}… fine. Deal.`);
+      return respond('accept', amount, pick(ACCEPT_LINES));
     }
     const counter = roundTo(amount + (t - amount) * ECONOMY.WAGER_CONCESSION, ECONOMY.COUNTER_STEP);
     // Not worth haggling over small change — they take your number.
-    if (Math.abs(counter - amount) < ECONOMY.MIN_COUNTER_GAP) return respond('accept', amount, `Not worth arguing over. ${formatMoney(amount)} it is.`);
+    if (Math.abs(counter - amount) < ECONOMY.MIN_COUNTER_GAP) return respond('accept', amount, pick(ACCEPT_LINES));
     return respond('counter', counter, confident
       ? `Pocket change. Make it ${formatMoney(counter)}.`
       : `Too rich for me. ${formatMoney(counter)}, tops.`);
@@ -702,8 +707,9 @@ export class EconomyManager {
     }
     n.deal = { type: 'titles' };
     n.counter = null;
-    n.log.push({ who: 'them', text: 'Titles it is. Say goodbye to your bug.' });
-    return { status: 'accept', message: 'Titles it is.' };
+    const line = pick(ACCEPT_LINES);
+    n.log.push({ who: 'them', text: line });
+    return { status: 'accept', message: line };
   }
 
   cancelDeal(c) {
@@ -779,9 +785,8 @@ export class EconomyManager {
     const pWin = 1 - this.confidence(c, bug);
     const conviction = Math.abs(pWin - 0.5) * 2;
     const side = pWin >= 0.5 ? 'win' : 'lose';
-    const q = side === 'win' ? pWin : 1 - pWin;
-    // Fair odds are 1/q; the bookie skims a margin off the profit.
-    const mult = 1 + (1 / q - 1) * ECONOMY.BOOKIE_MARGIN;
+    // A winning bet always pays double the stake.
+    const mult = ECONOMY.MANAGER_PAYOUT;
     const pot = Math.max(0, s.money - reserved);
     const stake = !s.staff.manager || pct <= 0 || conviction < ECONOMY.MANAGER_MIN_CONVICTION
       ? 0
