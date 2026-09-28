@@ -240,58 +240,55 @@ export class TerminalUI {
   // ───────────── Stakes ─────────────
   /**
    * DM window with a challenger: portrait + name up top, the chat log below,
-   * wager controls underneath. A rejection ends the chat — only the ✕ closes it.
-   * @param {object} c
-   * @param {Array} [endedLog] transcript of a chat the challenger has left
+   * controls underneath. The window is built once — replies are appended to the
+   * log and only the controls change. A rejection ends the chat; only ✕ closes it.
    */
-  openChat(c, endedLog = null) {
+  openChat(c) {
     const eco = this.economy;
     const s = this.state;
     const who = this.pilotName(c);
-    const n = endedLog ? null : eco.nego(c);
-    const log = endedLog || n.log;
+    let log = eco.nego(c).log;
+    let ended = false;
 
-    const logEl = el('div', { class: 'nego-log chat-log' }, log.length
-      ? log.map((m) => m.who === 'system'
-        ? el('div', { class: 'msg msg-system' }, m.text)
-        : el('div', { class: `msg msg-${m.who}` }, el('small', {}, m.who === 'you' ? 'You' : who), m.text))
-      : el('div', { class: 'muted small' }, `Say something to ${who}. Name a cash stake, or play for titles — winner takes the loser's vehicle.`));
+    const logEl = el('div', { class: 'nego-log chat-log' });
+    const controls = el('div', { class: 'chat-controls' });
+    const backdrop = () => document.querySelector('#modal-root .modal-backdrop');
 
-    const header = el('div', { class: 'chat-head' },
-      this.sprite.renderPortrait(c, 32),
-      el('h2', { class: 'chat-name' }, who));
-
-    const body = el('div', { class: 'nego chat' }, logEl);
-    // Their answer: accept → into the ring; reject → the chat ends; counter → keep talking.
-    const handle = (r) => {
-      s.commit();
-      if (r.status === 'reject') {
-        if (r.scrolled) toast('Everyone walked off — the board scrolls up: tougher challengers arrive!', 'bad');
-        if (r.returned) toast(`${this.pilotName(r.returned)} has come back to the board.`, 'good');
-        this.render();
-        this.openChat(c, r.log);
+    const message = (m) => (m.who === 'system'
+      ? el('div', { class: 'msg msg-system' }, m.text)
+      : el('div', { class: `msg msg-${m.who}` }, el('small', {}, m.who === 'you' ? 'You' : who), m.text));
+    let shown = 0;
+    const renderLog = () => {
+      if (!log.length) {
+        logEl.replaceChildren(el('div', { class: 'muted small' }, `Say something to ${who}. Name a cash stake, or play for titles — winner takes the loser's vehicle.`));
         return;
       }
-      this.openChat(c);
-    };
-    const attempt = (fn) => {
-      try { handle(fn()); } catch (err) { toast(err.message, 'bad'); }
+      if (shown === 0) logEl.replaceChildren();
+      for (; shown < log.length; shown++) logEl.append(message(log[shown]));
+      logEl.scrollTop = logEl.scrollHeight;
     };
 
-    if (!endedLog && n.deal) {
-      // They've said yes: the only thing left to do is fight.
-      body.append(el('div', { class: 'chat-controls chat-go' },
-        el('span', { class: 'muted small' }, `Stakes: ${n.deal.type === 'cash' ? formatMoney(n.deal.amount) : 'TITLES'}`),
-        el('button', { class: 'btn btn-fight', onclick: () => { closeModal(); this.fight(c, { tournament: false }); } }, 'Go Battle')));
-    } else if (!endedLog) {
+    const renderControls = () => {
+      const n = c.nego;
+      if (ended) {
+        controls.replaceChildren(el('p', { class: 'muted small chat-ended' }, 'Press ✕ to return to the Challenger Board.'));
+        return;
+      }
+      if (n?.deal) {
+        // They've said yes: the only thing left to do is fight.
+        controls.replaceChildren(el('div', { class: 'chat-go' },
+          el('span', { class: 'muted small' }, `Stakes: ${n.deal.type === 'cash' ? formatMoney(n.deal.amount) : 'TITLES'}`),
+          el('button', { class: 'btn btn-fight', onclick: () => { closeModal(); this.fight(c, { tournament: false }); } }, 'Go Battle')));
+        return;
+      }
       const max = Math.max(1, s.money);
       // Slider starts on their counter-offer, or everything you have if you can't cover it.
-      const start = n.counter != null ? Math.min(n.counter, max) : Math.min(max, Math.round(c.bounty / 10) * 10 || 10);
+      const start = n?.counter != null ? Math.min(n.counter, max) : Math.min(max, Math.round(c.bounty / 10) * 10 || 10);
       const amountLabel = el('strong', { class: 'wager-amount' });
       const offerBtn = el('button', { class: 'btn btn-primary', type: 'submit' });
       const setLabel = (v) => {
         amountLabel.textContent = formatMoney(v);
-        offerBtn.textContent = n.counter != null && v === n.counter ? `Accept ${formatMoney(v)}` : `Wager ${formatMoney(v)}`;
+        offerBtn.textContent = n?.counter != null && v === n.counter ? `Accept ${formatMoney(v)}` : `Wager ${formatMoney(v)}`;
       };
       const slider = el('input', {
         type: 'range', min: 1, max, step: 1, value: start, class: 'wager-slider',
@@ -299,22 +296,43 @@ export class TerminalUI {
         oninput: (e) => setLabel(Number(e.target.value)),
       });
       setLabel(start);
-      body.append(...[
-        n.counter != null && n.counter > s.money
-          ? el('p', { class: 'small bad' }, `You can't cover their ${formatMoney(n.counter)} — the slider is set to everything you have.`) : null,
-        el('form', {
-          class: 'wager-form chat-controls',
-          onsubmit: (e) => { e.preventDefault(); attempt(() => eco.offerCash(c, Number(slider.value))); },
-        },
-        el('div', { class: 'wager-row' }, amountLabel, el('span', { class: 'muted small' }, `of ${formatMoney(s.money)}`)),
-        slider,
-        el('div', { class: 'part-actions' },
-          offerBtn,
-          el('button', { class: 'btn btn-danger', type: 'button', onclick: () => attempt(() => eco.offerTitles(c)) }, 'Play for titles'))),
-      ].filter(Boolean));
-    }
+      const short = n?.counter != null && n.counter > s.money;
+      controls.replaceChildren(el('form', {
+        class: 'wager-form',
+        onsubmit: (e) => { e.preventDefault(); attempt(() => eco.offerCash(c, Number(slider.value))); },
+      },
+      el('div', { class: 'wager-row' }, amountLabel,
+        el('span', { class: `small ${short ? 'bad' : 'muted'}` }, short ? `of ${formatMoney(s.money)} — can't cover ${formatMoney(n.counter)}` : `of ${formatMoney(s.money)}`)),
+      slider,
+      el('div', { class: 'part-actions' },
+        offerBtn,
+        el('button', { class: 'btn btn-danger', type: 'button', onclick: () => attempt(() => eco.offerTitles(c)) }, 'Play for titles'))));
+    };
 
-    openModal(`Chat · ${who}`, body, { header, className: 'modal-chat', modal: !!endedLog });
+    // Their answer is added to the log; reject ends the chat, anything else updates the controls.
+    const attempt = (fn) => {
+      let r;
+      try { r = fn(); } catch (err) { toast(err.message, 'bad'); return; }
+      s.commit();
+      if (r.status === 'reject') {
+        ended = true;
+        log = r.log;
+        const bd = backdrop();
+        if (bd) bd.onclick = null; // only the ✕ closes a finished chat
+        if (r.scrolled) toast('Everyone walked off — the board scrolls up: tougher challengers arrive!', 'bad');
+        if (r.returned) toast(`${this.pilotName(r.returned)} has come back to the board.`, 'good');
+        this.render();
+      }
+      renderLog();
+      renderControls();
+    };
+
+    renderLog();
+    renderControls();
+    const header = el('div', { class: 'chat-head' },
+      this.sprite.renderPortrait(c, 32),
+      el('h2', { class: 'chat-name' }, who));
+    openModal(`Chat · ${who}`, el('div', { class: 'nego chat' }, logEl, controls), { header, className: 'modal-chat' });
     logEl.scrollTop = logEl.scrollHeight;
   }
 

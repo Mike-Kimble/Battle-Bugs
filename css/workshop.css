@@ -317,9 +317,10 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .chat-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .chat-head .pilot-portrait { width: 32px; height: 32px; max-width: 32px; max-height: 32px; border-width: 1px; }
 .chat-head .chat-name { margin: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chat .chat-log { min-height: 180px; max-height: 45vh; }
+.chat .chat-log { height: min(300px, 42vh); max-height: none; flex: none; }
 .msg-system { align-self: center; max-width: 100%; background: none; border: none; color: var(--muted); font-style: italic; font-size: 14px; padding: 2px 0; }
-.chat-controls { flex-direction: column; align-items: stretch; }
+.chat-controls { min-height: 132px; display: flex; flex-direction: column; justify-content: flex-end; }
+.chat-ended { margin: auto 0; text-align: center; }
 .chat-controls .part-actions { display: flex; gap: 8px; }
 .chat-controls .part-actions .btn { flex: 1; }
-.chat-go { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; }
+.chat-go { margin-top: auto; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; }
