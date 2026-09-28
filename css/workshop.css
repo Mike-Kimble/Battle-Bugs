@@ -103,7 +103,7 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .card.is-new { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 210, 74, 0.25); }
 
 /* Cards */
-.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
 .card-grid.parts { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
 .card {
   background: var(--panel-2); border: 2px solid var(--line); border-radius: var(--radius);
@@ -305,3 +305,9 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
   .advice { font-size: 14px; line-height: 1.05; }
   .advice-head { display: none; }
 }
+
+/* Challenger cards: portrait left, bug right, backstory below */
+.challenger-head { align-items: center; }
+.pilot-portrait { image-rendering: pixelated; border: 2px solid var(--line); border-radius: var(--radius); flex-shrink: 0; }
+.pilot-story { margin: 0; font-size: 16px; line-height: 1.2; color: #cfc6e0; font-style: italic; }
+.pilot-record { color: var(--muted); font-size: 14px; letter-spacing: 0; }

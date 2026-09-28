@@ -3,9 +3,9 @@ import { formatMoney } from '../systems/EconomyManager.js';
 import { el, toast, hpBar, partCard, openModal, closeModal, counterpart, vehicleCompare } from './WorkshopUI.js';
 
 const TABS = [
-  ['challengers', 'Challenger Board'],
   ['hangar', 'Hangar'],
   ['market', 'Marketplace'],
+  ['challengers', 'Challenger Board'],
   ['staff', 'Staff'],
   ['tournament', 'Tournament'],
 ];
@@ -42,7 +42,7 @@ export class TerminalUI {
     this.sprite = sprite;
     this.onFight = onFight;
     this.onNewGame = onNewGame;
-    this.tab = 'challengers';
+    this.tab = 'hangar';
   }
 
   act(fn, success) {
@@ -140,8 +140,8 @@ export class TerminalUI {
           !active.engine ? el('button', { class: 'btn btn-primary', onclick: () => { this.marketCat = 'engine'; this.setTab('market'); } }, 'Buy a motor') : null,
           el('button', { class: 'btn', onclick: () => this.setTab('hangar') }, 'Open the Hangar'))) : null,
       s.board.tierShift ? el('p', { class: 'small warn-text' }, `▲ The board has scrolled up ${s.board.tierShift} difficulty level${s.board.tierShift > 1 ? 's' : ''} after everyone walked off.`) : null,
-      walked.length ? el('p', { class: 'small muted' }, `Walked off (back after your next fight): ${walked.map((c) => c.bug.pilot?.name || c.bug.name).join(', ')}`) : null,
-      el('div', { class: 'card-grid' }, s.challengers.map((c) => this.challengerCard(c, { ready, label: c.rookie ? 'ROOKIE · EASY' : null }))));
+      walked.length ? el('p', { class: 'small muted' }, `Walked off (back after your next fight): ${walked.map((c) => this.pilotName(c)).join(', ')}`) : null,
+      el('div', { class: 'card-grid' }, s.challengers.map((c) => this.challengerCard(c, { ready, label: c.rookie && this.economy.wantsRookie ? 'ROOKIE · EASY' : null }))));
   }
 
   challengerCard(c, { ready, onFight, label }) {
@@ -166,18 +166,21 @@ export class TerminalUI {
           el('button', { class: 'btn btn-small btn-primary', disabled: !ready, onclick: () => this.openNegotiation(c) }, 'Wager cash'),
           el('button', { class: 'btn btn-small btn-danger', disabled: !ready, onclick: () => this.askTitles(c) }, 'Play for titles')));
     }
+    const story = c.story ? c.story.replaceAll('{name}', c.name).replaceAll('{planet}', c.planet).replaceAll('{bug}', `${bug.name}`) : null;
     return el('article', { class: `card challenger${deal ? ' has-deal' : ''}` },
-      el('div', { class: 'card-row' },
-        this.sprite.renderThumbnail(bug, 88),
+      el('div', { class: 'card-row challenger-head' },
+        this.sprite.renderPortrait(c, 72),
         el('div', { class: 'card-info' },
           label || c.matched ? el('div', { class: 'badges' },
             label ? el('span', { class: 'badge badge-gold' }, label) : null,
             c.matched ? el('span', { class: 'badge badge-match', title: 'Rated close to your best vehicle' }, 'EVEN MATCH') : null) : null,
-          el('h2', { class: 'pilot-name' }, this.pilotName(c)),
-          el('div', { class: 'bug-subtitle' }, `in the ${bug.name}`),
-          bug.pilot ? el('div', { class: 'muted small' }, `of ${bug.pilot.planet}`) : null,
-          el('div', { class: 'tier' }, '★'.repeat(c.tier), el('span', { class: 'dim' }, '★'.repeat(5 - c.tier))),
-          el('div', { class: 'small muted' }, `${bug.chassis.name} · ${Math.round(bug.condition * 100)}% condition`))),
+          el('h2', { class: 'pilot-name' }, this.pilotTitle(c)),
+          el('div', { class: 'bug-subtitle' }, bug.name),
+          el('div', { class: 'tier' }, '★'.repeat(c.tier), el('span', { class: 'dim' }, '★'.repeat(5 - c.tier)),
+            c.record ? el('span', { class: 'pilot-record' }, ` ${c.record.w}W–${c.record.l}L`) : null),
+          el('div', { class: 'small muted' }, `${bug.chassis.name} · ${Math.round(bug.condition * 100)}% condition`)),
+        this.sprite.renderThumbnail(bug, 72)),
+      story ? el('p', { class: 'pilot-story' }, story) : null,
       vehicleCompare(bug, this.state.activeBug, { neutral: true }),
       this.weaponChips(bug),
       foot,
@@ -185,7 +188,13 @@ export class TerminalUI {
   }
 
   pilotName(c) {
-    return c.bug.pilot?.name || c.bug.name;
+    return c.name || c.bug.pilot?.name || c.bug.name;
+  }
+
+  /** "Name of Planet". */
+  pilotTitle(c) {
+    const planet = c.planet || c.bug.pilot?.planet;
+    return planet ? `${this.pilotName(c)} of ${planet}` : this.pilotName(c);
   }
 
   // ───────────── Pre-fight: manager's bet ─────────────
@@ -290,11 +299,12 @@ export class TerminalUI {
     };
 
     const body = el('div', { class: 'nego' },
-      el('div', { class: 'card-row' },
-        this.sprite.renderThumbnail(c.bug, 64),
+      el('div', { class: 'card-row challenger-head' },
+        this.sprite.renderPortrait(c, 64),
         el('div', { class: 'card-info' },
-          el('h2', { class: 'pilot-name' }, who),
-          el('div', { class: 'bug-subtitle' }, `in the ${c.bug.name}`))),
+          el('h2', { class: 'pilot-name' }, this.pilotTitle(c)),
+          el('div', { class: 'bug-subtitle' }, c.bug.name)),
+        this.sprite.renderThumbnail(c.bug, 64)),
       el('div', { class: 'nego-log' }, n.log.length
         ? n.log.map((m) => el('div', { class: `msg msg-${m.who}` }, el('small', {}, m.who === 'you' ? 'You' : who), m.text))
         : el('div', { class: 'muted small' }, `Name your stake — you'll have to read ${who} yourself. Push a ridiculous number twice and they may walk off.`)),

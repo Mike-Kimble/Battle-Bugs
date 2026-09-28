@@ -568,6 +568,96 @@ export class SpriteRenderer {
     return 'hull';
   }
 
+  /**
+   * Procedural alien pilot portrait, deterministic per pilot: head shape,
+   * skin, eye count, antennae, mouth and a style-coloured backdrop.
+   */
+  renderPortrait(pilot, size = 88) {
+    const px = 32;
+    const c = document.createElement('canvas');
+    c.width = px;
+    c.height = px;
+    c.className = 'pilot-portrait';
+    c.style.width = `${size}px`;
+    c.style.height = `${size}px`;
+    const g = c.getContext('2d');
+    const rng = seeded(hashString(pilot.id || pilot.name || 'x'));
+    const r = () => rng();
+    const hue = Math.floor(r() * 360);
+    const skin = `hsl(${hue} 55% 50%)`;
+    const skinDark = `hsl(${hue} 50% 32%)`;
+    const skinLight = `hsl(${hue} 65% 66%)`;
+    const BACKDROPS = { bully: '#4a1f25', zapper: '#1f3a4a', turtle: '#2b3a22', dodger: '#3a2b4a', sumo: '#4a3a1f', hothead: '#5a2410', hapless: '#2a2a33' };
+    g.fillStyle = BACKDROPS[pilot.style] || '#221c30';
+    g.fillRect(0, 0, px, px);
+    g.fillStyle = 'rgba(255,255,255,0.06)';
+    for (let y = 0; y < px; y += 4) g.fillRect(0, y, px, 2);
+
+    // Shoulders / suit
+    g.fillStyle = `hsl(${(hue + 180) % 360} 30% 30%)`;
+    g.fillRect(6, 25, 20, 7);
+    g.fillStyle = skinDark;
+    g.fillRect(13, 21, 6, 5);
+
+    // Head
+    const shape = Math.floor(r() * 4);
+    g.fillStyle = skin;
+    g.beginPath();
+    if (shape === 0) g.ellipse(16, 13, 9, 10, 0, 0, Math.PI * 2); // egg
+    else if (shape === 1) g.ellipse(16, 12, 11, 8, 0, 0, Math.PI * 2); // wide blob
+    else if (shape === 2) { g.moveTo(16, 1); g.lineTo(27, 20); g.lineTo(5, 20); g.closePath(); } // triangle
+    else g.ellipse(16, 11, 7, 11, 0, 0, Math.PI * 2); // tall dome
+    g.fill();
+    g.fillStyle = skinLight;
+    g.fillRect(10, 5, 4, 2);
+    g.fillStyle = skinDark;
+    g.fillRect(8, 17, 16, 2);
+
+    // Antennae or horns
+    const ant = Math.floor(r() * 3);
+    g.fillStyle = skinDark;
+    if (ant === 1) {
+      g.fillRect(10, 0, 1, 5); g.fillRect(21, 0, 1, 5);
+      g.fillStyle = `hsl(${(hue + 90) % 360} 90% 60%)`;
+      g.fillRect(9, 0, 3, 2); g.fillRect(20, 0, 3, 2);
+    } else if (ant === 2) {
+      g.fillRect(6, 3, 2, 4); g.fillRect(24, 3, 2, 4);
+    }
+
+    // Eyes
+    const eyes = 1 + Math.floor(r() * 4);
+    const eyeColor = `hsl(${(hue + 120 + Math.floor(r() * 120)) % 360} 90% 65%)`;
+    const eyeW = eyes === 1 ? 6 : 3;
+    const span = eyes === 1 ? 0 : 14;
+    for (let i = 0; i < eyes; i++) {
+      const ex = eyes === 1 ? 13 : Math.round(9 + (span / (eyes - 1)) * i);
+      const ey = 10 + (eyes === 3 && i === 1 ? -3 : 0);
+      g.fillStyle = '#0b0910';
+      g.fillRect(ex - 1, ey - 1, eyeW + 2, 5);
+      g.fillStyle = eyeColor;
+      g.fillRect(ex, ey, eyeW, 3);
+      g.fillStyle = '#0b0910';
+      g.fillRect(ex + Math.floor(eyeW / 2), ey + 1, 1, 1);
+    }
+
+    // Mouth
+    const mouth = Math.floor(r() * 4);
+    g.fillStyle = '#0b0910';
+    if (mouth === 0) g.fillRect(12, 16, 8, 1); // flat
+    else if (mouth === 1) { g.fillRect(11, 15, 10, 2); g.fillStyle = '#f4e9c9'; g.fillRect(12, 15, 1, 1); g.fillRect(19, 15, 1, 1); } // fangs
+    else if (mouth === 2) { g.fillRect(12, 15, 1, 1); g.fillRect(13, 16, 6, 1); g.fillRect(19, 15, 1, 1); } // grin
+    else { g.fillStyle = skinDark; g.fillRect(12, 17, 2, 4); g.fillRect(15, 17, 2, 5); g.fillRect(18, 17, 2, 4); } // tentacles
+
+    // Style accessory
+    if (pilot.style === 'zapper') { g.fillStyle = '#9ff4ff'; g.fillRect(4, 8, 1, 1); g.fillRect(27, 12, 1, 1); g.fillRect(3, 14, 1, 1); }
+    if (pilot.style === 'hothead') { g.fillStyle = '#ff7a3d'; g.fillRect(25, 4, 2, 2); g.fillRect(27, 2, 1, 1); }
+    if (pilot.style === 'sumo') { g.fillStyle = '#1b1726'; g.fillRect(14, 0, 4, 3); }
+    if (pilot.style === 'turtle') { g.fillStyle = '#5d7a4a'; g.fillRect(6, 24, 20, 2); }
+    if (pilot.style === 'bully') { g.fillStyle = '#8a2a2a'; g.fillRect(19, 7, 5, 1); }
+    if (pilot.style === 'dodger') { g.fillStyle = '#c8b6ff'; g.fillRect(7, 9, 18, 1); }
+    return c;
+  }
+
   /** Static pixelated portrait for cards (facing up). */
   renderThumbnail(bug, size = 96) {
     const c = document.createElement('canvas');

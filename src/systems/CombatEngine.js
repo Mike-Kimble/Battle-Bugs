@@ -1,4 +1,5 @@
 import { ARENA, MATCH, PHYSICS, ACTIONS, EVENTS } from '../config/constants.js';
+import { PILOT_STYLES } from '../config/partsData.js';
 import { EventEmitter } from '../core/EventEmitter.js';
 import { PhysicsEngine } from '../physics/PhysicsEngine.js';
 import { Vector2D, wrapAngle } from '../physics/Vector2D.js';
@@ -20,7 +21,7 @@ export class CombatEngine extends EventEmitter {
   /**
    * @param {{player: BattleBug, opponent: BattleBug, difficulty?: number}} opts
    */
-  constructor({ player, opponent, difficulty = 0.5 }) {
+  constructor({ player, opponent, difficulty = 0.5, style = null }) {
     super();
     this.player = player;
     this.opponent = opponent;
@@ -36,7 +37,7 @@ export class CombatEngine extends EventEmitter {
 
     player.resetForBattle(new Vector2D(-ARENA.R0 * 0.45, 0), 0);
     opponent.resetForBattle(new Vector2D(ARENA.R0 * 0.45, 0), Math.PI);
-    this.ai = new AIController(opponent, player, difficulty);
+    this.ai = new AIController(opponent, player, difficulty, style);
 
     this.on(EVENTS.COLLISION, (c) => this.onCollision(c));
   }
@@ -375,17 +376,19 @@ export class CombatEngine extends EventEmitter {
  * rams when aligned and fires weapons when they would connect.
  */
 export class AIController {
-  constructor(me, foe, difficulty = 0.5) {
+  /** @param {string|null} style a PILOT_STYLES key — shapes how the pilot fights */
+  constructor(me, foe, difficulty = 0.5, style = null) {
     this.me = me;
     this.foe = foe;
     this.difficulty = difficulty;
+    this.style = { ram: 1, shove: 1, fire: 1, dodge: 1, rest: 1, ...(PILOT_STYLES[style]?.ai || {}) };
     this.think = 0.4;
     this.reaction = 0.5 - 0.35 * difficulty;
     this.resting = false;
   }
 
   update(dt, engine) {
-    const { me, foe, difficulty } = this;
+    const { me, foe, difficulty, style } = this;
     if (me.out || me.stalled || foe.out) return;
     this.think -= dt;
     if (this.think > 0) return;
@@ -401,14 +404,14 @@ export class AIController {
     // 1. Edge danger: head for the middle.
     if (myD > R - me.radius * 1.7) {
       engine.moveTo(me, me.pos.scale(0.25));
-      if (dist < 120 && sFrac > 0.3 && Math.random() < difficulty * 0.5) {
+      if (dist < 120 && sFrac > 0.3 && Math.random() < difficulty * 0.5 * style.dodge) {
         engine.dash(me, me.pos.negate().normalize());
       }
       return;
     }
 
     // 2. Stamina management — idle to cool, hysteresis to avoid dithering.
-    const low = 0.18 + 0.12 * difficulty;
+    const low = (0.18 + 0.12 * difficulty) * style.rest; // hotheads barely rest, turtles rest early
     if (sFrac < low) this.resting = true;
     if (this.resting && sFrac > low + 0.25) this.resting = false;
     if (this.resting) {
@@ -428,19 +431,29 @@ export class AIController {
       if (this.shouldFire(engine, w, foeD, R, dist)) engine.fireWeapon(me, i);
     });
 
-    // 4. Close in, aiming past the opponent to shove them outward.
+    // 4. Positioning, by temperament.
     const outward = foeD > 1 ? foe.pos.normalize() : toFoe.normalize();
-    engine.moveTo(me, engine.clampInside(foe.pos.add(outward.scale(45)), me.radius * 1.2));
+    const longGun = me.weapons.some((w) => !w.isBroken && w.stats.range >= 120);
+    if (style.keepAway && longGun && dist < 200) {
+      // Zappers hold at weapon range.
+      engine.moveTo(me, engine.clampInside(foe.pos.sub(toFoe.normalize().scale(200)), me.radius * 1.5));
+    } else if (style.holdCenter && foeD < R * 0.6 && dist > 170) {
+      // Turtles sit near the middle and wait for you to come to them (then brace and push back).
+      engine.moveTo(me, engine.clampInside(foe.pos.scale(0.35), me.radius * 1.5));
+    } else {
+      // Everyone else closes in, aiming past the opponent to shove them outward.
+      engine.moveTo(me, engine.clampInside(foe.pos.add(outward.scale(45)), me.radius * 1.2));
+    }
 
     // 5. Rams & shoves when lined up.
     const aligned = Math.abs(wrapAngle(toFoe.angle() - me.angle)) < 0.55;
     if (dist < 180 && aligned && me.actionCooldown <= 0) {
-      if (foeD > R * 0.5 && sFrac > 0.6 && Math.random() < 0.1 + 0.35 * difficulty) engine.ram(me, true);
-      else if (sFrac > 0.4 && Math.random() < 0.05 + 0.25 * difficulty) engine.ram(me, false);
+      if (foeD > R * 0.5 && sFrac > 0.6 && Math.random() < (0.1 + 0.35 * difficulty) * style.shove) engine.ram(me, true);
+      else if (sFrac > 0.4 && Math.random() < (0.05 + 0.25 * difficulty) * style.ram) engine.ram(me, false);
     }
 
     // 6. Dodge incoming lunges.
-    if (foe.lunge && dist < 160 && sFrac > 0.25 && Math.random() < difficulty * 0.6) {
+    if (foe.lunge && dist < 160 && sFrac > 0.25 && Math.random() < difficulty * 0.6 * style.dodge) {
       engine.dash(me, this.dodgeDir(toFoe));
     }
   }
@@ -456,7 +469,7 @@ export class AIController {
     const { me, foe, difficulty } = this;
     if (w.isBroken || (me.cooldowns[w.uid] || 0) > 0) return false;
     if (me.stamina < w.stats.cost + 12) return false;
-    if (Math.random() > 0.3 + 0.7 * difficulty) return false;
+    if (Math.random() > (0.3 + 0.7 * difficulty) * this.style.fire) return false;
     const chk = engine.weaponCheck(me, w);
     switch (w.stats.effect) {
       case 'drain': return chk.hit && !foe.stalled && foe.stamina > 25;

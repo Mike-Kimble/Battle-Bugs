@@ -1,5 +1,5 @@
 import { ECONOMY, EVENTS, SAVE_KEY } from '../config/constants.js';
-import { STARTER_BUG } from '../config/partsData.js';
+import { STARTER_BUG, PILOT_STYLES, FIGHTING_STYLES } from '../config/partsData.js';
 import { EventEmitter } from './EventEmitter.js';
 import { Storage } from './Storage.js';
 import { BattleBug } from '../entities/BattleBug.js';
@@ -21,7 +21,8 @@ export class GameState extends EventEmitter {
     this.activeVehicleId = null;
     this.inventory = [];
     this.record = { wins: 0, losses: 0, ties: 0, challengerWins: 0, streak: 0 };
-    this.challengers = [];
+    this.pool = [];         // every challenger pilot, persistent and progressing
+    this.challengers = [];  // the ones on the board right now (same objects as in the pool)
     // Walk-offs wait in `rejected` until you next fight; tierShift scrolls the board up in difficulty.
     this.board = { rejected: [], rejections: 0, tierShift: 0 };
     this.market = { parts: [], vehicles: [] };
@@ -75,8 +76,19 @@ export class GameState extends EventEmitter {
     s.inventory = d.inventory.map(Part.fromJSON);
     s.record = { ...s.record, ...d.record };
     const hydrate = (c) => ({ ...c, bug: BattleBug.fromJSON(c.bug) });
-    s.challengers = (d.challengers || []).map(hydrate);
-    s.board = { ...s.board, ...d.board, rejected: (d.board?.rejected || []).map(hydrate) };
+    if (d.pool) {
+      s.pool = d.pool.map(hydrate);
+      const byId = new Map(s.pool.map((p) => [p.id, p]));
+      s.challengers = (d.challengerIds || []).map((id) => byId.get(id)).filter(Boolean);
+      s.board = { ...s.board, ...d.board, rejected: (d.board?.rejectedIds || []).map((id) => byId.get(id)).filter(Boolean) };
+      delete s.board.rejectedIds;
+    } else {
+      // Older saves: the board and walk-offs become the start of the pool.
+      s.challengers = (d.challengers || []).map(hydrate);
+      s.board = { ...s.board, ...d.board, rejected: (d.board?.rejected || []).map(hydrate) };
+      s.pool = [...s.challengers, ...s.board.rejected];
+    }
+    for (const p of s.pool) GameState.upgradeLegacyPilot(p);
     s.market = {
       parts: (d.market?.parts || []).map((l) => ({ ...l, part: Part.fromJSON(l.part) })),
       vehicles: (d.market?.vehicles || []).map((l) => ({ ...l, bug: BattleBug.fromJSON(l.bug) })),
@@ -104,8 +116,9 @@ export class GameState extends EventEmitter {
       activeVehicleId: this.activeVehicleId,
       inventory: this.inventory.map((p) => p.toJSON()),
       record: this.record,
-      challengers: this.challengers.map((c) => ({ ...c, bug: c.bug.toJSON() })),
-      board: { ...this.board, rejected: this.board.rejected.map((c) => ({ ...c, bug: c.bug.toJSON() })) },
+      pool: this.pool.map((p) => ({ ...p, bug: p.bug.toJSON() })),
+      challengerIds: this.challengers.map((c) => c.id),
+      board: { rejections: this.board.rejections, tierShift: this.board.tierShift, rejectedIds: this.board.rejected.map((c) => c.id) },
       market: {
         parts: this.market.parts.map((l) => ({ ...l, part: l.part.toJSON() })),
         vehicles: this.market.vehicles.map((l) => ({ ...l, bug: l.bug.toJSON() })),
@@ -123,6 +136,17 @@ export class GameState extends EventEmitter {
       fine: this.fine,
       log: this.log.slice(-40),
     };
+  }
+
+  /** Give pre-pool challengers a name, style, backstory, skill, purse and record. */
+  static upgradeLegacyPilot(p) {
+    p.name ||= p.bug.pilot?.name || 'Nameless';
+    p.planet ||= p.bug.pilot?.planet || 'parts unknown';
+    p.style ||= p.rookie ? 'hapless' : FIGHTING_STYLES[Math.floor(Math.random() * FIGHTING_STYLES.length)];
+    p.story ||= PILOT_STYLES[p.style].stories[0];
+    p.skill ??= p.difficulty ?? 0.3;
+    p.purse ??= (p.bounty || 200) * 2;
+    p.record ||= { w: 0, l: 0 };
   }
 
   save() {

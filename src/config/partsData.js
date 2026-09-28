@@ -199,3 +199,84 @@ export const BUG_ADJECTIVES = Object.freeze([
 export const BUG_NOUNS = Object.freeze([
   'Weevil', 'Stag', 'Tick', 'Mite', 'Hopper', 'Borer', 'Crusher', 'Chomper', 'Skitter', 'Mandible', 'Grub', 'Locust', 'Scuttler',
 ]);
+
+// ───────────── Challenger pilots ─────────────
+/**
+ * Pilot personalities. `ai` tunes the opponent AI (multipliers on ram /
+ * shove / weapon / dodge eagerness and on how soon they rest to cool),
+ * `shops` is what they buy first, `stories` are their backstories
+ * ({name}, {planet}, {bug} are filled in).
+ */
+export const PILOT_STYLES = Object.freeze({
+  bully: {
+    label: 'Bully',
+    ai: { ram: 2.0, shove: 1.5, fire: 1.0, dodge: 0.5, rest: 0.8 },
+    shops: 'engine',
+    stories: [
+      '{name} once headbutted a moon out of orbit and has been looking for something bigger ever since. Expect the {bug} straight up your tailpipe. Repeatedly.',
+      'Banned from three spaceports for "aggressive parking". {name} doesn\'t do tactics — just rams, shoves, and then some more rams for dessert.',
+      '{name}\'s mother wanted a poet. What she got was a {bug} that treats every opponent like a door that needs opening.',
+    ],
+  },
+  zapper: {
+    label: 'Zapper',
+    ai: { ram: 0.6, shove: 0.6, fire: 2.0, dodge: 1.0, rest: 1.0, keepAway: true },
+    shops: 'weapon',
+    stories: [
+      'A former lightning farmer from {planet}, {name} still can\'t resist pressing the big glowing button. Keep your stamina topped up.',
+      '{name} keeps a tidy distance and a very untidy arsenal. The {bug} hums, crackles, and occasionally sets its own seat on fire.',
+      'Once short-circuited an entire hive-city "by accident". {name} fights from range and loves watching opponents stall.',
+    ],
+  },
+  turtle: {
+    label: 'Turtle',
+    ai: { ram: 0.5, shove: 1.2, fire: 1.0, dodge: 0.8, rest: 1.6, holdCenter: true },
+    shops: 'armor',
+    stories: [
+      '{name} believes patience is a weapon. It\'s also the only weapon they trust. Expect the {bug} parked mid-ring, daring you to come in.',
+      'Seventeen years as a tollbooth on {planet}. {name} doesn\'t chase — {name} waits, braces, and lets you do something silly.',
+      'The {bug}\'s previous owner died of boredom mid-bout. {name} plays it slow, heavy and dead centre.',
+    ],
+  },
+  dodger: {
+    label: 'Dodger',
+    ai: { ram: 0.8, shove: 0.8, fire: 1.0, dodge: 2.5, rest: 1.0 },
+    shops: 'tires',
+    stories: [
+      '{name} was a professional puddle-skater before sumo. Lunge at the {bug} and you\'ll be halfway off the ring before you notice it isn\'t there.',
+      'Nobody has ever landed a clean hit on {name} — including three ex-partners and a tax inspector. Rams are a gamble.',
+      'The {bug} handles like a greased moth. {name} handbrake-turns at the last second and lets your momentum do the rest.',
+    ],
+  },
+  sumo: {
+    label: 'Sumo',
+    ai: { ram: 1.0, shove: 2.0, fire: 0.7, dodge: 1.0, rest: 1.1 },
+    shops: 'tires',
+    stories: [
+      '{name} learned ancient Earth sumo from a single scratched holo-tape and got alarmingly good. Loves the edge of the ring — yours.',
+      'A traditionalist from {planet}: bow, shove, repeat. {name} saves the big power shove for when you\'re near the rope.',
+      '{name} paces out the dohyo before every bout and knows exactly where your wheels will leave it.',
+    ],
+  },
+  hothead: {
+    label: 'Hothead',
+    ai: { ram: 2.5, shove: 2.0, fire: 1.5, dodge: 0.3, rest: 0.3 },
+    shops: 'engine',
+    stories: [
+      '{name} runs the {bug} flat out from the first second and has overheated in every bout they\'ve ever lost. Survive the opening rush.',
+      'Anger-management dropout, {planet} chapter. {name} rams everything, fires everything, then stalls in a sulk.',
+      '{name} once challenged a sun to a staring contest. Brave, loud, and completely allergic to pacing.',
+    ],
+  },
+  hapless: {
+    label: 'Rookie',
+    ai: { ram: 0.6, shove: 0.4, fire: 0.5, dodge: 0.3, rest: 1.0 },
+    shops: 'engine',
+    stories: [
+      '{name} bought the {bug} this morning with a coupon and is still reading the manual. Mid-bout.',
+      '{name}\'s mum signed them up. The {bug}\'s steering is mostly theoretical.',
+    ],
+  },
+});
+
+export const FIGHTING_STYLES = Object.freeze(Object.keys(PILOT_STYLES).filter((k) => k !== 'hapless'));

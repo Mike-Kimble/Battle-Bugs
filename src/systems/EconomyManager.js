@@ -1,6 +1,6 @@
 import { ECONOMY } from '../config/constants.js';
 import {
-  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS,
+  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES,
 } from '../config/partsData.js';
 import { BattleBug } from '../entities/BattleBug.js';
 import { Part, makeId } from '../entities/Part.js';
@@ -264,79 +264,193 @@ export class EconomyManager {
     });
   }
 
-  makeChallenger(tier, opts = {}) {
-    const bug = this.generateBug(tier, opts);
-    const bounty = roundTo(ECONOMY.BOUNTY_BASE + tier * ECONOMY.BOUNTY_PER_TIER + rand(0, 80), 5);
-    return {
-      id: makeId('ch'),
-      tier,
-      bounty,
-      difficulty: Math.min(1, 0.1 + tier * 0.16 + rand(-0.05, 0.05) + (opts.extraDifficulty || 0)),
-      bug,
+  // ───────────── Challenger pilots (a persistent pool) ─────────────
+  /**
+   * A pilot: a named alien with a play style, a backstory, a skill level,
+   * a purse, a record and their own bug. Pilots live in `state.pool`, the
+   * board shows a handful of them, and they all progress between fights.
+   */
+  makePilot(tier, { style = pick(FIGHTING_STYLES), bug = null, rookie = false } = {}) {
+    const name = alienName();
+    const planet = pick(PLANETS);
+    const theBug = bug || this.generateBug(tier);
+    theBug.pilot = { name, planet };
+    const p = {
+      id: makeId('pl'),
+      name,
+      planet,
+      style,
+      story: pick(PILOT_STYLES[style].stories),
+      skill: Math.min(0.95, 0.1 + tier * 0.16 + rand(-0.05, 0.05)),
+      purse: roundTo((ECONOMY.BOUNTY_BASE + tier * ECONOMY.BOUNTY_PER_TIER) * rand(1, 2.5), 10),
+      record: { w: 0, l: 0 },
+      rookie,
+      bug: theBug,
     };
+    return this.refreshPilot(p);
+  }
+
+  /** Recompute the board-facing numbers after a pilot's bug or skill changes. */
+  refreshPilot(p) {
+    p.bug.pilot = { name: p.name, planet: p.planet };
+    p.tier = this.vehicleStars(p.bug);
+    p.bounty = roundTo(ECONOMY.BOUNTY_BASE + p.tier * ECONOMY.BOUNTY_PER_TIER, 5);
+    p.difficulty = p.rookie && this.wantsRookie ? 0.05 : p.skill;
+    return p;
+  }
+
+  /** Kept for callers that just want "a challenger of tier N": a new pool pilot. */
+  makeChallenger(tier, opts = {}) {
+    return this.makePilot(tier, opts);
+  }
+
+  junkBug(name) {
+    const [lo, hi] = ECONOMY.JUNK_CONDITION;
+    return BattleBug.create({
+      ...STARTER_BUG, name, hue: randInt(0, 359), alien: true, engine: 'rust_motor', armor: null,
+      condition: () => rand(lo + 0.2, hi + 0.25),
+    });
   }
 
   /** A deliberately weak, unarmed, half-wrecked opponent for new pilots. */
   makeRookie() {
     const bug = BattleBug.create({
-      name: `Rookie ${pick(BUG_NOUNS)}`,
-      hue: randInt(0, 359),
-      alien: true,
-      pilot: { name: alienName(), planet: pick(PLANETS) },
-      chassis: 'scrapper_frame',
-      engine: 'rust_motor',
-      tires: 'bald_rollers',
-      armor: null,
-      weapons: [],
+      name: `Rookie ${pick(BUG_NOUNS)}`, hue: randInt(0, 359), alien: true,
+      chassis: 'scrapper_frame', engine: 'rust_motor', tires: 'bald_rollers', armor: null, weapons: [],
       condition: () => rand(0.5, 0.65),
     });
-    return {
-      id: makeId('ch'),
-      tier: 1,
-      bounty: roundTo(ECONOMY.BOUNTY_BASE + rand(20, 60), 5),
-      difficulty: 0.05,
-      rookie: true,
-      bug,
-    };
+    const p = this.makePilot(1, { style: 'hapless', bug, rookie: true });
+    p.skill = 0.05;
+    return this.refreshPilot(p);
+  }
+
+  /** Build the starting pool: a rookie plus pilots spread across every tier. */
+  ensurePool() {
+    const s = this.state;
+    if (!s.pool.length) {
+      s.pool.push(this.makeRookie());
+      for (const tier of ECONOMY.POOL_TIERS) s.pool.push(this.makePilot(tier));
+    }
+    for (const p of s.pool) this.refreshPilot(p);
+  }
+
+  /** New blood when the pool can't offer what the board needs. Retires a has-been if full. */
+  recruit(pilot) {
+    const s = this.state;
+    s.pool.push(pilot);
+    if (s.pool.length > ECONOMY.POOL_MAX) {
+      const busy = new Set([...s.challengers, ...s.board.rejected].map((c) => c.id));
+      const retiree = s.pool
+        .filter((p) => !busy.has(p.id) && !this.rookieSlot(p) && p !== pilot)
+        .sort((x, y) => (y.record.l - y.record.w) - (x.record.l - x.record.w))[0];
+      if (retiree) s.pool = s.pool.filter((p) => p !== retiree);
+    }
+    return pilot;
   }
 
   get hasRookie() {
     return this.state.challengers.some((c) => c.rookie);
   }
 
+  /** While you're new, the rookie only ever fills the rookie slot; afterwards they're just another pilot. */
+  rookieSlot(p) {
+    return p.rookie && this.wantsRookie;
+  }
+
   get wantsRookie() {
     return this.state.record.challengerWins < ECONOMY.ROOKIE_UNTIL_WINS && this.state.board.tierShift === 0;
   }
 
-  /** Challenger at board slot `i` (0 = easiest), after any difficulty scroll. */
-  makeBoardChallenger(i) {
-    const t = this.baseTier - 1 + i + this.state.board.tierShift;
-    return this.makeChallenger(clampTier(t), { extraDifficulty: Math.max(0, t - 5) * 0.08 });
+  /** Pool pilots free to go on the board (not already there, not walked off). */
+  get availablePilots() {
+    const s = this.state;
+    const taken = new Set([...s.challengers, ...s.board.rejected].map((c) => c.id));
+    return s.pool.filter((p) => !taken.has(p.id));
   }
 
   sortBoard() {
-    this.state.challengers.sort((a, b) => (b.rookie ? 1 : 0) - (a.rookie ? 1 : 0) || a.tier - b.tier || a.difficulty - b.difficulty);
+    this.state.challengers.sort((a, b) => (this.rookieSlot(b) ? 1 : 0) - (this.rookieSlot(a) ? 1 : 0) || a.tier - b.tier || a.difficulty - b.difficulty);
   }
 
-  /** A fresh board of BOARD_SIZE challengers spanning the difficulty range. */
+  /** A fresh board drawn from the pool. */
   generateChallengers() {
+    this.ensurePool();
+    for (const c of this.state.challengers) c.matched = false;
     this.state.challengers = [];
     this.refillBoard();
   }
 
   /**
-   * Top the board back up to BOARD_SIZE: the rookie (while you're new), two
-   * even matches for your best vehicle, then the difficulty ladder.
+   * Top the board back up to BOARD_SIZE from the pool: the rookie (while
+   * you're new), two even matches for your best vehicle, then pilots spread
+   * across the difficulty range (the strongest, once the board has scrolled).
    */
   refillBoard() {
     const s = this.state;
-    if (this.wantsRookie && !this.hasRookie) s.challengers.push(this.makeRookie());
-    while (s.challengers.filter((c) => c.matched).length < ECONOMY.MATCHED_CHALLENGERS && s.challengers.length < ECONOMY.BOARD_SIZE) {
-      s.challengers.push(this.makeMatchedChallenger());
+    this.ensurePool();
+    if (this.wantsRookie && !this.hasRookie) {
+      const rookie = this.availablePilots.find((p) => p.rookie) || this.recruit(this.makeRookie());
+      s.challengers.push(rookie);
     }
-    let i = 1;
-    while (s.challengers.length < ECONOMY.BOARD_SIZE) s.challengers.push(this.makeBoardChallenger(i++ % ECONOMY.BOARD_SIZE));
+    while (s.challengers.filter((c) => c.matched).length < ECONOMY.MATCHED_CHALLENGERS && s.challengers.length < ECONOMY.BOARD_SIZE) {
+      const target = this.bestVehicle ? this.rating(this.bestVehicle) : 0;
+      const even = this.availablePilots
+        .filter((p) => !this.rookieSlot(p) && this.isEvenMatch(p))
+        .sort((x, y) => Math.abs(this.rating(x.bug) - target) - Math.abs(this.rating(y.bug) - target))[0];
+      const c = even || this.recruit(this.makeMatchedChallenger());
+      c.matched = true;
+      s.challengers.push(c);
+    }
+    while (s.challengers.length < ECONOMY.BOARD_SIZE) {
+      const rest = this.availablePilots.filter((p) => !this.rookieSlot(p)).sort((x, y) => this.rating(x.bug) - this.rating(y.bug));
+      if (!rest.length) {
+        s.challengers.push(this.recruit(this.makePilot(clampTier(this.baseTier + s.board.tierShift))));
+        continue;
+      }
+      // Spread picks across the range; after a scroll, favour the strongest.
+      const need = ECONOMY.BOARD_SIZE - s.challengers.length;
+      const idx = s.board.tierShift > 0
+        ? rest.length - 1
+        : Math.min(rest.length - 1, Math.floor(((ECONOMY.BOARD_SIZE - need) / ECONOMY.BOARD_SIZE) * rest.length));
+      s.challengers.push(rest[idx]);
+    }
+    for (const c of s.challengers) this.refreshPilot(c);
     this.sortBoard();
+  }
+
+  /** Each pilot's between-fights life: an off-screen bout, then repairs and one upgrade. */
+  progressPool(fought) {
+    for (const p of this.state.pool) {
+      if (p.rookie && this.wantsRookie) continue; // the rookie stays green until you've found your feet
+      if (p !== fought) {
+        const won = chance(0.4 + 0.2 * p.skill);
+        const swing = p.bounty * (won ? rand(0.6, 1.2) : -rand(0.2, 0.4));
+        p.purse = Math.max(0, Math.round(p.purse + swing + ECONOMY.PILOT_STIPEND));
+        if (won) { p.record.w++; p.skill = Math.min(0.95, p.skill + 0.01); } else p.record.l++;
+        for (const part of p.bug.parts) part.applyDamage(part.maxHp * rand(0, won ? 0.12 : 0.25));
+      }
+      this.maintainPilot(p);
+    }
+  }
+
+  /** Pilots use the same logic as your mechanic: repair, then buy the optimal affordable part. */
+  maintainPilot(p) {
+    const bug = p.bug;
+    for (const part of [bug.chassis, bug.engine, bug.tires, bug.armor, ...bug.weapons].filter(Boolean)) {
+      const cost = Math.ceil(part.missingHp * (part.value / part.maxHp) * ECONOMY.REPAIR_RATE);
+      if (cost <= p.purse) { p.purse -= cost; part.repair(); }
+    }
+    const pref = PILOT_STYLES[p.style]?.shops;
+    const needs = this.diagnose(bug);
+    needs.sort((x, y) => (x.urgent === y.urgent ? (y.type === pref) - (x.type === pref) : y.urgent - x.urgent));
+    for (const { type } of needs) {
+      const key = this.optimalPart(bug, type, p.purse, { owned: [], discount: 1 });
+      if (!key) continue;
+      p.purse -= PARTS[key].value;
+      for (const old of bug.equip(new Part(key))) p.purse += Math.round(old.value * old.hpRatio * ECONOMY.SCRAP_RATE);
+      break;
+    }
+    this.refreshPilot(p);
   }
 
   // ───────────── Even matches ─────────────
@@ -358,24 +472,22 @@ export class EconomyManager {
   }
 
   /**
-   * A challenger whose rating is as close as possible to your best vehicle,
-   * at its star level or at most one star higher. These keep the board
-   * winnable after a fall from grace.
+   * A new pilot whose bug is rated as close as possible to your best
+   * vehicle, at its star level or at most one star higher.
    */
   makeMatchedChallenger() {
     const best = this.bestVehicle;
-    if (!best) return this.makeBoardChallenger(1);
+    if (!best) return this.makePilot(1);
     const target = this.rating(best);
     const star = this.vehicleStars(best);
-    let pick = null;
+    let pickBug = null;
     let err = Infinity;
     for (let i = 0; i < 24 && err > 0.06; i++) {
-      const c = this.makeChallenger(clampTier(star + (i % 2)));
-      const e = Math.abs(this.rating(c.bug) - target) / target;
-      if (e < err) { pick = c; err = e; }
+      const bug = this.generateBug(clampTier(star + (i % 2)));
+      const e = Math.abs(this.rating(bug) - target) / target;
+      if (e < err) { pickBug = bug; err = e; }
     }
-    pick.matched = true;
-    return pick;
+    return this.makePilot(this.vehicleStars(pickBug), { bug: pickBug });
   }
 
   /** Still a fair fight for your current best vehicle? */
@@ -383,7 +495,7 @@ export class EconomyManager {
     const best = this.bestVehicle;
     if (!best) return false;
     const target = this.rating(best);
-    return c.tier <= this.vehicleStars(best) + 1 && Math.abs(this.rating(c.bug) - target) / target <= ECONOMY.MATCH_TOLERANCE;
+    return this.vehicleStars(c.bug) <= this.vehicleStars(best) + 1 && Math.abs(this.rating(c.bug) - target) / target <= ECONOMY.MATCH_TOLERANCE;
   }
 
   generateMarket() {
@@ -565,10 +677,18 @@ export class EconomyManager {
     for (const c of s.board.rejected) s.challengers.push(c);
     s.board.rejected = [];
     s.board.rejections = 0;
-    for (const c of s.challengers) c.nego = null;
-    // Your best vehicle may have changed (lost a title, captured an upgrade):
-    // replace even matches that no longer fit so the board stays winnable.
-    s.challengers = s.challengers.filter((c) => !c.matched || this.isEvenMatch(c));
+    // Old haggling is void after a bout — including the pilot just fought, who may come straight back.
+    challenger.nego = null;
+    for (const c of s.pool) c.nego = null;
+    // Every pilot in the pool has had their own week: bouts, repairs, upgrades.
+    this.progressPool(tournament ? null : challenger);
+    // Your best vehicle (and theirs) may have changed: replace even matches
+    // that no longer fit so the board stays winnable.
+    s.challengers = s.challengers.filter((c) => {
+      if (!c.matched || this.isEvenMatch(c)) return true;
+      c.matched = false; // back into the pool
+      return false;
+    });
     this.refillBoard();
   }
 
@@ -714,8 +834,13 @@ export class EconomyManager {
       pilot: { name: alienName(), planet: pick(PLANETS) },
       condition: () => 1,
     });
+    const style = pick(FIGHTING_STYLES);
     const c = {
       id: makeId('ch'),
+      name: bug.pilot.name,
+      planet: bug.pilot.planet,
+      style,
+      story: pick(PILOT_STYLES[style].stories),
       tier: 5,
       bounty: ECONOMY.TOURNAMENT_PRIZE,
       difficulty: Math.min(1, 0.9 + round * 0.05),
@@ -747,17 +872,17 @@ export class EconomyManager {
     return this.rating(clone);
   }
 
-  /** Could you get hold of this part — already in spares, or list price within budget? */
-  affordable(key, budget) {
-    return this.state.inventory.some((p) => p.key === key) || PARTS[key].value * this.discount <= budget;
+  /** Could this part be had — already owned, or list price (after discount) within budget? */
+  affordable(key, budget, { owned = this.state.inventory, discount = this.discount } = {}) {
+    return owned.some((p) => p.key === key) || PARTS[key].value * discount <= budget;
   }
 
   /** The single best part of `type` for this bug within budget, judged on a pristine example of each. */
-  optimalPart(bug, type, budget = Infinity) {
+  optimalPart(bug, type, budget = Infinity, opts = {}) {
     const base = this.rating(bug);
     let best = null;
     for (const key of PART_KEYS_BY_TYPE[type]) {
-      if (!this.affordable(key, budget)) continue;
+      if (!this.affordable(key, budget, opts)) continue;
       const part = new Part(key);
       // Weapons all add the same raw rating, so break ties by quality (tier, then value).
       const gain = this.ratingWith(bug, part) - base + (type === 'weapon' ? PARTS[key].tier * 0.5 + PARTS[key].value / 1000 : 0);
@@ -770,6 +895,26 @@ export class EconomyManager {
   }
 
   /**
+   * What's holding a bug back, most urgent first: [{type, reason, urgent}].
+   * Shared by your mechanic and by the challengers' own pit crews.
+   */
+  diagnose(bug) {
+    const s = bug.getStats();
+    const needs = [];
+    const add = (type, reason, urgent = true) => needs.push({ type, reason, urgent });
+    if (!bug.engine) add('engine', "there's no motor in her");
+    if (s.fDrive > s.fGrip * 1.05) add('tires', 'traction-limited — the motor out-muscles your tires');
+    else if (s.fGrip > s.fDrive * 1.25) add('engine', 'power-limited — your tires can take more than the motor gives');
+    if (!bug.armor) add('armor', "you've got no armour — every hit goes straight to the hull");
+    if (bug.weapons.length < bug.weaponSlots) add('weapon', `you've got ${bug.weaponSlots - bug.weapons.length} empty hardpoint${bug.weaponSlots - bug.weapons.length > 1 ? 's' : ''}`);
+    if (s.cooling < 12) add('engine', "your motor runs hot — you'll stall in long pushes");
+    add('engine', 'more push always helps', false);
+    add('tires', 'more grip always helps', false);
+    add('armor', 'tougher plating', false);
+    return needs;
+  }
+
+  /**
    * What the mechanic says about a bug: what's limiting it and the one
    * optimal part to fix that. Only optimal picks — if it isn't in your
    * spares or on the Marketplace, tough.
@@ -778,7 +923,6 @@ export class EconomyManager {
   mechanicAdvice(bug) {
     const out = { lines: [], pick: null };
     if (!bug) return out;
-    const s = bug.getStats();
     const hurt = bug.parts.filter((p) => p.hpRatio < 0.5).sort((a, b) => a.hpRatio - b.hpRatio)[0];
     if (hurt) out.lines.push(`Fix your ${hurt.name} first — it's at ${Math.round(hurt.hpRatio * 100)}% and dragging everything down.`);
     if (this.inField) {
@@ -786,15 +930,7 @@ export class EconomyManager {
       return out;
     }
 
-    // Diagnose, in order of what hurts a sumo bug most.
-    const needs = [];
-    if (!bug.engine) needs.push(['engine', "there's no motor in her"]);
-    if (s.fDrive > s.fGrip * 1.05) needs.push(['tires', 'traction-limited — the motor out-muscles your tires']);
-    else if (s.fGrip > s.fDrive * 1.25) needs.push(['engine', 'power-limited — your tires can take more than the motor gives']);
-    if (!bug.armor) needs.push(['armor', "you've got no armour — every hit goes straight to the hull"]);
-    if (bug.weapons.length < bug.weaponSlots) needs.push(['weapon', `you've got ${bug.weaponSlots - bug.weapons.length} empty hardpoint${bug.weaponSlots - bug.weapons.length > 1 ? 's' : ''}`]);
-    if (s.cooling < 12) needs.push(['engine', 'your motor runs hot — you\'ll stall in long pushes']);
-    needs.push(['engine', 'more push always helps'], ['tires', 'more grip always helps'], ['armor', 'tougher plating']);
+    const needs = this.diagnose(bug).map((n) => [n.type, n.reason]);
 
     // Stay within budget: the best part you could actually pay for (or already own).
     const budget = this.state.money;
@@ -939,10 +1075,25 @@ export class EconomyManager {
     } else if (stake?.type === 'titles') {
       if (result === 'win') {
         capture();
+        // They're back to the junkyard, like you once were.
+        challenger.bug = this.junkBug(`Scrap ${pick(BUG_NOUNS)}`);
+        this.refreshPilot(challenger);
       } else if (result === 'loss') {
         s.removeVehicle(playerBug.id);
         report.lostVehicle = playerBug;
-        report.lines.push(`You lost the title: ${playerBug.name} now belongs to ${challenger.bug.pilot?.name || 'the challenger'}.`);
+        report.lines.push(`You lost the title: ${playerBug.name} now belongs to ${challenger.name || challenger.bug.pilot?.name || 'the challenger'}.`);
+        // They keep whichever bug is better and sell the other.
+        if (challenger.purse != null) {
+          playerBug.alien = true;
+          playerBug.resetForBattle(playerBug.pos, 0);
+          if (this.rating(playerBug) > this.rating(challenger.bug)) {
+            challenger.purse += Math.round(this.vehicleValue(challenger.bug) * ECONOMY.SELL_RATE);
+            challenger.bug = playerBug;
+          } else {
+            challenger.purse += Math.round(this.vehicleValue(playerBug) * ECONOMY.SELL_RATE);
+          }
+          this.refreshPilot(challenger);
+        }
         if (!s.vehicles.length) report.lines.push('You have no vehicles left — find a replacement on the Marketplace.');
       } else {
         report.lines.push('Draw — both titles stay put.');
@@ -951,16 +1102,21 @@ export class EconomyManager {
       if (result === 'win') {
         report.bounty = stake.amount;
         s.earn(stake.amount);
+        if (challenger.purse != null) challenger.purse = Math.max(0, challenger.purse - stake.amount);
         report.lines.push(`Won the wager: +${formatMoney(stake.amount)}`);
       } else if (result === 'loss') {
         const paid = Math.min(stake.amount, s.money);
         s.spend(paid);
+        if (challenger.purse != null) challenger.purse += paid;
         report.lines.push(`Lost the wager: −${formatMoney(paid)}`);
       } else {
         report.lines.push('Draw — the wager is void.');
       }
     }
 
+    if (!tournament && challenger.record && result !== 'tie') {
+      if (result === 'win') challenger.record.l++; else challenger.record.w++;
+    }
     if (!tournament && result === 'win') {
       s.record.challengerWins++;
       if (s.record.challengerWins === ECONOMY.TOURNAMENT_UNLOCK_WINS) report.lines.push('★ The Inter-Planetary Tournament is now OPEN to you!');
@@ -981,10 +1137,10 @@ export class EconomyManager {
 
     this.afterBout(challenger, tournament);
     // The mechanic's pick is judged on the bug you'll fight with next.
-    const pick = s.staff.mechanic ? this.mechanicAdvice(s.activeBug).pick : null;
+    const mechPick = s.staff.mechanic ? this.mechanicAdvice(s.activeBug).pick : null;
     this.generateMarket();
-    if (pick && s.staff.manager && !this.inField && chance(ECONOMY.MANAGER_FINDS_PICK)) {
-      if (this.stockPick(pick.key)) report.lines.push(`Manager: tracked down the ${PARTS[pick.key].name} your mechanic wanted — it's on the Marketplace.`);
+    if (mechPick && s.staff.manager && !this.inField && chance(ECONOMY.MANAGER_FINDS_PICK)) {
+      if (this.stockPick(mechPick.key)) report.lines.push(`Manager: tracked down the ${PARTS[mechPick.key].name} your mechanic wanted — it's on the Marketplace.`);
     }
     this.ensureReplacementListing();
     if (s.staff.manager) {

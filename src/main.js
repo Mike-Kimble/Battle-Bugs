@@ -22,6 +22,7 @@ class App {
     this.state = GameState.load() || GameState.newGame();
     this.economy = new EconomyManager(this.state);
     if (this.state.fresh) this.economy.setupNewGame();
+    this.economy.ensurePool();
     const needsRookie = this.state.record.challengerWins < ECONOMY.ROOKIE_UNTIL_WINS && !this.economy.hasRookie;
     if (!this.state.challengers.length || needsRookie) this.economy.generateChallengers();
     else if (this.state.challengers.length < ECONOMY.BOARD_SIZE && !this.state.board.rejected.length) this.economy.refillBoard();
@@ -132,7 +133,7 @@ class App {
     this.state.save();
 
     this.match = { challenger, tournament, stake, bet, player, endTimer: null, banner: null };
-    this.engine = new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty });
+    this.engine = new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty, style: challenger.style });
     this.wireEngine(this.engine);
 
     $('#workshop-screen').classList.remove('active');
