@@ -1,11 +1,11 @@
 import { ECONOMY, EVENTS, SAVE_KEY } from '../config/constants.js';
-import { STARTER_BUG, PILOT_STYLES, FIGHTING_STYLES } from '../config/partsData.js';
+import { STARTER_BUG, FIGHTING_STYLES } from '../config/partsData.js';
 import { EventEmitter } from './EventEmitter.js';
 import { Storage } from './Storage.js';
 import { BattleBug } from '../entities/BattleBug.js';
 import { Part } from '../entities/Part.js';
 
-const SAVE_VERSION = 1;
+const SAVE_VERSION = 2; // v2: the fixed 20-pilot roster
 
 /**
  * Persistent campaign state: money, hangar, inventory, boards, staff and tournament.
@@ -34,8 +34,10 @@ export class GameState extends EventEmitter {
     this.titles = 0; // championships won in earlier seasons
     this.managerBetPct = 0;
     this.fixStreak = 0;
+    this.winBetStreak = 0; // wins in a row with the manager betting on you to win
+    this.pendingDM = null; // { pilotId, lines } — a DM waiting for you back in the workshop
     this.fine = null; // { amount, battlesLeft }
-    this.rivalId = null; // the first pilot you fought: they follow you to the Grand Final
+    this.rivalId = null; // the first alien you beat in a title match: they follow you to the Grand Final
     this.rivalNextAt = 0; // bout count at which the rival next turns up on the board
     this.compareRef = null; // { id, refId }: captured vehicle vs the vehicle that won it (session only)
     this.log = [];
@@ -105,6 +107,8 @@ export class GameState extends EventEmitter {
     s.titles = d.titles || 0;
     s.managerBetPct = d.managerBetPct ?? (s.staff.manager ? 0.1 : 0);
     s.fixStreak = d.fixStreak || 0;
+    s.winBetStreak = d.winBetStreak || 0;
+    s.pendingDM = d.pendingDM || null;
     s.fine = d.fine || null;
     s.rivalId = d.rivalId || null;
     s.rivalNextAt = d.rivalNextAt || 0;
@@ -137,6 +141,8 @@ export class GameState extends EventEmitter {
       titles: this.titles,
       managerBetPct: this.managerBetPct,
       fixStreak: this.fixStreak,
+      winBetStreak: this.winBetStreak,
+      pendingDM: this.pendingDM,
       fine: this.fine,
       rivalId: this.rivalId,
       rivalNextAt: this.rivalNextAt,
@@ -149,7 +155,7 @@ export class GameState extends EventEmitter {
     p.name ||= p.bug.pilot?.name || 'Nameless';
     p.planet ||= p.bug.pilot?.planet || 'parts unknown';
     p.style ||= p.rookie ? 'hapless' : FIGHTING_STYLES[Math.floor(Math.random() * FIGHTING_STYLES.length)];
-    p.story ||= PILOT_STYLES[p.style].stories[0];
+    p.story ||= '';
     p.skill ??= p.difficulty ?? 0.3;
     p.purse ??= (p.bounty || 200) * 2;
     p.record ||= { w: 0, l: 0 };

@@ -219,6 +219,8 @@ export class TerminalUI {
           : el('div', { class: 'muted' }, pct <= 0 ? 'No bet this fight.' : 'Not confident enough either way to bet.'),
         plan.side === 'lose' && plan.stake >= 1 && s.fixStreak >= ECONOMY.FIXING_WARNING
           ? el('div', { class: 'muted small' }, 'Word around the pits is this is starting to look like match-fixing… anyway.') : null,
+        eco.bigBetFate(plan.side, plan.stake) === 'refused'
+          ? el('div', { class: 'muted small' }, 'I wonder what kind of idiots are bankrolling these bets…') : null,
       ].filter(Boolean));
     };
     const slider = el('input', {
@@ -238,6 +240,28 @@ export class TerminalUI {
   }
 
   // ───────────── Stakes ─────────────
+  /** A DM waiting for you (your new rival's promise of revenge): shown once, answered with "We'll see". */
+  showPendingDM() {
+    const s = this.state;
+    const dm = s.pendingDM;
+    if (!dm) return;
+    s.pendingDM = null;
+    s.save();
+    const c = s.pool.find((p) => p.id === dm.pilotId);
+    if (!c) return;
+    const who = this.pilotName(c);
+    const header = el('div', { class: 'chat-head' },
+      this.sprite.renderPortrait(c, 32),
+      el('h2', { class: 'chat-name' }, who));
+    const logEl = el('div', { class: 'nego-log chat-log' },
+      dm.lines.map((text) => el('div', { class: 'msg msg-them' }, el('small', {}, who), text)));
+    const controls = el('div', { class: 'chat-controls' },
+      el('div', { class: 'chat-go' }, el('span', {}),
+        el('button', { class: 'btn btn-primary', onclick: closeModal }, "We'll see")));
+    openModal(`Chat · ${who}`, el('div', { class: 'nego chat' }, logEl, controls), { header, className: 'modal-chat', modal: true });
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
   /**
    * DM window with a challenger: portrait + name up top, the chat log below,
    * controls underneath. The window is built once — replies are appended to the
@@ -547,7 +571,7 @@ export class TerminalUI {
       return wrap;
     }
 
-    wrap.append(el('ol', { class: 'bracket' }, ['Quarter-Final', 'Semi-Final', 'Grand Final'].map((name, i) => el('li', {
+    wrap.append(el('ol', { class: 'bracket' }, ECONOMY.TOURNAMENT_ROUND_NAMES.map((name, i) => el('li', {
       class: t.entered && i === t.round ? 'current' : t.entered && i < t.round ? 'done' : '',
     }, name))));
 
@@ -578,7 +602,7 @@ export class TerminalUI {
       }) : null,
       el('button', {
         class: 'btn btn-small btn-danger',
-        onclick: () => this.confirm('Withdraw?', `You forfeit your place and the entry fee — re-entering costs another ${formatMoney(ECONOMY.TOURNAMENT_FEE)}.`, () => this.act(() => eco.withdrawTournament(), 'Withdrawn from the tournament')),
+        onclick: () => this.confirm('Withdraw?', `You forfeit your place and the entry fee — re-entering costs another ${formatMoney(ECONOMY.TOURNAMENT_FEE)} and starts again from ${ECONOMY.TOURNAMENT_ROUND_NAMES[0]}.`, () => this.act(() => eco.withdrawTournament(), 'Withdrawn from the tournament')),
       }, 'Withdraw'),
     ].filter(Boolean));
     return wrap;

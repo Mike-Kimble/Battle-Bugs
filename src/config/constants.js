@@ -102,10 +102,10 @@ export const ECONOMY = Object.freeze({
   BOUNTY_BASE: 110,          // base stake a challenger expects (scaled by tier)
   BOUNTY_PER_TIER: 120,
   BOARD_SIZE: 5,             // challengers on the board, spread across difficulties
-  POOL_TIERS: [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 5, 5], // the starting pilot pool (plus a rookie)
-  POOL_MAX: 18,              // new pilots beyond this retire the worst record
+  POOL_TIERS: [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 5, 5], // the 19 roster pilots after the rookie (pool of 20)
   PILOT_STIPEND: 40,         // sponsors' pocket money per fight cycle
   RIVAL_EDGE: 1.05,          // your rival keeps their bug rated this far above your best
+                             // (your rival is the first alien you beat in a title match)
   RIVAL_GAP: [3, 5],         // bouts the rival stays away after each appearance (so they show up roughly every 5th round)
   MATCHED_CHALLENGERS: 2,    // board slots rating-matched to your best vehicle (≤ 1 star higher)
   MATCH_TOLERANCE: 0.2,      // an even match stays on the board while within ±20% of your best rating
@@ -134,6 +134,10 @@ export const ECONOMY = Object.freeze({
   FIXING_WARNING: 2,         // show the match-fixing warning from this many
   ALL_IN_ACCEPT: 0.7,        // they countered above your cash and you went all in → they accept
   FIXING_FINE: 500,
+  // Win too often with your manager backing you and the bookies catch on.
+  HOT_STREAK: 3,             // wins in a row with the manager betting on you to win
+  BIG_WIN_BET: 500,          // bets over this on a win are refused once you're on a hot streak…
+                             // …and one more streak win later, the manager runs off with the stake
   FINE_BATTLES: 3,           // battles allowed to pay the fine
 
   MECHANIC_DISCOUNT: 0.9,    // mechanic gets 10% off parts & repairs
@@ -142,8 +146,9 @@ export const ECONOMY = Object.freeze({
   MARKET_STOCK: { engine: 3, tires: 3, weapon: 4, armor: 3 },
   MARKET_VEHICLES: 3,
   TOURNAMENT_UNLOCK_WINS: 5,
-  TOURNAMENT_ROUNDS: 3,
-  TOURNAMENT_PRIZE: 5000,
+  TOURNAMENT_ROUNDS: 5,
+  TOURNAMENT_ROUND_NAMES: ['Round One', 'Round Two', 'Quarter-Final', 'Semi-Final', 'Grand Final'],
+  TOURNAMENT_PRIZE: 20000,
   TOURNAMENT_FEE: 1000,       // paid on every entry, no refunds
 });
 

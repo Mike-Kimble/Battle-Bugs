@@ -1,6 +1,6 @@
 import { ECONOMY } from '../config/constants.js';
 import {
-  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES,
+  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, CHALLENGER_ROSTER,
 } from '../config/partsData.js';
 import { BattleBug } from '../entities/BattleBug.js';
 import { Part, makeId } from '../entities/Part.js';
@@ -275,9 +275,8 @@ export class EconomyManager {
    * a purse, a record and their own bug. Pilots live in `state.pool`, the
    * board shows a handful of them, and they all progress between fights.
    */
-  makePilot(tier, { style = pick(FIGHTING_STYLES), bug = null, rookie = false } = {}) {
-    const name = alienName();
-    const planet = pick(PLANETS);
+  makePilot(tier, entry, { bug = null, rookie = false } = {}) {
+    const { name, planet, style, story } = entry;
     const theBug = bug || this.generateBug(tier);
     // A zapper's story promises an arsenal — make sure there's at least something to zap with.
     if (style === 'zapper' && !theBug.weapons.length && theBug.weaponSlots) theBug.equip(Part.create(pickPartKey('weapon', tier + 1), rand(0.7, 1)));
@@ -287,7 +286,7 @@ export class EconomyManager {
       name,
       planet,
       style,
-      story: pick(PILOT_STYLES[style].stories),
+      story,
       skill: Math.min(0.95, 0.1 + tier * 0.16 + rand(-0.05, 0.05)),
       purse: roundTo((ECONOMY.BOUNTY_BASE + tier * ECONOMY.BOUNTY_PER_TIER) * rand(1, 2.5), 10),
       record: { w: 0, l: 0 },
@@ -306,11 +305,6 @@ export class EconomyManager {
     return p;
   }
 
-  /** Kept for callers that just want "a challenger of tier N": a new pool pilot. */
-  makeChallenger(tier, opts = {}) {
-    return this.makePilot(tier, opts);
-  }
-
   junkBug(name) {
     const [lo, hi] = ECONOMY.JUNK_CONDITION;
     return BattleBug.create({
@@ -320,39 +314,30 @@ export class EconomyManager {
   }
 
   /** A deliberately weak, unarmed, half-wrecked opponent for new pilots. */
-  makeRookie() {
+  makeRookie(entry) {
     const bug = BattleBug.create({
       name: `Rookie ${pick(BUG_NOUNS)}`, hue: randInt(0, 359), alien: true,
       chassis: 'scrapper_frame', engine: 'rust_motor', tires: 'bald_rollers', armor: null, weapons: [],
       condition: () => rand(0.5, 0.65),
     });
-    const p = this.makePilot(1, { style: 'hapless', bug, rookie: true });
+    const p = this.makePilot(1, entry, { bug, rookie: true });
     p.skill = 0.05;
     return this.refreshPilot(p);
   }
 
-  /** Build the starting pool: a rookie plus pilots spread across every tier. */
+  /**
+   * Build the pool from the 20-pilot roster: the rookie, then everyone else
+   * dealt a random starting tier, so each game's line-up plays differently.
+   */
   ensurePool() {
     const s = this.state;
     if (!s.pool.length) {
-      s.pool.push(this.makeRookie());
-      for (const tier of ECONOMY.POOL_TIERS) s.pool.push(this.makePilot(tier));
+      const [rookie, ...rest] = CHALLENGER_ROSTER;
+      s.pool.push(this.makeRookie(rookie));
+      const tiers = [...ECONOMY.POOL_TIERS].sort(() => Math.random() - 0.5);
+      rest.forEach((entry, i) => s.pool.push(this.makePilot(tiers[i] ?? 3, entry)));
     }
     for (const p of s.pool) this.refreshPilot(p);
-  }
-
-  /** New blood when the pool can't offer what the board needs. Retires a has-been if full. */
-  recruit(pilot) {
-    const s = this.state;
-    s.pool.push(pilot);
-    if (s.pool.length > ECONOMY.POOL_MAX) {
-      const busy = new Set([...s.challengers, ...s.board.rejected].map((c) => c.id));
-      const retiree = s.pool
-        .filter((p) => !busy.has(p.id) && !this.rookieSlot(p) && p !== pilot && p.id !== s.rivalId)
-        .sort((x, y) => (y.record.l - y.record.w) - (x.record.l - x.record.w))[0];
-      if (retiree) s.pool = s.pool.filter((p) => p !== retiree);
-    }
-    return pilot;
   }
 
   get hasRookie() {
@@ -397,8 +382,8 @@ export class EconomyManager {
     const s = this.state;
     this.ensurePool();
     if (this.wantsRookie && !this.hasRookie) {
-      const rookie = this.availablePilots.find((p) => p.rookie) || this.recruit(this.makeRookie());
-      s.challengers.push(rookie);
+      const rookie = this.availablePilots.find((p) => p.rookie);
+      if (rookie) s.challengers.push(rookie);
     }
     // Your rival turns up every few bouts (unless they've just walked off on you).
     const rival = this.rival;
@@ -408,16 +393,14 @@ export class EconomyManager {
       const even = this.availablePilots
         .filter((p) => !this.rookieSlot(p) && p.id !== s.rivalId && this.isEvenMatch(p))
         .sort((x, y) => Math.abs(this.rating(x.bug) - target) - Math.abs(this.rating(y.bug) - target))[0];
-      const c = even || this.recruit(this.makeMatchedChallenger());
+      const c = even || this.rematch();
+      if (!c) break;
       c.matched = true;
       s.challengers.push(c);
     }
     while (s.challengers.length < ECONOMY.BOARD_SIZE) {
       const rest = this.availablePilots.filter((p) => !this.rookieSlot(p)).sort((x, y) => this.rating(x.bug) - this.rating(y.bug));
-      if (!rest.length) {
-        s.challengers.push(this.recruit(this.makePilot(clampTier(this.baseTier + s.board.tierShift))));
-        continue;
-      }
+      if (!rest.length) break; // everyone else has walked off — a short board until your next fight
       // Spread picks across the range; after a scroll, favour the strongest.
       const need = ECONOMY.BOARD_SIZE - s.challengers.length;
       const idx = s.board.tierShift > 0
@@ -434,12 +417,19 @@ export class EconomyManager {
     return this.state.rivalId ? this.state.pool.find((p) => p.id === this.state.rivalId) || null : null;
   }
 
-  /** The first pilot you fight becomes your rival for the rest of the game. */
-  setRival(pilot, result) {
-    if (this.state.rivalId || !pilot?.record) return;
-    this.state.rivalId = pilot.id;
-    pilot.rivalOrigin = result === 'loss' ? 'won' : 'beaten';
+  /**
+   * The first alien you beat in a title match becomes your rival for the rest
+   * of the game — and lets you know exactly how they feel about it.
+   * @param {string} lostBugName the ride they just lost to you
+   */
+  setRival(pilot, lostBugName) {
+    const s = this.state;
+    if (s.rivalId || !pilot?.record) return false;
+    s.rivalId = pilot.id;
+    pilot.rookie = false; // no longer anybody's easy first fight
     this.scheduleRival();
+    s.pendingDM = { pilotId: pilot.id, lines: RIVAL_DM.map((l) => l.replaceAll('{bug}', lostBugName)) };
+    return true;
   }
 
   get boutsPlayed() {
@@ -467,11 +457,8 @@ export class EconomyManager {
     const r = this.rival;
     const best = this.bestVehicle;
     if (!r || !best || this.rookieSlot(r)) return;
-    if (r.rookie) {
-      r.rookie = false;
-      r.style = pick(FIGHTING_STYLES);
-    }
-    r.story = RIVAL_STORIES[r.rivalOrigin || 'beaten'];
+    if (r.style === 'hapless') r.style = pick(FIGHTING_STYLES); // they've learned a thing or two since
+    r.story = RIVAL_STORIES.beaten;
     r.skill = Math.min(0.95, r.skill + 0.03);
     const target = this.rating(best) * ECONOMY.RIVAL_EDGE;
     for (let i = 0; i < 3 && this.rating(r.bug) < target; i++) {
@@ -544,12 +531,27 @@ export class EconomyManager {
   }
 
   /**
-   * A new pilot whose bug is rated as close as possible to your best
-   * vehicle, at its star level or at most one star higher.
+   * No pilot in the pool is an even match right now, so one of them goes
+   * shopping: the free pilot closest to your level buys a ride rated as
+   * close as possible to your best vehicle (at most one star higher).
    */
-  makeMatchedChallenger() {
+  rematch() {
+    const s = this.state;
     const best = this.bestVehicle;
-    if (!best) return this.makePilot(1);
+    const free = this.availablePilots.filter((p) => !this.rookieSlot(p) && p.id !== s.rivalId);
+    if (!free.length) return null;
+    const target = best ? this.rating(best) : 0;
+    const p = free.sort((x, y) => Math.abs(this.rating(x.bug) - target) - Math.abs(this.rating(y.bug) - target))[0];
+    if (best) {
+      p.bug = this.matchedBug();
+      if (p.style === 'zapper' && !p.bug.weapons.length && p.bug.weaponSlots) p.bug.equip(Part.create(pickPartKey('weapon', p.tier + 1), rand(0.7, 1)));
+    }
+    return this.refreshPilot(p);
+  }
+
+  /** A bug rated as close as possible to your best vehicle, at its star level or one higher. */
+  matchedBug() {
+    const best = this.bestVehicle;
     const target = this.rating(best);
     const star = this.vehicleStars(best);
     let pickBug = null;
@@ -559,7 +561,7 @@ export class EconomyManager {
       const e = Math.abs(this.rating(bug) - target) / target;
       if (e < err) { pickBug = bug; err = e; }
     }
-    return this.makePilot(this.vehicleStars(pickBug), { bug: pickBug });
+    return pickBug;
   }
 
   /** Still a fair fight for your current best vehicle? */
@@ -794,22 +796,53 @@ export class EconomyManager {
     return { side, stake, mult, pWin, conviction };
   }
 
+  /**
+   * What the bookies make of a big bet on you to win while you're on a hot
+   * streak: 'refused' on the next one, 'stolen' after that (the manager
+   * vanishes with the stake), otherwise null.
+   */
+  bigBetFate(side, stake) {
+    if (side !== 'win' || stake <= ECONOMY.BIG_WIN_BET) return null;
+    const n = this.state.winBetStreak || 0;
+    return n > ECONOMY.HOT_STREAK ? 'stolen' : n === ECONOMY.HOT_STREAK ? 'refused' : null;
+  }
+
   /** Place the manager's bet for this fight; `pct` is the per-fight limit. */
   placeManagerBet(c, bug, reserved = 0, pct = this.state.managerBetPct) {
     if (this.inField) return null;
     const plan = this.planManagerBet(c, bug, reserved, pct);
     if (plan.stake < 1) return null;
-    this.state.spend(plan.stake);
-    return { side: plan.side, stake: plan.stake, mult: plan.mult };
+    const fate = this.bigBetFate(plan.side, plan.stake);
+    // A refused bet never leaves your account; a stolen one leaves with the manager.
+    if (fate !== 'refused') this.state.spend(plan.stake);
+    return { side: plan.side, stake: plan.stake, mult: plan.mult, fate };
   }
 
-  settleManagerBet(bet, result, report) {
+  /** Hot streak: wins in a row backed by a big win-bet. A loss, a draw or a smaller bet resets it. */
+  trackWinBetStreak(bet, result) {
     const s = this.state;
+    const backed = bet?.side === 'win' && bet.stake >= ECONOMY.BIG_WIN_BET;
+    s.winBetStreak = backed && result === 'win' ? (s.winBetStreak || 0) + 1 : 0;
+  }
+
+  settleManagerBet(bet, result, report, { tournament = false } = {}) {
+    const s = this.state;
+    if (!tournament) this.trackWinBetStreak(bet, result);
     if (!bet) {
       s.fixStreak = 0;
       return;
     }
     const sideText = bet.side === 'win' ? 'to WIN' : 'to LOSE';
+    if (bet.fate === 'refused') {
+      report.lines.push(`Your manager's ${formatMoney(bet.stake)} bet on you ${sideText} wasn't accepted — nobody will take bets against you any more.`);
+      return;
+    }
+    if (bet.fate === 'stolen') {
+      s.staff.manager = false;
+      s.winBetStreak = 0;
+      report.lines.push(`Your manager has mysteriously gone missing — along with the ${formatMoney(bet.stake)} they were meant to bet. You'll have to hire a new one.`);
+      return;
+    }
     if (result === 'tie') {
       s.earn(bet.stake);
       report.lines.push(`Manager's bet on you ${sideText} refunded (draw).`);
@@ -859,13 +892,29 @@ export class EconomyManager {
     if (!bug?.isBattleReady) throw new Error('Your active vehicle is not battle-ready');
     if (!this.state.canAfford(ECONOMY.TOURNAMENT_FEE)) throw new Error(`The entry fee is ${formatMoney(ECONOMY.TOURNAMENT_FEE)}`);
     this.state.spend(ECONOMY.TOURNAMENT_FEE);
-    Object.assign(this.state.tournament, { entered: true, vehicleId: bug.id, round: 0, eliminated: false });
+    Object.assign(this.state.tournament, { entered: true, vehicleId: bug.id, round: 0, eliminated: false, field: this.tournamentField() });
     this.state.tournament.opponent = this.tournamentOpponentJSON(0);
     this.state.addLog(`Entered the Inter-Planetary Tournament with ${bug.name}`);
   }
 
   withdrawTournament() {
-    Object.assign(this.state.tournament, { entered: false, vehicleId: null, round: 0, opponent: null });
+    Object.assign(this.state.tournament, { entered: false, vehicleId: null, round: 0, opponent: null, field: null });
+  }
+
+  /**
+   * The field: the strongest pilots in the pool, weakest first, with your
+   * rival waiting in the Grand Final (or the strongest pilot of all if you
+   * haven't made one yet).
+   */
+  tournamentField() {
+    const s = this.state;
+    const rival = this.rival;
+    const byStrength = s.pool.filter((p) => p !== rival)
+      .sort((x, y) => (y.skill + this.rating(y.bug) / 1000) - (x.skill + this.rating(x.bug) / 1000));
+    const n = ECONOMY.TOURNAMENT_ROUNDS;
+    const field = byStrength.slice(0, rival ? n - 1 : n).reverse();
+    if (rival) field.push(rival);
+    return field.map((p) => p.id);
   }
 
   /**
@@ -900,8 +949,10 @@ export class EconomyManager {
    * Earlier rounds vary the weapon loadout; the final carries the best pair.
    */
   tournamentOpponentJSON(round) {
+    const s = this.state;
     const { build } = this.strongestBuild();
-    const final = round >= ECONOMY.TOURNAMENT_ROUNDS - 1;
+    const n = ECONOMY.TOURNAMENT_ROUNDS;
+    const final = round >= n - 1;
     const spec = { ...build };
     if (!final) {
       const pool = PART_KEYS_BY_TYPE.weapon.slice()
@@ -909,33 +960,31 @@ export class EconomyManager {
         .slice(0, build.weapons.length + 1);
       spec.weapons = pool.sort(() => Math.random() - 0.5).slice(0, build.weapons.length);
     }
+    s.tournament.field ||= this.tournamentField();
+    const pilot = s.pool.find((p) => p.id === s.tournament.field[round]) || s.pool[s.pool.length - 1];
+    const isRival = pilot.id === s.rivalId;
+    // Their own ride's name and paint job, rebuilt as the best machine money can buy.
     const bug = BattleBug.create({
       ...spec,
-      name: `${pick(BUG_ADJECTIVES)} ${pick(BUG_NOUNS)}`,
-      hue: randInt(0, 359),
+      name: pilot.bug.name,
+      hue: pilot.bug.hue,
       alien: true,
-      pilot: { name: alienName(), planet: pick(PLANETS) },
+      pilot: { name: pilot.name, planet: pilot.planet },
       condition: () => 1,
     });
-    const rival = final ? this.rival : null;
-    if (rival) {
-      // Your rival, in the best machine money can buy.
-      bug.name = rival.bug.name;
-      bug.hue = rival.bug.hue;
-      bug.pilot = { name: rival.name, planet: rival.planet };
-    }
-    const style = rival?.style || pick(FIGHTING_STYLES);
+    const style = pilot.style === 'hapless' ? pick(FIGHTING_STYLES) : pilot.style;
     const c = {
-      id: rival ? rival.id : makeId('ch'),
-      name: bug.pilot.name,
-      planet: bug.pilot.planet,
+      id: pilot.id,
+      name: pilot.name,
+      planet: pilot.planet,
       style,
-      story: rival ? RIVAL_STORIES.final : pick(PILOT_STYLES[style].stories),
-      record: rival ? { ...rival.record } : undefined,
+      story: isRival && final ? RIVAL_STORIES.final : pilot.story,
+      record: { ...pilot.record },
       tier: 5,
       bounty: ECONOMY.TOURNAMENT_PRIZE,
-      difficulty: Math.min(1, 0.9 + round * 0.05),
-      roundName: ['Quarter-Final', 'Semi-Final', 'Grand Final'][round] || `Round ${round + 1}`,
+      // Sharper every round; the Grand Final is flown at maximum skill.
+      difficulty: Math.min(1, 0.8 + (round / (n - 1)) * 0.2),
+      roundName: ECONOMY.TOURNAMENT_ROUND_NAMES[round] || `Round ${round + 1}`,
       bug,
     };
     return { ...c, bug: c.bug.toJSON() };
@@ -1167,10 +1216,13 @@ export class EconomyManager {
       }
     } else if (stake?.type === 'titles') {
       if (result === 'win') {
+        const lostName = opponentBug.name;
         capture();
         // They're back to the junkyard, like you once were.
         challenger.bug = this.junkBug(`Scrap ${pick(BUG_NOUNS)}`);
         this.refreshPilot(challenger);
+        // The first alien you beat for their title never forgets it.
+        if (this.setRival(challenger, lostName)) report.lines.push(`${challenger.name} took that loss personally…`);
       } else if (result === 'loss') {
         s.removeVehicle(playerBug.id);
         report.lostVehicle = playerBug;
@@ -1207,7 +1259,6 @@ export class EconomyManager {
       }
     }
 
-    if (!tournament) this.setRival(challenger, result);
     if (!tournament && challenger.record && result !== 'tie') {
       if (result === 'win') challenger.record.l++; else challenger.record.w++;
     }
@@ -1223,7 +1274,7 @@ export class EconomyManager {
       s.fine.battlesLeft -= 1;
       if (s.fine.amount > 0) report.lines.push(`Fine outstanding: ${formatMoney(s.fine.amount)} — ${Math.max(0, s.fine.battlesLeft)} battle${s.fine.battlesLeft === 1 ? '' : 's'} left to pay.`);
     }
-    this.settleManagerBet(bet, result, report);
+    this.settleManagerBet(bet, result, report, { tournament });
 
     this.payStaff(report);
     if (s.staff.mechanic) this.runMechanic(report);

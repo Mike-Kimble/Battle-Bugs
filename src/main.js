@@ -104,6 +104,7 @@ class App {
     $('#workshop-screen').classList.add('active');
     $('#masthead').classList.remove('hidden');
     this.renderUI();
+    this.terminal.showPendingDM(); // e.g. a freshly made rival with something to get off their chest
   }
 
   // ───────────── Battle lifecycle ─────────────

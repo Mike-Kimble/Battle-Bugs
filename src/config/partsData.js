@@ -204,86 +204,111 @@ export const BUG_NOUNS = Object.freeze([
 /**
  * Pilot personalities. `ai` tunes the opponent AI (multipliers on ram /
  * shove / weapon / dodge eagerness and on how soon they rest to cool),
- * `shops` is what they buy first, `stories` are their backstories
- * ({name}, {planet}, {bug} are filled in).
+ * and `shops` is what they buy first. Each pilot's bio lives in CHALLENGER_ROSTER.
  */
 export const PILOT_STYLES = Object.freeze({
   bully: {
     label: 'Bully',
     ai: { ram: 2.0, shove: 1.5, fire: 1.0, dodge: 0.5, rest: 0.8 },
     shops: 'engine',
-    stories: [
-      '{name} once headbutted a moon out of orbit and has been looking for something bigger ever since. Expect the {bug} straight up your tailpipe. Repeatedly.',
-      'Banned from three spaceports for "aggressive parking". {name} doesn\'t do tactics — just rams, shoves, and then some more rams for dessert.',
-      '{name}\'s mother wanted a poet. What she got was a {bug} that treats every opponent like a door that needs opening.',
-    ],
   },
   zapper: {
     label: 'Zapper',
     ai: { ram: 0.6, shove: 0.6, fire: 2.0, dodge: 1.0, rest: 1.0, keepAway: true },
     shops: 'weapon',
-    stories: [
-      'A former lightning farmer from {planet}, {name} still can\'t resist pressing the big glowing button. Keep your stamina topped up.',
-      '{name} keeps a tidy distance and a very untidy arsenal. The {bug} hums, crackles, and occasionally sets its own seat on fire.',
-      'Once short-circuited an entire hive-city "by accident". {name} fights from range and loves watching opponents stall.',
-    ],
   },
   turtle: {
     label: 'Turtle',
     ai: { ram: 0.5, shove: 1.2, fire: 1.0, dodge: 0.8, rest: 1.6, holdCenter: true },
     shops: 'armor',
-    stories: [
-      '{name} believes patience is a weapon. It\'s also the only weapon they trust. Expect the {bug} parked mid-ring, daring you to come in.',
-      'Seventeen years as a tollbooth on {planet}. {name} doesn\'t chase — {name} waits, braces, and lets you do something silly.',
-      'The {bug}\'s previous owner died of boredom mid-bout. {name} plays it slow, heavy and dead centre.',
-    ],
   },
   dodger: {
     label: 'Dodger',
     ai: { ram: 0.8, shove: 0.8, fire: 1.0, dodge: 2.5, rest: 1.0 },
     shops: 'tires',
-    stories: [
-      '{name} was a professional puddle-skater before sumo. Lunge at the {bug} and you\'ll be halfway off the ring before you notice it isn\'t there.',
-      'Nobody has ever landed a clean hit on {name} — including three ex-partners and a tax inspector. Rams are a gamble.',
-      'The {bug} handles like a greased moth. {name} handbrake-turns at the last second and lets your momentum do the rest.',
-    ],
   },
   sumo: {
     label: 'Sumo',
     ai: { ram: 1.0, shove: 2.0, fire: 0.7, dodge: 1.0, rest: 1.1 },
     shops: 'tires',
-    stories: [
-      '{name} learned ancient Earth sumo from a single scratched holo-tape and got alarmingly good. Loves the edge of the ring — yours.',
-      'A traditionalist from {planet}: bow, shove, repeat. {name} saves the big power shove for when you\'re near the rope.',
-      '{name} paces out the dohyo before every bout and knows exactly where your wheels will leave it.',
-    ],
   },
   hothead: {
     label: 'Hothead',
     ai: { ram: 2.5, shove: 2.0, fire: 1.5, dodge: 0.3, rest: 0.3 },
     shops: 'engine',
-    stories: [
-      '{name} runs the {bug} flat out from the first second and has overheated in every bout they\'ve ever lost. Survive the opening rush.',
-      'Anger-management dropout, {planet} chapter. {name} rams everything, fires everything, then stalls in a sulk.',
-      '{name} once challenged a sun to a staring contest. Brave, loud, and completely allergic to pacing.',
-    ],
   },
   hapless: {
     label: 'Rookie',
     ai: { ram: 0.6, shove: 0.4, fire: 0.5, dodge: 0.3, rest: 1.0 },
     shops: 'engine',
-    stories: [
-      '{name} bought the {bug} this morning with a coupon and is still reading the manual. Mid-bout.',
-      '{name}\'s mum signed them up. The {bug}\'s steering is mostly theoretical.',
-    ],
   },
 });
 
-/** Backstories for your rival — the first pilot you ever fought. */
+/** Your rival's bio once they've sworn revenge, and for the Grand Final. */
 export const RIVAL_STORIES = Object.freeze({
-  beaten: '{name} has never forgotten the day you beat them in a junkyard scrapper. Every upgrade since has been about you.',
-  won: '{name} beat you the day you rolled out of the junkyard and has told everyone on {planet} about it. Twice.',
-  final: 'It was always going to be {name}. From the junkyard to the Grand Final — one of you goes home a legend.',
+  beaten: '{name} still hasn\'t forgiven you for taking their ride in a title match. Every bolt on the {bug} has been fitted with you in mind.',
+  final: 'It was always going to be {name}. From the day you took their ride to the Grand Final — one of you goes home a legend.',
 });
+
+/** What your rival DMs you after you take their ride. {bug} is the ride they lost. */
+export const RIVAL_DM = Object.freeze([
+  'That was NOT a fair fight.',
+  'The ring was tilted, my {bug} had a wobbly wheel and I\'m 90% sure you were using a magnet.',
+  'Enjoy my ride while it lasts. I\'m going to rebuild — bigger, faster, meaner — and when we meet again I\'m taking back what\'s mine. With interest.',
+]);
+
+/**
+ * The challenger pool: 20 pilots, every one with a unique name, home world
+ * and bio that hints at how they fight. {name} and {bug} are filled in.
+ * The first entry is the rookie.
+ */
+export const CHALLENGER_ROSTER = Object.freeze([
+  { name: 'Pib', planet: 'Larvax', style: 'hapless',
+    story: 'Pib bought the {bug} this morning with a cereal-box coupon and is still reading the manual. Mid-bout. The steering is mostly theoretical.' },
+  // Bullies — ram first, ask never
+  { name: 'Grunkle Vox', planet: 'Dung Moon', style: 'bully',
+    story: 'Grunkle Vox once headbutted a moon out of orbit and has been looking for something bigger ever since. Expect the {bug} straight up your tailpipe. Repeatedly.' },
+  { name: 'Madame Thraxx', planet: 'Formica Major', style: 'bully',
+    story: 'Banned from three spaceports for "aggressive parking". Madame Thraxx doesn\'t do tactics — just rams, shoves, and a few more rams for dessert.' },
+  { name: 'Big Oggo', planet: 'Chitinia Prime', style: 'bully',
+    story: 'Big Oggo\'s mum wanted a poet. What she got was a {bug} that treats every opponent like a door that needs opening.' },
+  // Zappers — keep away and fire
+  { name: 'Zizzle Kren', planet: 'Vesp-9', style: 'zapper',
+    story: 'A retired lightning farmer, Zizzle Kren still can\'t resist pressing the big glowing button. Keep your stamina topped up.' },
+  { name: 'Doctor Plink', planet: 'Nebula Nest', style: 'zapper',
+    story: 'Doctor Plink keeps a tidy distance and a very untidy arsenal. The {bug} hums, crackles, and occasionally sets its own seat on fire.' },
+  { name: 'Qixxa Sparkwhistle', planet: 'Kepler-Sting', style: 'zapper',
+    story: 'Once short-circuited an entire hive-city "by accident". Qixxa fights from range and giggles every time an opponent stalls.' },
+  // Turtles — park in the middle and wait
+  { name: 'Old Mossback', planet: 'The Ooze Belt', style: 'turtle',
+    story: 'Old Mossback believes patience is a weapon — the only one worth owning. Expect the {bug} parked mid-ring, daring you to come in.' },
+  { name: 'Brr\'unt', planet: 'Thorax Station', style: 'turtle',
+    story: 'Seventeen years as a tollbooth. Brr\'unt doesn\'t chase — Brr\'unt waits, braces, and lets you do something silly.' },
+  { name: 'Snoozlo', planet: 'Glorp IV', style: 'turtle',
+    story: 'The {bug}\'s previous owner died of boredom mid-bout. Snoozlo plays it slow, heavy and dead centre, with a nap between shoves.' },
+  // Dodgers — make you miss
+  { name: 'Flitterby Vash', planet: 'Mandibulon', style: 'dodger',
+    story: 'A professional puddle-skater before sumo. Lunge at Flitterby\'s {bug} and you\'ll be halfway off the ring before you notice it isn\'t there.' },
+  { name: 'Slipp', planet: 'Arachnos', style: 'dodger',
+    story: 'Nobody has ever landed a clean hit on Slipp — including three ex-partners and a tax inspector. Rams are a gamble.' },
+  { name: 'Wobbletop Nee', planet: 'Cryo Drift', style: 'dodger',
+    story: 'The {bug} handles like a greased moth. Wobbletop Nee handbrake-turns at the last second and lets your momentum do the rest.' },
+  // Sumo — shove you over the edge
+  { name: 'Yokozuna Blorp', planet: 'Hive Nine', style: 'sumo',
+    story: 'Learned ancient Earth sumo from one scratched holo-tape and got alarmingly good. Yokozuna Blorp loves the edge of the ring — yours.' },
+  { name: 'Master Ukk', planet: 'Pupa Reach', style: 'sumo',
+    story: 'A traditionalist: bow, shove, repeat. Master Ukk saves the big power shove for the moment your wheels get near the rope.' },
+  { name: 'Tessel Rinq', planet: 'Stridulon', style: 'sumo',
+    story: 'Tessel Rinq paces out the dohyo before every bout and knows exactly where your wheels will leave it.' },
+  // Hotheads — flat out, then overheat
+  { name: 'Scorch McGilly', planet: 'Magmoth', style: 'hothead',
+    story: 'Scorch McGilly runs the {bug} flat out from the first second and has overheated in every bout ever lost. Survive the opening rush.' },
+  { name: 'Rageblossom', planet: 'Xylo Rift', style: 'hothead',
+    story: 'Anger-management dropout. Rageblossom rams everything, fires everything, then stalls in a sulk.' },
+  { name: 'Krakkle Joon', planet: 'Sunspot Dirge', style: 'hothead',
+    story: 'Krakkle Joon once challenged a sun to a staring contest. Brave, loud, and completely allergic to pacing.' },
+  { name: 'Vexby Thrum', planet: 'Nectaris', style: 'hothead',
+    story: 'Runs on fizzy nectar and grudges. Vexby Thrum goes full throttle at the bell, peaks at eleven seconds and spends the rest of the bout wheezing.' },
+]);
 
 export const FIGHTING_STYLES = Object.freeze(Object.keys(PILOT_STYLES).filter((k) => k !== 'hapless'));
