@@ -857,6 +857,8 @@ export class EconomyManager {
     const bug = this.state.activeBug;
     if (!this.tournamentUnlocked) throw new Error(`Win ${ECONOMY.TOURNAMENT_UNLOCK_WINS} challenger bouts to unlock`);
     if (!bug?.isBattleReady) throw new Error('Your active vehicle is not battle-ready');
+    if (!this.state.canAfford(ECONOMY.TOURNAMENT_FEE)) throw new Error(`The entry fee is ${formatMoney(ECONOMY.TOURNAMENT_FEE)}`);
+    this.state.spend(ECONOMY.TOURNAMENT_FEE);
     Object.assign(this.state.tournament, { entered: true, vehicleId: bug.id, round: 0, eliminated: false });
     this.state.tournament.opponent = this.tournamentOpponentJSON(0);
     this.state.addLog(`Entered the Inter-Planetary Tournament with ${bug.name}`);

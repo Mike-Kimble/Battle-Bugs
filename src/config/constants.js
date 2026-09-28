@@ -144,6 +144,7 @@ export const ECONOMY = Object.freeze({
   TOURNAMENT_UNLOCK_WINS: 5,
   TOURNAMENT_ROUNDS: 3,
   TOURNAMENT_PRIZE: 5000,
+  TOURNAMENT_FEE: 1000,       // paid on every entry, no refunds
 });
 
 export const RENDER = Object.freeze({

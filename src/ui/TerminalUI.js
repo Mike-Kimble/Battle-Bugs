@@ -553,14 +553,17 @@ export class TerminalUI {
 
     if (!t.entered) {
       const bug = s.activeBug;
+      const fee = ECONOMY.TOURNAMENT_FEE;
+      const canPay = s.money >= fee;
       wrap.append(...[
         t.eliminated ? el('p', { class: 'bad' }, 'You were eliminated last time. Regroup, upgrade and try again.') : null,
         el('p', {}, 'Entering with: ', el('strong', {}, bug?.name ?? '—'), bug && !bug.isBattleReady ? el('span', { class: 'bad' }, ' (not battle-ready)') : ''),
+        el('p', { class: canPay ? '' : 'bad' }, `Entry fee: ${formatMoney(fee)}${canPay ? '' : ` — you have ${formatMoney(s.money)}`}`),
         el('button', {
-          class: 'btn btn-fight', disabled: !bug?.isBattleReady,
-          onclick: () => this.confirm('Enter the tournament?', `${bug.name} will be locked in: no upgrades or part swaps until you win or are eliminated.`,
+          class: 'btn btn-fight', disabled: !bug?.isBattleReady || !canPay,
+          onclick: () => this.confirm('Enter the tournament?', `Pay the ${formatMoney(fee)} entry fee. ${bug.name} will be locked in: no upgrades or part swaps until you win or are eliminated.`,
             () => this.act(() => eco.enterTournament(), 'Entered! Good luck, pilot.')),
-        }, 'ENTER TOURNAMENT')].filter(Boolean));
+        }, `ENTER · ${formatMoney(fee)}`)].filter(Boolean));
       return wrap;
     }
 
@@ -575,7 +578,7 @@ export class TerminalUI {
       }) : null,
       el('button', {
         class: 'btn btn-small btn-danger',
-        onclick: () => this.confirm('Withdraw?', 'You forfeit your place and must start from the Quarter-Final next time.', () => this.act(() => eco.withdrawTournament(), 'Withdrawn from the tournament')),
+        onclick: () => this.confirm('Withdraw?', `You forfeit your place and the entry fee — re-entering costs another ${formatMoney(ECONOMY.TOURNAMENT_FEE)}.`, () => this.act(() => eco.withdrawTournament(), 'Withdrawn from the tournament')),
       }, 'Withdraw'),
     ].filter(Boolean));
     return wrap;
