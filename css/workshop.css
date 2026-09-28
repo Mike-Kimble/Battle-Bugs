@@ -311,3 +311,14 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .pilot-portrait { image-rendering: pixelated; border: 2px solid var(--line); border-radius: var(--radius); flex-shrink: 0; }
 .pilot-story { margin: 0; font-size: 16px; line-height: 1.2; color: #cfc6e0; font-style: italic; }
 .pilot-record { color: var(--muted); font-size: 14px; letter-spacing: 0; }
+
+/* Challenger DM window */
+.modal-chat .modal-head { padding: 10px 12px 8px; }
+.chat-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.chat-head .pilot-portrait { width: 32px; height: 32px; max-width: 32px; max-height: 32px; border-width: 1px; }
+.chat-head .chat-name { margin: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat .chat-log { min-height: 180px; max-height: 45vh; }
+.msg-system { align-self: center; max-width: 100%; background: none; border: none; color: var(--muted); font-style: italic; font-size: 14px; padding: 2px 0; }
+.chat-controls { flex-direction: column; align-items: stretch; }
+.chat-controls .part-actions { display: flex; gap: 8px; }
+.chat-controls .part-actions .btn { flex: 1; }

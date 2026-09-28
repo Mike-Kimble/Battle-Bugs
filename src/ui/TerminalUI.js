@@ -162,9 +162,7 @@ export class TerminalUI {
           el('button', { class: 'btn btn-fight', disabled: !ready || !affordable, onclick: () => this.fight(c, { tournament: false }) }, 'FIGHT')));
     } else {
       foot = el('div', { class: 'card-foot card-foot-end' },
-        el('div', { class: 'part-actions' },
-          el('button', { class: 'btn btn-small btn-primary', disabled: !ready, onclick: () => this.openNegotiation(c) }, 'Wager cash'),
-          el('button', { class: 'btn btn-small btn-danger', disabled: !ready, onclick: () => this.askTitles(c) }, 'Play for titles')));
+        el('button', { class: 'btn btn-small btn-primary', disabled: !ready, onclick: () => this.openChat(c) }, 'Message'));
     }
     const story = c.story ? c.story.replaceAll('{name}', c.name).replaceAll('{planet}', c.planet).replaceAll('{bug}', `${bug.name}`) : null;
     return el('article', { class: `card challenger${deal ? ' has-deal' : ''}` },
@@ -240,87 +238,85 @@ export class TerminalUI {
   }
 
   // ───────────── Stakes ─────────────
-  /** Flash the outcome of a rejection (walk-off, board scroll, a return). */
-  announce(r) {
-    toast(r.message, r.status === 'reject' ? 'bad' : 'good');
-    if (r.scrolled) toast('Everyone walked off — the board scrolls up: tougher challengers arrive!', 'bad');
-    if (r.returned) toast(`${r.returned.bug.pilot?.name || r.returned.bug.name} has come back to the board.`, 'good');
-  }
-
-  /** Pink slips: straight to the challenger's answer — and the ring if they say yes. */
-  askTitles(c) {
-    const r = this.economy.offerTitles(c);
-    this.announce(r);
-    this.state.commit();
-    if (r.status === 'accept') this.fight(c, { tournament: false });
-  }
-
-  openNegotiation(c) {
+  /**
+   * DM window with a challenger: portrait + name up top, the chat log below,
+   * wager controls underneath. A rejection ends the chat — only the ✕ closes it.
+   * @param {object} c
+   * @param {Array} [endedLog] transcript of a chat the challenger has left
+   */
+  openChat(c, endedLog = null) {
     const eco = this.economy;
     const s = this.state;
-    const n = eco.nego(c);
     const who = this.pilotName(c);
-    const onBoard = s.challengers.includes(c);
-    const max = Math.max(1, s.money);
-    // Slider starts on their counter-offer, or everything you have if you can't cover it.
-    const start = n.counter != null ? Math.min(n.counter, max) : Math.min(max, Math.round(c.bounty / 10) * 10 || 10);
-    const amountLabel = el('strong', { class: 'wager-amount' }, formatMoney(start));
-    const offerBtn = el('button', { class: 'btn btn-primary', type: 'submit' });
-    const setLabel = (v) => {
-      amountLabel.textContent = formatMoney(v);
-      offerBtn.textContent = n.counter != null && v === n.counter ? `Accept ${formatMoney(v)}` : `Offer ${formatMoney(v)}`;
-    };
-    const slider = el('input', {
-      type: 'range', min: 1, max, step: 1, value: start, class: 'wager-slider',
-      'aria-label': 'Your offer',
-      oninput: (e) => setLabel(Number(e.target.value)),
-    });
-    setLabel(start);
-    const offer = (amount) => {
-      try {
-        const r = eco.offerCash(c, Number(amount));
-        s.commit();
-        if (r.status === 'accept') {
-          // Deal struck — straight into the ring (via the manager's window, if any).
-          closeModal();
-          toast(r.message, 'good');
-          this.fight(c, { tournament: false });
-          return;
-        }
-        if (r.status === 'reject') this.announce(r);
-        this.openNegotiation(c);
-      } catch (err) {
-        toast(err.message, 'bad');
+    const n = endedLog ? null : eco.nego(c);
+    const log = endedLog || n.log;
+
+    const logEl = el('div', { class: 'nego-log chat-log' }, log.length
+      ? log.map((m) => m.who === 'system'
+        ? el('div', { class: 'msg msg-system' }, m.text)
+        : el('div', { class: `msg msg-${m.who}` }, el('small', {}, m.who === 'you' ? 'You' : who), m.text))
+      : el('div', { class: 'muted small' }, `Say something to ${who}. Name a cash stake, or play for titles — winner takes the loser's vehicle.`));
+
+    const header = el('div', { class: 'chat-head' },
+      this.sprite.renderPortrait(c, 32),
+      el('h2', { class: 'chat-name' }, who));
+
+    const body = el('div', { class: 'nego chat' }, logEl);
+    // Their answer: accept → into the ring; reject → the chat ends; counter → keep talking.
+    const handle = (r) => {
+      s.commit();
+      if (r.status === 'accept') {
+        closeModal();
+        toast(r.message, 'good');
+        this.fight(c, { tournament: false });
+        return;
       }
+      if (r.status === 'reject') {
+        if (r.scrolled) toast('Everyone walked off — the board scrolls up: tougher challengers arrive!', 'bad');
+        if (r.returned) toast(`${this.pilotName(r.returned)} has come back to the board.`, 'good');
+        this.render();
+        this.openChat(c, r.log);
+        return;
+      }
+      this.openChat(c);
+    };
+    const attempt = (fn) => {
+      try { handle(fn()); } catch (err) { toast(err.message, 'bad'); }
     };
 
-    const body = el('div', { class: 'nego' },
-      el('div', { class: 'card-row challenger-head' },
-        this.sprite.renderPortrait(c, 64),
-        el('div', { class: 'card-info' },
-          el('h2', { class: 'pilot-name' }, this.pilotTitle(c)),
-          el('div', { class: 'bug-subtitle' }, c.bug.name)),
-        this.sprite.renderThumbnail(c.bug, 64)),
-      el('div', { class: 'nego-log' }, n.log.length
-        ? n.log.map((m) => el('div', { class: `msg msg-${m.who}` }, el('small', {}, m.who === 'you' ? 'You' : who), m.text))
-        : el('div', { class: 'muted small' }, `Name your stake — you'll have to read ${who} yourself. Push a ridiculous number twice and they may walk off.`)),
-    );
-
-    if (!onBoard) {
-      body.append(el('div', { class: 'notice notice-warn' }, `${who} has walked off the board.`),
-        el('button', { class: 'btn', onclick: closeModal }, 'Close'));
-    } else {
-      if (n.counter != null && n.counter > s.money) {
-        body.append(el('p', { class: 'small bad' }, `You can't cover their ${formatMoney(n.counter)} — the slider is set to everything you have.`));
-      }
-      body.append(
+    if (!endedLog) {
+      const max = Math.max(1, s.money);
+      // Slider starts on their counter-offer, or everything you have if you can't cover it.
+      const start = n.counter != null ? Math.min(n.counter, max) : Math.min(max, Math.round(c.bounty / 10) * 10 || 10);
+      const amountLabel = el('strong', { class: 'wager-amount' });
+      const offerBtn = el('button', { class: 'btn btn-primary', type: 'submit' });
+      const setLabel = (v) => {
+        amountLabel.textContent = formatMoney(v);
+        offerBtn.textContent = n.counter != null && v === n.counter ? `Accept ${formatMoney(v)}` : `Wager ${formatMoney(v)}`;
+      };
+      const slider = el('input', {
+        type: 'range', min: 1, max, step: 1, value: start, class: 'wager-slider',
+        'aria-label': 'Your offer',
+        oninput: (e) => setLabel(Number(e.target.value)),
+      });
+      setLabel(start);
+      body.append(...[
+        n.counter != null && n.counter > s.money
+          ? el('p', { class: 'small bad' }, `You can't cover their ${formatMoney(n.counter)} — the slider is set to everything you have.`) : null,
         el('form', {
-          class: 'wager-form',
-          onsubmit: (e) => { e.preventDefault(); offer(slider.value); },
-        }, el('div', { class: 'wager-row' }, amountLabel, el('span', { class: 'muted small' }, `of ${formatMoney(s.money)}`)), slider, offerBtn),
-      );
+          class: 'wager-form chat-controls',
+          onsubmit: (e) => { e.preventDefault(); attempt(() => eco.offerCash(c, Number(slider.value))); },
+        },
+        el('div', { class: 'wager-row' }, amountLabel, el('span', { class: 'muted small' }, `of ${formatMoney(s.money)}`)),
+        slider,
+        el('div', { class: 'part-actions' },
+          offerBtn,
+          el('button', { class: 'btn btn-danger', type: 'button', onclick: () => attempt(() => eco.offerTitles(c)) }, 'Play for titles'))),
+      ].filter(Boolean));
     }
-    openModal(`Stakes · ${who}`, body);
+
+    openModal(`Chat · ${who}`, body, { header, className: 'modal-chat', modal: !!endedLog });
+    logEl.scrollTop = logEl.scrollHeight;
   }
 
   // ───────────── Hangar ─────────────

@@ -719,10 +719,12 @@ export class EconomyManager {
     const s = this.state;
     const b = s.board;
     s.challengers = s.challengers.filter((x) => x.id !== c.id);
+    // The chat transcript survives the walk-off so the DM window can show it.
+    const log = [...(c.nego?.log || []), { who: 'system', text: `${c.bug.pilot?.name || c.name || c.bug.name} has left the chat.` }];
     c.nego = null;
     b.rejected.push(c);
     b.rejections += 1;
-    const out = { scrolled: false, returned: null };
+    const out = { scrolled: false, returned: null, log };
     if (!s.challengers.length) {
       b.tierShift += 1;
       this.generateChallengers();

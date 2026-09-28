@@ -26,13 +26,17 @@ export function el(tag, attrs = {}, ...children) {
 
 let modalOnClose = null;
 
-export function openModal(title, body, { onClose } = {}) {
+/**
+ * @param {{onClose?:Function, header?:Node, className?:string, modal?:boolean}} opts
+ *   header replaces the title; modal:true means only the ✕ closes it (no backdrop click).
+ */
+export function openModal(title, body, { onClose, header, className = '', modal = false } = {}) {
   const root = document.getElementById('modal-root');
   root.replaceChildren(
-    el('div', { class: 'modal-backdrop', onclick: closeModal }),
-    el('div', { class: 'modal', role: 'dialog', 'aria-label': title },
+    el('div', { class: 'modal-backdrop', onclick: modal ? null : closeModal }),
+    el('div', { class: `modal ${className}`, role: 'dialog', 'aria-label': title },
       el('div', { class: 'modal-head' },
-        el('h2', {}, title),
+        header || el('h2', {}, title),
         el('button', { class: 'btn btn-icon', 'aria-label': 'Close', onclick: closeModal }, '✕')),
       el('div', { class: 'modal-body' }, body)),
   );
