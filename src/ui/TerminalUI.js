@@ -133,6 +133,12 @@ export class TerminalUI {
         el('strong', {}, active ? active.name : '—'), active && !ready ? el('span', { class: 'bad' }, ' (not battle-ready)') : ''),
       !active ? el('div', { class: 'notice notice-warn' }, 'You have no vehicle. Buy one from Marketplace › Chassis.',
         el('button', { class: 'btn btn-primary', onclick: () => { this.marketCat = 'chassis'; this.setTab('market'); } }, 'Go to Chassis')) : null,
+      active && !ready ? el('div', { class: 'notice notice-warn' },
+        el('strong', {}, `${active.name} isn't ready to fight:`),
+        el('ul', { class: 'issues' }, active.battleIssues().map((i) => el('li', {}, i))),
+        el('div', { class: 'part-actions' },
+          !active.engine ? el('button', { class: 'btn btn-primary', onclick: () => { this.marketCat = 'engine'; this.setTab('market'); } }, 'Buy a motor') : null,
+          el('button', { class: 'btn', onclick: () => this.setTab('hangar') }, 'Open the Hangar'))) : null,
       s.board.tierShift ? el('p', { class: 'small warn-text' }, `▲ The board has scrolled up ${s.board.tierShift} difficulty level${s.board.tierShift > 1 ? 's' : ''} after everyone walked off.`) : null,
       walked.length ? el('p', { class: 'small muted' }, `Walked off (back after your next fight): ${walked.map((c) => c.bug.pilot?.name || c.bug.name).join(', ')}`) : null,
       el('div', { class: 'card-grid' }, s.challengers.map((c) => this.challengerCard(c, { ready, label: c.rookie ? 'ROOKIE · EASY' : null }))));

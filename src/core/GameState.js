@@ -14,7 +14,9 @@ const SAVE_VERSION = 1;
 export class GameState extends EventEmitter {
   constructor() {
     super();
-    this.money = ECONOMY.START_MONEY;
+    this.money = 0;
+    this.fresh = false;     // set on a new game until the economy sizes the starting cash
+    this.startBonus = 0;    // extra starting cash (a champion's prize)
     this.vehicles = [];
     this.activeVehicleId = null;
     this.inventory = [];
@@ -41,12 +43,14 @@ export class GameState extends EventEmitter {
    * A fresh game. A champion can start a new season from scratch, carrying
    * the grand prize as extra starting money.
    */
-  static newGame({ money = ECONOMY.START_MONEY, season = 1, titles = 0 } = {}) {
+  static newGame({ bonus = 0, season = 1, titles = 0 } = {}) {
     const state = new GameState();
-    state.money = money;
+    state.fresh = true;
+    state.startBonus = bonus;
     state.season = season;
     state.titles = titles;
-    const starter = BattleBug.create({ ...STARTER_BUG });
+    const [lo, hi] = ECONOMY.JUNK_CONDITION;
+    const starter = BattleBug.create({ ...STARTER_BUG, condition: () => lo + Math.random() * (hi - lo) });
     state.vehicles.push(starter);
     state.activeVehicleId = starter.id;
     return state;
@@ -82,6 +86,8 @@ export class GameState extends EventEmitter {
     s.gameComplete = !!d.gameComplete;
     s.gameOver = d.gameOver || null;
     s.season = d.season || 1;
+    s.fresh = !!d.fresh;
+    s.startBonus = d.startBonus || 0;
     s.titles = d.titles || 0;
     s.managerBetPct = d.managerBetPct ?? (s.staff.manager ? 0.1 : 0);
     s.fixStreak = d.fixStreak || 0;
@@ -109,6 +115,8 @@ export class GameState extends EventEmitter {
       gameComplete: this.gameComplete,
       gameOver: this.gameOver,
       season: this.season,
+      fresh: this.fresh,
+      startBonus: this.startBonus,
       titles: this.titles,
       managerBetPct: this.managerBetPct,
       fixStreak: this.fixStreak,

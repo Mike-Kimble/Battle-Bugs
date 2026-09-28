@@ -169,11 +169,12 @@ export function partsUpToTier(type, tier) {
   return (PART_KEYS_BY_TYPE[type] || []).filter((k) => PARTS[k].tier <= tier);
 }
 
+/** Fresh from the junkyard: no motor, everything else badly beaten up. */
 export const STARTER_BUG = Object.freeze({
-  name: 'Scrapper Bug',
+  name: 'Junkyard Scrapper',
   hue: 28,
   chassis: 'scrapper_frame',
-  engine: 'rust_motor',
+  engine: null,
   tires: 'bald_rollers',
   armor: 'scrap_plating',
   weapons: [],

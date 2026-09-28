@@ -21,6 +21,7 @@ class App {
   constructor() {
     this.state = GameState.load() || GameState.newGame();
     this.economy = new EconomyManager(this.state);
+    if (this.state.fresh) this.economy.setupNewGame();
     const needsRookie = this.state.record.challengerWins < ECONOMY.ROOKIE_UNTIL_WINS && !this.economy.hasRookie;
     if (!this.state.challengers.length || needsRookie) this.economy.generateChallengers();
     else if (this.state.challengers.length < ECONOMY.BOARD_SIZE && !this.state.board.rejected.length) this.economy.refillBoard();
@@ -74,20 +75,19 @@ class App {
   /** Champion's reward: a fresh game from scratch, bankrolled by the grand prize. */
   newSeason() {
     const s = this.state;
-    GameState.newGame({ money: ECONOMY.START_MONEY + ECONOMY.TOURNAMENT_PRIZE, season: s.season + 1, titles: s.titles + 1 }).save();
+    GameState.newGame({ bonus: ECONOMY.TOURNAMENT_PRIZE, season: s.season + 1, titles: s.titles + 1 }).save();
     window.location.reload();
   }
 
   showChampion() {
     const root = $('#overlay-root');
     const s = this.state;
-    const bankroll = ECONOMY.START_MONEY + ECONOMY.TOURNAMENT_PRIZE;
     root.replaceChildren(el('div', { class: 'result-card result-win champion' },
       el('h1', {}, 'CHAMPION OF THE GALAXY'),
       el('p', { class: 'champion-text' }, `You won the Inter-Planetary Tournament${s.season > 1 ? ` in season ${s.season}` : ''} and the ${formatMoney(ECONOMY.TOURNAMENT_PRIZE)} grand prize. Game complete!`),
       el('p', { class: 'muted' }, `Final record ${s.record.wins}W · ${s.record.losses}L · ${s.record.ties}D${s.titles ? ` · ${s.titles + 1} championships` : ''}`),
-      el('p', {}, `Start again from scratch with a Scrapper Bug — but with ${formatMoney(bankroll)} in the bank.`),
-      el('button', { class: 'btn btn-primary btn-big', onclick: () => this.newSeason() }, `Start season ${s.season + 1} with ${formatMoney(bankroll)}`)));
+      el('p', {}, `Start again from the junkyard — but with your ${formatMoney(ECONOMY.TOURNAMENT_PRIZE)} prize in the bank on top.`),
+      el('button', { class: 'btn btn-primary btn-big', onclick: () => this.newSeason() }, `Start season ${s.season + 1} (+${formatMoney(ECONOMY.TOURNAMENT_PRIZE)})`)));
     root.classList.add('open');
   }
 

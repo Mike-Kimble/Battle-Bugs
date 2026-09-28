@@ -730,6 +730,7 @@ export class EconomyManager {
 
     // Diagnose, in order of what hurts a sumo bug most.
     const needs = [];
+    if (!bug.engine) needs.push(['engine', "there's no motor in her"]);
     if (s.fDrive > s.fGrip * 1.05) needs.push(['tires', 'traction-limited — the motor out-muscles your tires']);
     else if (s.fGrip > s.fDrive * 1.25) needs.push(['engine', 'power-limited — your tires can take more than the motor gives']);
     if (!bug.armor) needs.push(['armor', "you've got no armour — every hit goes straight to the hull"]);
@@ -773,6 +774,29 @@ export class EconomyManager {
     return true;
   }
 
+  // ───────────── New game ─────────────
+  /**
+   * Size the starting cash for a fresh junkyard start: exactly enough to
+   * repair the Scrapper, buy the cheapest motor on the Marketplace and
+   * place a §100 first bet (plus any champion's bonus).
+   */
+  setupNewGame() {
+    const s = this.state;
+    this.generateChallengers();
+    this.generateMarket();
+    const engines = () => s.market.parts.filter((l) => l.part.type === 'engine');
+    if (!engines().some((l) => l.part.key === 'rust_motor')) {
+      const part = Part.create('rust_motor', rand(0.8, 1));
+      s.market.parts.unshift({ id: makeId('mk'), part, price: roundTo(part.value * part.hpRatio * rand(ECONOMY.MARKUP_MIN, 1.1), 5) });
+    }
+    // Cheapest motor to get running, counting what it'd cost to repair a used one.
+    const motorCost = (l) => this.partPrice(l) + this.repairCost(l.part);
+    const cheapestMotor = Math.min(...engines().map(motorCost));
+    s.money = this.repairAllCost(s.activeBug) + cheapestMotor + ECONOMY.START_BET + (s.startBonus || 0);
+    s.fresh = false;
+    s.addLog(`Rolled a Junkyard Scrapper out of the scrapheap with ${formatMoney(s.money)} to your name.`);
+  }
+
   // ───────────── Survival ─────────────
   /** Cash plus what the parts inventory would fetch. */
   get liquidWorth() {
@@ -784,7 +808,7 @@ export class EconomyManager {
     const s = this.state;
     if (s.vehicles.length || this.liquidWorth < ECONOMY.MIN_VEHICLE_PRICE) return;
     if (s.market.vehicles.some((l) => l.price <= this.liquidWorth)) return;
-    const bug = BattleBug.create({ ...STARTER_BUG, name: 'Junkyard Scrapper', armor: null, condition: () => rand(0.55, 0.75) });
+    const bug = BattleBug.create({ ...STARTER_BUG, engine: 'rust_motor', armor: null, condition: () => rand(0.55, 0.75) });
     const price = Math.max(ECONOMY.MIN_VEHICLE_PRICE, Math.min(roundTo(this.liquidWorth * 0.8, 5), 150));
     s.market.vehicles.unshift({ id: makeId('mk'), bug, price });
   }
