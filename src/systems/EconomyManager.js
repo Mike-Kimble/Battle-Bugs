@@ -665,12 +665,63 @@ export class EconomyManager {
     Object.assign(this.state.tournament, { entered: false, vehicleId: null, round: 0, opponent: null });
   }
 
+  /**
+   * The strongest possible build by fighting rating: for every frame, the
+   * best motor, tires and armour for it (greedy), armed with the best
+   * weapons. Returns catalogue keys and the build's rating.
+   */
+  strongestBuild() {
+    const make = (b) => BattleBug.create({ ...b, condition: () => 1 });
+    const weaponsFor = (chassis) => PART_KEYS_BY_TYPE.weapon.slice()
+      .sort((x, y) => PARTS[y].tier - PARTS[x].tier || PARTS[y].value - PARTS[x].value)
+      .slice(0, PARTS[chassis].stats.weaponSlots);
+    let best = null;
+    for (const chassis of PART_KEYS_BY_TYPE.chassis) {
+      const build = { chassis, engine: 'rust_motor', tires: 'bald_rollers', armor: null, weapons: weaponsFor(chassis) };
+      for (const type of ['engine', 'tires', 'armor', 'engine', 'tires']) { // two passes: grip and power depend on each other
+        const ranked = PART_KEYS_BY_TYPE[type]
+          .map((k) => [k, this.rating(make({ ...build, [type]: k }))])
+          .sort((x, y) => y[1] - x[1]);
+        build[type] = ranked[0][0];
+      }
+      const r = this.rating(make(build));
+      if (!best || r > best.rating) best = { build, rating: r };
+    }
+    return best;
+  }
+
+  /**
+   * Tournament entrants are the hardest pilots in the game: every one runs
+   * the strongest possible build, pristine and fully armed, and the pilots
+   * get better each round (the Grand Final is flown at maximum skill).
+   * Earlier rounds vary the weapon loadout; the final carries the best pair.
+   */
   tournamentOpponentJSON(round) {
-    const tier = clampTier(4 + round);
-    const c = this.makeChallenger(tier, { condition: () => 1, fullSlots: true });
-    c.difficulty = Math.min(1, 0.75 + round * 0.12);
-    c.bounty = roundTo(600 + round * 500, 50);
-    c.roundName = ['Quarter-Final', 'Semi-Final', 'Grand Final'][round] || `Round ${round + 1}`;
+    const { build } = this.strongestBuild();
+    const final = round >= ECONOMY.TOURNAMENT_ROUNDS - 1;
+    const spec = { ...build };
+    if (!final) {
+      const pool = PART_KEYS_BY_TYPE.weapon.slice()
+        .sort((x, y) => PARTS[y].tier - PARTS[x].tier || PARTS[y].value - PARTS[x].value)
+        .slice(0, build.weapons.length + 1);
+      spec.weapons = pool.sort(() => Math.random() - 0.5).slice(0, build.weapons.length);
+    }
+    const bug = BattleBug.create({
+      ...spec,
+      name: `${pick(BUG_ADJECTIVES)} ${pick(BUG_NOUNS)}`,
+      hue: randInt(0, 359),
+      alien: true,
+      pilot: { name: alienName(), planet: pick(PLANETS) },
+      condition: () => 1,
+    });
+    const c = {
+      id: makeId('ch'),
+      tier: 5,
+      bounty: ECONOMY.TOURNAMENT_PRIZE,
+      difficulty: Math.min(1, 0.9 + round * 0.05),
+      roundName: ['Quarter-Final', 'Semi-Final', 'Grand Final'][round] || `Round ${round + 1}`,
+      bug,
+    };
     return { ...c, bug: c.bug.toJSON() };
   }
 
