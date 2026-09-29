@@ -1,5 +1,5 @@
 /**
- * BATTLE BUGS — global tuning constants.
+ * WEEVIL WARS — global tuning constants.
  * All distances are world pixels, all times are seconds unless suffixed (_MS).
  */
 

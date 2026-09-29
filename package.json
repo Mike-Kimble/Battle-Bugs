@@ -1,5 +1,5 @@
 {
-  "name": "battle-bugs",
+  "name": "weevil-wars",
   "version": "1.0.0",
   "description": "A modular 2D browser-based vehicle arena battler. Vanilla ES6 modules, HTML5 Canvas, procedural pixel-art.",
   "type": "module",

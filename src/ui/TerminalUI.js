@@ -103,7 +103,7 @@ export class TerminalUI {
     const s = this.state;
     const cw = Math.min(s.record.challengerWins, ECONOMY.TOURNAMENT_UNLOCK_WINS);
     this.header.replaceChildren(
-      el('div', { class: 'logo' }, 'BATTLE', el('span', {}, 'BUGS')),
+      el('div', { class: 'logo' }, 'WEEVIL', el('span', {}, 'WARS')),
       el('div', { class: 'hud-stats' },
         el('div', { class: 'stat money' }, el('small', {}, 'Capital'), el('strong', {}, formatMoney(s.money))),
         el('div', { class: 'stat' }, el('small', {}, 'Record W·L·D'), el('strong', {}, `${s.record.wins}·${s.record.losses}·${s.record.ties}`)),
