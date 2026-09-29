@@ -247,8 +247,9 @@ function pristineStats(bug) {
  * Front / Center / Sides / Hull opens repair & replace modals.
  */
 export class WorkshopUI {
-  constructor(root, { state, economy, sprite }) {
+  constructor(root, { state, economy, sprite, onShop = null }) {
     this.root = root;
+    this.onShop = onShop; // (partType) => open that Marketplace category
     this.state = state;
     this.economy = economy;
     this.sprite = sprite;
@@ -675,6 +676,14 @@ export class WorkshopUI {
       section.append(list);
     } else {
       section.append(el('p', { class: 'muted small' }, 'No spare parts of this type — visit the Marketplace or strip a captured vehicle.'));
+    }
+    // Straight to the right aisle of the Marketplace (closed while you're in the tournament).
+    if (this.onShop && !this.economy.inField) {
+      const label = { engine: 'Propulsion', tires: 'Running Gear', armor: 'Armour', weapon: 'Weapons' }[type];
+      section.append(el('button', {
+        class: 'btn btn-small shop-link',
+        onclick: () => { closeModal(); this.onShop(type); },
+      }, `Shop ${label} on the Marketplace →`));
     }
     return section;
   }

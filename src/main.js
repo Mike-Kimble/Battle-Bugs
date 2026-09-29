@@ -33,7 +33,12 @@ class App {
     this.arena = new ArenaRenderer();
     this.renderer = new CanvasRenderer($('#game-canvas'));
 
-    this.workshop = new WorkshopUI($('#hoist-panel'), { state: this.state, economy: this.economy, sprite: this.sprite });
+    this.workshop = new WorkshopUI($('#hoist-panel'), {
+      state: this.state,
+      economy: this.economy,
+      sprite: this.sprite,
+      onShop: (type) => { this.terminal.marketCat = type; this.terminal.setTab('market'); },
+    });
     this.terminal = new TerminalUI($('#terminal-panel'), $('#topbar'), $('#tabbar'), {
       state: this.state,
       economy: this.economy,

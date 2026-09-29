@@ -196,6 +196,20 @@ export class EconomyManager {
     return listing.part;
   }
 
+  /** Buy a part and fit it straight onto `bug` (for an empty slot). */
+  buyAndFit(listingId, bug) {
+    this.assertUnlocked(bug);
+    const part = this.buyPartListing(listingId);
+    return this.equipFromInventory(bug, part.uid);
+  }
+
+  /** Does `bug` have a free slot for a part of this type? */
+  hasFreeSlot(bug, type) {
+    if (!bug) return false;
+    if (type === 'weapon') return bug.weapons.length < bug.weaponSlots;
+    return ['engine', 'tires', 'armor'].includes(type) && !bug[type];
+  }
+
   buyVehicleListing(listingId) {
     this.assertNotInField();
     const i = this.state.market.vehicles.findIndex((l) => l.id === listingId);

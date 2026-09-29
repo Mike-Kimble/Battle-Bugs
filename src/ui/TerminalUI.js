@@ -456,10 +456,16 @@ export class TerminalUI {
       forSale = el('div', { class: 'card-grid parts' }, s.market.parts.filter((l) => l.part.type === cat).map((l) => partCard(l.part, this.economy, {
         compareTo: counterpart(active, l.part),
         extra: dealBadge(l),
-        actions: [el('button', {
-          class: 'btn btn-small btn-primary', disabled: s.money < this.economy.partPrice(l),
-          onclick: () => this.act(() => this.economy.buyPartListing(l.id), `Bought ${l.part.name}`),
-        }, `Buy ${formatMoney(this.economy.partPrice(l))}`),
+        actions: [this.economy.hasFreeSlot(active, l.part.type)
+          // Nothing fitted there: buy it and bolt it straight on.
+          ? el('button', {
+            class: 'btn btn-small btn-primary', disabled: s.money < this.economy.partPrice(l),
+            onclick: () => this.act(() => this.economy.buyAndFit(l.id, active), `Bought and fitted ${l.part.name} to ${active.name}`),
+          }, `Buy & fit ${formatMoney(this.economy.partPrice(l))}`)
+          : el('button', {
+            class: 'btn btn-small btn-primary', disabled: s.money < this.economy.partPrice(l),
+            onclick: () => this.act(() => this.economy.buyPartListing(l.id), `Bought ${l.part.name}`),
+          }, `Buy ${formatMoney(this.economy.partPrice(l))}`),
         s.staff.mechanic ? el('span', { class: 'small muted' }, el('s', {}, formatMoney(l.price)), ' mechanic −10%') : null],
       })));
     }
