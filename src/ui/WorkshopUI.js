@@ -89,7 +89,7 @@ const capped = (v) => Math.min(100, Math.max(0, v));
 export function statBar({ value, potential = value, ref = null, max, better, neutral = false, cls = '' }) {
   const scale = Math.max(max, value, potential, ref ?? 0) || 1;
   const pct = (v) => `${Math.max(0, Math.min(1, v / scale)) * 100}%`;
-  let tone = 'neutral';
+  let tone = neutral || better === 'neutral' ? 'neutral weight' : 'neutral';
   if (ref != null && !neutral && better !== 'neutral') {
     const diff = better === 'lower' ? ref - potential : potential - ref;
     const eps = Math.abs(ref) * 0.01 + 1e-9;

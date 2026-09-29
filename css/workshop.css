@@ -345,3 +345,4 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .codex-item.rarity-epic { border-color: #8a3fc0; }
 .codex-item.rarity-legendary { border-color: #e0a020; }
 .shop-link { margin-top: 8px; width: 100%; }
+.stat-bar .cmp-fill.weight { background: #6a6390; }
