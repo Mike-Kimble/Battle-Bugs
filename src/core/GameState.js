@@ -115,6 +115,7 @@ export class GameState extends EventEmitter {
     s.comeback = !!d.comeback;
     s.rivalExcuses = d.rivalExcuses || 0;
     s.sellQuotes = d.sellQuotes || {};
+    s.tournamentNudgeAt = d.tournamentNudgeAt || 0;
     s.pendingDM = d.pendingDM || null;
     s.discovered = new Set(d.discovered || []);
     for (const v of s.vehicles) s.discover(v.parts);
@@ -155,12 +156,13 @@ export class GameState extends EventEmitter {
       comeback: this.comeback,
       rivalExcuses: this.rivalExcuses,
       sellQuotes: this.sellQuotes,
+      tournamentNudgeAt: this.tournamentNudgeAt || 0,
       pendingDM: this.pendingDM,
       discovered: [...this.discovered],
       fine: this.fine,
       rivalId: this.rivalId,
       rivalNextAt: this.rivalNextAt,
-      log: this.log.slice(-40),
+      log: this.log.slice(-60),
     };
   }
 
@@ -189,8 +191,9 @@ export class GameState extends EventEmitter {
     this.emit(EVENTS.STATE_CHANGE, this);
   }
 
-  addLog(msg) {
-    this.log.push({ t: Date.now(), msg });
+  /** A log entry, optionally with the details (e.g. an end-of-battle report). */
+  addLog(msg, lines = []) {
+    this.log.push({ t: Date.now(), msg, lines: lines.slice() });
   }
 
   // ───────────── Vehicles ─────────────

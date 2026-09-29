@@ -137,6 +137,9 @@ export class TerminalUI {
     const ready = active?.isBattleReady;
     const walked = s.board.rejected;
     return el('div', {},
+      this.economy.tournamentReady ? el('div', { class: 'notice notice-gold' },
+        `📈 Manager: "You're good enough for the Tournament, and you can cover the ${formatMoney(ECONOMY.TOURNAMENT_FEE)} entry with change to spare. I'd enter."`,
+        el('button', { class: 'btn btn-small btn-primary', onclick: () => this.setTab('tournament') }, 'Go to Tournament')) : null,
       el('p', { class: 'muted' }, 'Pick a challenger and agree the stakes: haggle over ', el('strong', {}, 'cash'),
         ', or play for ', el('strong', {}, 'titles'), ' — winner drives off in the loser\'s vehicle. Your fighter: ',
         el('strong', {}, active ? active.name : '—'), active && !ready ? el('span', { class: 'bad' }, ' (not battle-ready)') : ''),
@@ -559,8 +562,10 @@ export class TerminalUI {
       s.staff.manager ? this.renderBetting() : null,
       s.fine ? this.renderFine() : null,
       this.renderCodex(),
-      el('h3', {}, 'Recent log'),
-      el('ul', { class: 'log' }, s.log.slice(-10).reverse().map((l) => el('li', {}, l.msg))),
+      el('h3', {}, 'Log'),
+      el('ul', { class: 'log' }, s.log.slice(-25).reverse().map((l) => el('li', {},
+        el('span', { class: 'log-time' }, new Date(l.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })), ' ', l.msg,
+        l.lines?.length ? el('ul', { class: 'log-lines' }, l.lines.map((x) => el('li', {}, x))) : null))),
       el('h3', {}, 'Office'),
       el('button', {
         class: 'btn btn-danger',

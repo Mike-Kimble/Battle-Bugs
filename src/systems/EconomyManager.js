@@ -1059,6 +1059,20 @@ export class EconomyManager {
   }
 
   // ───────────── Tournament ─────────────
+  /**
+   * Your manager's call: unlocked, not already in, your best ride is close to
+   * a tournament-grade build, and the entry fee leaves change to spare.
+   */
+  get tournamentReady() {
+    const s = this.state;
+    if (!s.staff.manager || !this.tournamentUnlocked || s.tournament.entered || s.gameComplete) return false;
+    if (s.money < ECONOMY.TOURNAMENT_FEE + ECONOMY.TOURNAMENT_SPARE) return false;
+    const best = this.bestVehicle;
+    if (!best?.isBattleReady) return false;
+    this.tourneyBar ??= this.strongestBuild().rating;
+    return this.rating(best) >= this.tourneyBar * ECONOMY.TOURNAMENT_READY;
+  }
+
   get tournamentUnlocked() {
     return this.state.record.challengerWins >= ECONOMY.TOURNAMENT_UNLOCK_WINS;
   }
@@ -1504,8 +1518,16 @@ export class EconomyManager {
       if (gems.length) report.lines.push(`Manager: I've heard whispers about something rare out there — ${gems.length === 1 ? 'one ride' : `${gems.length} rides`} worth a closer look.`);
     }
 
+    // Your manager reckons you're ready for the big one (repeats every few bouts until you enter).
+    if (this.tournamentReady && this.boutsPlayed >= (s.tournamentNudgeAt || 0)) {
+      report.lines.push(`Manager: You're good enough for the Tournament now, and you can cover the ${formatMoney(ECONOMY.TOURNAMENT_FEE)} entry with change to spare. I'd enter.`);
+      s.tournamentNudgeAt = this.boutsPlayed + ECONOMY.TOURNAMENT_NUDGE_EVERY;
+    }
+
     report.gameOver = this.checkGameOver();
-    s.addLog(`${result.toUpperCase()} vs ${challenger.bug?.name ?? opponentBug.name} — ${reason}`);
+    // The whole end-of-battle report goes in the log (Admin tab).
+    const who = tournament ? challenger.name : `${challenger.name || opponentBug.pilot?.name || 'a challenger'}`;
+    s.addLog(`${result.toUpperCase()} vs ${who} (${opponentBug.name}) — ${reason}`, report.lines);
     return report;
   }
 

@@ -156,7 +156,10 @@ export const ECONOMY = Object.freeze({
   TOURNAMENT_ROUNDS: 5,
   TOURNAMENT_ROUND_NAMES: ['Round One', 'Round Two', 'Quarter-Final', 'Semi-Final', 'Grand Final'],
   TOURNAMENT_PRIZE: 20000,
-  TOURNAMENT_FEE: 1000,       // paid on every entry, no refunds
+  TOURNAMENT_FEE: 1000,
+  TOURNAMENT_SPARE: 500,     // the manager only suggests entering with this much left after the fee
+  TOURNAMENT_READY: 0.8,     // …and once your best ride rates this close to a tournament-grade build
+  TOURNAMENT_NUDGE_EVERY: 4, // bouts between reminders       // paid on every entry, no refunds
 });
 
 export const RENDER = Object.freeze({

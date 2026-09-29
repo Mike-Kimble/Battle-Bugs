@@ -349,3 +349,5 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .subtabs-2 { margin-top: 4px; }
 .subtabs-2 .subtab { font-size: 11px; }
 .region-tabs { margin: 6px 0 10px; }
+.log-time { color: var(--muted); font-size: 13px; }
+.log-lines { margin: 2px 0 6px 14px; padding: 0; list-style: '– '; color: #cfc6e0; font-size: 14px; }
