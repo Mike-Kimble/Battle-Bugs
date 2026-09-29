@@ -92,8 +92,9 @@ export const ECONOMY = Object.freeze({
   SCRAP_PRICE: 10,           // all a scrap part fetches
   REPAIR_CAP: 0.9,           // DIY repairs only get a part back to 90% — a mechanic gets it to 100%
   REPAIR_RATE: 0.45,         // $ per missing HP = rate · value / maxHp
-  MARKUP_MIN: 0.85,
-  MARKUP_MAX: 1.3,
+  PRICE_SWING: 0.25,         // buy/sell prices land within ±25% of base value
+  PRICE_AGAINST: 0.7,        // chance the swing goes against you (dearer to buy, cheaper to sell)
+  PRICE_AGAINST_MANAGER: 0.4, // …with a manager negotiating
   RARE_DEAL_THRESHOLD: 0.8,  // price < 80% of value → flagged by the manager
   MECHANIC_SHOWS_AT_WINS: 3,  // staff only appear on the Admin tab once you've made a name
   MANAGER_SHOWS_AT_WINS: 5,

@@ -89,13 +89,38 @@ export class EconomyManager {
   }
 
   // ───────────── Pricing ─────────────
+  /**
+   * Haggling luck: price = base + sign × random(0–1) × 25% × base. The sign goes
+   * against you (dearer when buying, cheaper when selling) 70% of the time —
+   * only 40% with a manager doing the talking.
+   * @param {'buy'|'sell'} side
+   */
+  priceSwing(side) {
+    const against = chance(this.state.staff.manager ? ECONOMY.PRICE_AGAINST_MANAGER : ECONOMY.PRICE_AGAINST);
+    const sign = (side === 'buy') === against ? 1 : -1;
+    return 1 + sign * Math.random() * ECONOMY.PRICE_SWING;
+  }
+
+  /** A buyer's offer for an item, fixed until the next restock (so what you see is what you get). */
+  sellQuote(id) {
+    const q = this.state.sellQuotes;
+    if (!(id in q)) q[id] = this.priceSwing('sell');
+    return q[id];
+  }
+
+  partSellBase(part) {
+    return part.isScrap ? 0 : part.value * part.hpRatio * ECONOMY.SELL_RATE;
+  }
+
   partSellPrice(part) {
     if (part.isScrap) return ECONOMY.SCRAP_PRICE;
-    return Math.max(ECONOMY.SCRAP_PRICE, Math.round(part.value * part.hpRatio * ECONOMY.SELL_RATE));
+    return Math.max(ECONOMY.SCRAP_PRICE, Math.round(this.partSellBase(part) * this.sellQuote(part.uid)));
   }
 
   vehicleSellPrice(bug) {
-    return bug.parts.reduce((s, p) => s + this.partSellPrice(p), 0);
+    const scrap = bug.parts.filter((p) => p.isScrap).length * ECONOMY.SCRAP_PRICE;
+    const base = bug.parts.reduce((s, p) => s + this.partSellBase(p), 0);
+    return Math.round(base * this.sellQuote(bug.id)) + scrap;
   }
 
   /** Fair (pristine-scaled) worth of a vehicle, used for market listings. */
@@ -695,6 +720,7 @@ export class EconomyManager {
   }
 
   generateMarket() {
+    this.state.sellQuotes = {}; // buyers change too
     const tierCap = clampTier(this.baseTier + 1);
     const parts = [];
     const types = Object.entries(ECONOMY.MARKET_STOCK).flatMap(([type, n]) => Array(n).fill(type));
@@ -704,8 +730,7 @@ export class EconomyManager {
       const key = weightedPick(pool);
       const condition = chance(0.45) ? 1 : rand(0.55, 0.95);
       const part = Part.create(key, condition);
-      const markup = chance(0.15) ? rand(0.55, 0.78) : rand(ECONOMY.MARKUP_MIN, ECONOMY.MARKUP_MAX);
-      parts.push({ id: makeId('mk'), part, price: roundTo(part.value * part.hpRatio * markup, 5) });
+      parts.push({ id: makeId('mk'), part, price: roundTo(part.value * part.hpRatio * this.priceSwing('buy'), 5) });
     }
     // Now and then a dealer puts something special in the window — always just out of reach.
     const tease = this.teaserListing();
@@ -714,8 +739,7 @@ export class EconomyManager {
     for (let i = 0; i < ECONOMY.MARKET_VEHICLES; i++) {
       const bug = this.generateBug(clampTier(tierCap - randInt(0, 1)), { alien: chance(0.5), condition: () => rand(0.6, 1) });
       if (!bug.alien) bug.name = `Used ${bug.name}`;
-      const markup = chance(0.15) ? rand(0.6, 0.78) : rand(ECONOMY.MARKUP_MIN, ECONOMY.MARKUP_MAX);
-      vehicles.push({ id: makeId('mk'), bug, price: Math.max(ECONOMY.MIN_VEHICLE_PRICE, roundTo(this.listingValue(bug) * markup, 5)) });
+      vehicles.push({ id: makeId('mk'), bug, price: Math.max(ECONOMY.MIN_VEHICLE_PRICE, roundTo(this.listingValue(bug) * this.priceSwing('buy'), 5)) });
     }
     // Project frames: an empty frame, and a rolling chassis (frame + running gear) — bring your own motor.
     for (const rolling of [false, true]) {
@@ -728,8 +752,7 @@ export class EconomyManager {
         tires: rolling ? weightedPick(shopKeys('tires').filter((k) => PARTS[k].tier <= tierCap)) : null,
         condition: () => rand(0.6, 1),
       });
-      const markup = rand(ECONOMY.MARKUP_MIN, ECONOMY.MARKUP_MAX);
-      vehicles.push({ id: makeId('mk'), bug, price: Math.max(ECONOMY.SCRAP_PRICE * 5, roundTo(this.vehicleValue(bug) * markup, 5)) });
+      vehicles.push({ id: makeId('mk'), bug, price: Math.max(ECONOMY.SCRAP_PRICE * 5, roundTo(this.vehicleValue(bug) * this.priceSwing('buy'), 5)) });
     }
     this.state.market = { parts, vehicles };
   }
@@ -1266,7 +1289,7 @@ export class EconomyManager {
   stockPick(key) {
     if (this.state.market.parts.some((l) => l.part.key === key)) return false;
     const part = Part.create(key, rand(0.75, 1));
-    const price = roundTo(part.value * part.hpRatio * rand(ECONOMY.MARKUP_MIN, ECONOMY.MARKUP_MAX), 5);
+    const price = roundTo(part.value * part.hpRatio * this.priceSwing('buy'), 5);
     this.state.market.parts.unshift({ id: makeId('mk'), part, price, managerFind: true });
     return true;
   }
@@ -1285,7 +1308,7 @@ export class EconomyManager {
     const engines = () => s.market.parts.filter((l) => l.part.type === 'engine');
     if (!engines().some((l) => l.part.key === 'rust_motor')) {
       const part = Part.create('rust_motor', rand(0.8, 1));
-      s.market.parts.unshift({ id: makeId('mk'), part, price: roundTo(part.value * part.hpRatio * rand(ECONOMY.MARKUP_MIN, 1.1), 5) });
+      s.market.parts.unshift({ id: makeId('mk'), part, price: roundTo(part.value * part.hpRatio * this.priceSwing('buy'), 5) });
     }
     // Cheapest motor to get running, counting what it'd cost to repair a used one.
     const motorCost = (l) => this.partPrice(l) + this.repairCost(l.part);

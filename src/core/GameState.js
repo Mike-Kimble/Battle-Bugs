@@ -36,7 +36,8 @@ export class GameState extends EventEmitter {
     this.fixStreak = 0;
     this.winBetStreak = 0; // wins in a row with the manager betting on you to win
     this.comeback = false;
-    this.rivalExcuses = 0; // how many excuses your rival has DM'd you (they never repeat until they run out) // lost your only ride: the next title offer is always accepted
+    this.rivalExcuses = 0;
+    this.sellQuotes = {}; // buyers' offers per item id, fixed until the next restock // how many excuses your rival has DM'd you (they never repeat until they run out) // lost your only ride: the next title offer is always accepted
     this.pendingDM = null; // { pilotId, lines } — a DM waiting for you back in the workshop
     this.discovered = new Set(); // every part key you've ever owned — the Codex, kept across seasons
     this.fine = null; // { amount, battlesLeft }
@@ -113,6 +114,7 @@ export class GameState extends EventEmitter {
     s.winBetStreak = d.winBetStreak || 0;
     s.comeback = !!d.comeback;
     s.rivalExcuses = d.rivalExcuses || 0;
+    s.sellQuotes = d.sellQuotes || {};
     s.pendingDM = d.pendingDM || null;
     s.discovered = new Set(d.discovered || []);
     for (const v of s.vehicles) s.discover(v.parts);
@@ -152,6 +154,7 @@ export class GameState extends EventEmitter {
       winBetStreak: this.winBetStreak,
       comeback: this.comeback,
       rivalExcuses: this.rivalExcuses,
+      sellQuotes: this.sellQuotes,
       pendingDM: this.pendingDM,
       discovered: [...this.discovered],
       fine: this.fine,
