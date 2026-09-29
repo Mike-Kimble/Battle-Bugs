@@ -348,3 +348,4 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .stat-bar .cmp-fill.weight { background: #6a6390; }
 .subtabs-2 { margin-top: 4px; }
 .subtabs-2 .subtab { font-size: 11px; }
+.region-tabs { margin: 6px 0 10px; }

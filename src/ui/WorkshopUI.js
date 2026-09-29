@@ -545,11 +545,28 @@ export class WorkshopUI {
       this.openRegionKey = null;
       return;
     }
+    if (this.openRegionKey !== key) this.regionTab = region.types[0];
     this.openRegionKey = key;
     const locked = this.state.isLocked(bug);
+    // Areas with several part types get a tab each (Center: Drive · Cooling · Enhancement; Hull: Chassis · Armour).
+    const type = region.types.includes(this.regionTab) ? this.regionTab : region.types[0];
+    const TAB_LABELS = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancement', chassis: 'Chassis', armor: 'Armour' };
+    const tabs = region.types.length > 1
+      ? el('div', { class: 'subtabs region-tabs', role: 'tablist' }, region.types.map((t) => {
+        const list = bug.slotList(t);
+        const count = list ? `${list.length}/${bug.slotCapacity(t)}` : (t === 'chassis' || bug[t] ? '✓' : '—');
+        return el('button', {
+          class: `subtab${t === type ? ' active' : ''}`,
+          role: 'tab',
+          'aria-selected': t === type ? 'true' : 'false',
+          onclick: () => { this.regionTab = t; this.openRegion(key); },
+        }, TAB_LABELS[t], el('span', { class: 'subtab-count' }, count));
+      }))
+      : null;
     const body = el('div', { class: 'region-modal' },
       el('p', { class: 'muted' }, region.blurb, locked ? ' — tournament lock: repairs only.' : ''),
-      region.types.map((type) => this.renderSlot(bug, type, locked)));
+      tabs,
+      this.renderSlot(bug, type, locked));
     openModal(`${region.label} · ${bug.name}`, body, { onClose: () => { this.openRegionKey = null; } });
   }
 

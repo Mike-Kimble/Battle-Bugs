@@ -464,7 +464,9 @@ export class TerminalUI {
             hpBar(l.bug.condition, { label: `Condition ${Math.round(l.bug.condition * 100)}%` }))),
         // Sold as seen: you can't look under the hood.
         vehicleCompare(l.bug, active, { exterior: true }),
-        el('p', { class: 'small muted under-hood' }, 'Under the hood: ???'),
+        el('p', { class: 'small muted under-hood' }, l.bug.engine
+          ? 'Under the hood: ???'
+          : l.bug.tires ? 'Rolling chassis — frame and running gear, no motor. Bring your own.' : 'Empty frame — nothing fitted. A blank canvas.'),
         this.managerHunch(l.bug),
         this.weaponChips(l.bug),
         el('div', { class: 'card-foot' },

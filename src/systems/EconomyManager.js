@@ -717,6 +717,20 @@ export class EconomyManager {
       const markup = chance(0.15) ? rand(0.6, 0.78) : rand(ECONOMY.MARKUP_MIN, ECONOMY.MARKUP_MAX);
       vehicles.push({ id: makeId('mk'), bug, price: Math.max(ECONOMY.MIN_VEHICLE_PRICE, roundTo(this.listingValue(bug) * markup, 5)) });
     }
+    // Project frames: an empty frame, and a rolling chassis (frame + running gear) — bring your own motor.
+    for (const rolling of [false, true]) {
+      const pool = shopKeys('chassis').filter((k) => PARTS[k].tier <= tierCap);
+      const chassis = weightedPick(pool);
+      const bug = BattleBug.create({
+        name: `${PARTS[chassis].name} ${rolling ? 'Rolling Chassis' : 'Bare Frame'}`,
+        hue: randInt(0, 359),
+        chassis,
+        tires: rolling ? weightedPick(shopKeys('tires').filter((k) => PARTS[k].tier <= tierCap)) : null,
+        condition: () => rand(0.6, 1),
+      });
+      const markup = rand(ECONOMY.MARKUP_MIN, ECONOMY.MARKUP_MAX);
+      vehicles.push({ id: makeId('mk'), bug, price: Math.max(ECONOMY.SCRAP_PRICE * 5, roundTo(this.vehicleValue(bug) * markup, 5)) });
+    }
     this.state.market = { parts, vehicles };
   }
 
