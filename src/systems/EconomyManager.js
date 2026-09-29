@@ -1194,7 +1194,8 @@ export class EconomyManager {
   /**
    * Size the starting cash for a fresh junkyard start: exactly enough to
    * repair the Scrapper, buy the cheapest motor on the Marketplace and
-   * place a §100 first bet (plus any champion's bonus).
+   * have a measly §3 left over (plus any champion's bonus) — so the quick
+   * way up is playing for titles.
    */
   setupNewGame() {
     const s = this.state;
@@ -1208,7 +1209,7 @@ export class EconomyManager {
     // Cheapest motor to get running, counting what it'd cost to repair a used one.
     const motorCost = (l) => this.partPrice(l) + this.repairCost(l.part);
     const cheapestMotor = Math.min(...engines().map(motorCost));
-    s.money = this.repairAllCost(s.activeBug) + cheapestMotor + ECONOMY.START_BET + (s.startBonus || 0);
+    s.money = this.repairAllCost(s.activeBug) + cheapestMotor + ECONOMY.START_SPARE + (s.startBonus || 0);
     s.fresh = false;
     s.addLog(`Rolled a Junkyard Scrapper out of the scrapheap with ${formatMoney(s.money)} to your name.`);
   }

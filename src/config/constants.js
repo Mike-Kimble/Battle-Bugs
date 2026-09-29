@@ -84,7 +84,7 @@ export const INPUT = Object.freeze({
 
 export const ECONOMY = Object.freeze({
   CURRENCY_SYMBOL: '§',
-  START_BET: 100,            // starting cash covers repairs + the cheapest motor + this first bet
+  START_SPARE: 3,            // starting cash covers repairs + the cheapest motor, leaving just this — play for titles to get ahead
   JUNK_CONDITION: [0.25, 0.5], // starter parts are at least 50% damaged
   SELL_RATE: 0.6,            // resale fraction of value × condition
   SCRAP_RATE: 0.2,           // manual sale of broken parts

@@ -243,12 +243,10 @@ export class SpriteRenderer {
         ctx.ellipse(r * 0.62, 0, r * 0.28, r * 0.3, 0, 0, Math.PI * 2);
         break;
       case 'ant':
-        // Big gaster, thorax, head.
-        ctx.ellipse(-r * 0.42, 0, r * 0.52, r * 0.6, 0, 0, Math.PI * 2);
-        ctx.moveTo(r * 0.5, 0);
-        ctx.ellipse(r * 0.24, 0, r * 0.26, r * 0.3, 0, 0, Math.PI * 2);
-        ctx.moveTo(r * 0.98, 0);
-        ctx.ellipse(r * 0.72, 0, r * 0.26, r * 0.28, 0, 0, Math.PI * 2);
+        // Big gaster and a head — no thorax.
+        ctx.ellipse(-r * 0.3, 0, r * 0.6, r * 0.62, 0, 0, Math.PI * 2);
+        ctx.moveTo(r * 0.83, 0);
+        ctx.ellipse(r * 0.55, 0, r * 0.28, r * 0.3, 0, 0, Math.PI * 2);
         break;
       case 'daddy':
         // A round little body — no legs.
@@ -318,11 +316,11 @@ export class SpriteRenderer {
         ctx.fillRect(-r * 0.4, -r * 0.18, r * 0.36, r * 0.28);
         break;
       case 'ant':
-        // Gaster stripes and a pinched waist.
-        for (let i = 0; i < 3; i++) ctx.fillRect(-r * 0.75 + i * r * 0.24, -r * 0.5, 3, r);
-        ctx.fillRect(r * 0.06, -r * 0.3, 3, r * 0.6);
+        // Gaster stripes and the neck where the head joins.
+        for (let i = 0; i < 3; i++) ctx.fillRect(-r * 0.62 + i * r * 0.26, -r * 0.52, 3, r * 1.04);
+        ctx.fillRect(r * 0.27, -r * 0.28, 3, r * 0.56);
         ctx.fillStyle = pal.accent;
-        ctx.fillRect(r * 0.62, -r * 0.1, 5, 5);
+        ctx.fillRect(r * 0.55, -r * 0.1, 5, 5);
         break;
       case 'daddy':
         // Dark saddle and a row of stitches.
@@ -360,8 +358,8 @@ export class SpriteRenderer {
     if (shape === 'ant') {
       // Elbowed antennae
       ctx.beginPath();
-      ctx.moveTo(r * 0.9, -r * 0.12); ctx.lineTo(r * 1.12, -r * 0.35); ctx.lineTo(r * 1.3, -r * 0.2);
-      ctx.moveTo(r * 0.9, r * 0.12); ctx.lineTo(r * 1.12, r * 0.35); ctx.lineTo(r * 1.3, r * 0.2);
+      ctx.moveTo(r * 0.76, -r * 0.14); ctx.lineTo(r * 1.0, -r * 0.38); ctx.lineTo(r * 1.2, -r * 0.22);
+      ctx.moveTo(r * 0.76, r * 0.14); ctx.lineTo(r * 1.0, r * 0.38); ctx.lineTo(r * 1.2, r * 0.22);
       ctx.stroke();
     }
     if (shape === 'aphid') {
