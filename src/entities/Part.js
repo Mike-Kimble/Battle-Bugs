@@ -14,6 +14,9 @@ export function makeId(prefix = 'id') {
  * only key, uid and current HP are persisted.
  */
 export class Part {
+  /** Condition at or below which a part is scrap (set by the economy: 20%, or 0% with a mechanic). */
+  static scrapBelow = () => 0;
+
   constructor(key, { uid, hp } = {}) {
     this.def = getPartDef(key);
     this.key = key;
@@ -43,6 +46,8 @@ export class Part {
 
   get hpRatio() { return this.maxHp > 0 ? this.hp / this.maxHp : 0; }
   get isBroken() { return this.hp <= 0; }
+  /** Too far gone to fit or repair — scrap only. The limit depends on who's in your workshop. */
+  get isScrap() { return this.hp <= this.maxHp * Part.scrapBelow(); }
   get missingHp() { return this.maxHp - this.hp; }
 
   /** @returns {{dealt:number, broke:boolean}} */

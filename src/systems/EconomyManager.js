@@ -82,13 +82,14 @@ export class EconomyManager {
   /** @param {import('../core/GameState.js').GameState} state */
   constructor(state) {
     this.state = state;
+    // A mechanic can bring back anything that isn't completely destroyed.
+    Part.scrapBelow = () => (state.staff.mechanic ? 0 : ECONOMY.SCRAP_BELOW);
   }
 
   // ───────────── Pricing ─────────────
   partSellPrice(part) {
-    const scrap = part.value * (this.state.staff.manager ? ECONOMY.MANAGER_SCRAP_RATE : ECONOMY.SCRAP_RATE);
-    if (part.isBroken) return Math.round(scrap);
-    return Math.round(Math.max(scrap * part.hpRatio, part.value * part.hpRatio * ECONOMY.SELL_RATE));
+    if (part.isScrap) return ECONOMY.SCRAP_PRICE;
+    return Math.max(ECONOMY.SCRAP_PRICE, Math.round(part.value * part.hpRatio * ECONOMY.SELL_RATE));
   }
 
   vehicleSellPrice(bug) {
@@ -114,6 +115,7 @@ export class EconomyManager {
   }
 
   repairCost(part) {
+    if (part.isScrap) return 0; // beyond repair
     return part.missingHp > 0 ? Math.max(1, Math.ceil(part.missingHp * this.repairCostPerHp(part))) : 0;
   }
 
@@ -157,6 +159,7 @@ export class EconomyManager {
     const part = this.state.getPart(partUid);
     if (!part) throw new Error('Part not in inventory');
     if (part.type === 'chassis') throw new Error('A chassis is a whole vehicle frame — it cannot be fitted');
+    if (part.isScrap) throw new Error(`${part.name} is scrap — sell it for ${formatMoney(ECONOMY.SCRAP_PRICE)}`);
     if (part.type === 'weapon' && bug.weaponSlots === 0) throw new Error('This chassis has no hardpoints');
     this.state.removePart(partUid);
     for (const displaced of bug.equip(part, slot)) this.state.addPart(displaced);
@@ -256,8 +259,9 @@ export class EconomyManager {
     this.assertDisposable(bug);
     const parts = [bug.engine, bug.tires, bug.armor, ...bug.weapons].filter(Boolean);
     parts.forEach((p) => this.state.addPart(p));
-    const rate = this.state.staff.manager ? ECONOMY.MANAGER_SCRAP_RATE : ECONOMY.SCRAP_RATE;
-    const scrap = Math.round(bug.chassis.value * rate * Math.max(0.25, bug.chassis.hpRatio));
+    const scrap = bug.chassis.isScrap
+      ? ECONOMY.SCRAP_PRICE
+      : Math.max(ECONOMY.SCRAP_PRICE, Math.round(bug.chassis.value * ECONOMY.SCRAP_RATE * bug.chassis.hpRatio));
     this.state.removeVehicle(id);
     this.state.earn(scrap);
     return { parts, scrap };
@@ -1162,7 +1166,9 @@ export class EconomyManager {
   mechanicAdvice(bug) {
     const out = { lines: [], pick: null, combos: [] };
     if (!bug) return out;
-    const hurt = bug.parts.filter((p) => p.hpRatio < 0.5).sort((a, b) => a.hpRatio - b.hpRatio)[0];
+    const junk = bug.parts.find((p) => p.isScrap);
+    if (junk) out.lines.push(`Your ${junk.name} is finished — strip it and sell it for scrap.`);
+    const hurt = bug.parts.filter((p) => !p.isScrap && p.hpRatio < 0.5).sort((a, b) => a.hpRatio - b.hpRatio)[0];
     if (hurt) out.lines.push(`Fix your ${hurt.name} first — it's at ${Math.round(hurt.hpRatio * 100)}% and dragging everything down.`);
     // Combinations: the bad ones first — that's what a mechanic is for.
     const combos = bug.getStats().interactions.slice().sort((a, b) => a.good - b.good);
@@ -1431,7 +1437,7 @@ export class EconomyManager {
 
   runManager(report) {
     if (this.inField) return;
-    const scrap = this.state.inventory.filter((p) => p.isBroken);
+    const scrap = this.state.inventory.filter((p) => p.isScrap);
     if (!scrap.length) return;
     let total = 0;
     for (const p of scrap) total += this.sellPart(p.uid);

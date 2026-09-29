@@ -382,7 +382,7 @@ export class TerminalUI {
     return partCard(p, this.economy, {
       compareTo: p.type === 'chassis' ? undefined : counterpart(this.state.activeBug, p),
       actions: [el('button', { class: 'btn btn-small', onclick: () => this.act(() => this.economy.sellPart(p.uid), (v) => `Sold ${p.name} for ${formatMoney(v)}`) },
-        `${p.isBroken ? 'Scrap' : 'Sell'} ${formatMoney(this.economy.partSellPrice(p))}`)],
+        `${p.isScrap ? 'Scrap' : 'Sell'} ${formatMoney(this.economy.partSellPrice(p))}`)],
     });
   }
 
@@ -527,9 +527,9 @@ export class TerminalUI {
     const eco = this.economy;
     const cards = [
       eco.staffAvailable('mechanic') ? staffCard('mechanic', 'Mechanic', ECONOMY.MECHANIC_HIRE, ECONOMY.MECHANIC_WAGE,
-        'Repairs your active vehicle after each bout, gets you 10% off parts and repairs, and tells you the one upgrade that would help most.', '🔧') : null,
+        'Repairs your active vehicle after each bout, can save parts too far gone for anyone else (right down to 1%), gets you 10% off parts and repairs, and tells you the one upgrade that would help most.', '🔧') : null,
       eco.staffAvailable('manager') ? staffCard('manager', 'Manager', ECONOMY.MANAGER_HIRE, ECONOMY.MANAGER_WAGE,
-        'Bets on your fights, sells broken scrap at peak value, flags rare deals — and usually tracks down the part your mechanic wants.', '📈') : null,
+        'Bets on your fights, clears your scrap pile, flags rare deals — and usually tracks down the part your mechanic wants.', '📈') : null,
     ].filter(Boolean);
     return el('div', {},
       cards.length

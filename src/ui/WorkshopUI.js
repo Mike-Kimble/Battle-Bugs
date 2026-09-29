@@ -159,13 +159,13 @@ export function counterpart(bug, part) {
 }
 
 export function partCard(part, economy, { actions = [], extra = null, compareTo, compareLegend } = {}) {
-  return el('div', { class: `part-card rarity-${part.rarity}${part.isBroken ? ' broken' : ''}` },
+  return el('div', { class: `part-card rarity-${part.rarity}${part.isScrap ? ' broken' : ''}` },
     el('div', { class: 'part-head' },
       el('span', { class: `part-type type-${part.type}` }, part.type),
       el('strong', {}, part.name),
       part.rarity !== 'common' ? el('span', { class: `rarity-tag rarity-${part.rarity}` }, part.rarity) : null),
     el('div', { class: 'part-stats' }, partStatLine(part)),
-    hpBar(part.hpRatio, { label: part.isBroken ? 'BROKEN' : `Condition ${Math.round(part.hpRatio * 100)}%` }),
+    hpBar(part.hpRatio, { label: part.isScrap ? `SCRAP — ${Math.round(part.hpRatio * 100)}%` : `Condition ${Math.round(part.hpRatio * 100)}%` }),
     compareTo !== undefined && compareTo !== part ? partCompare(part, compareTo, { legend: compareLegend }) : null,
     extra,
     actions.length ? el('div', { class: 'part-actions' }, actions) : null);
@@ -597,21 +597,21 @@ export class WorkshopUI {
         const actions = [];
         if (type === 'weapon') {
           if (bug.weapons.length < bug.weaponSlots) {
-            actions.push(el('button', { class: 'btn btn-small btn-primary', disabled: locked, onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid), `Mounted ${part.name}`) }, 'Mount'));
+            actions.push(el('button', { class: 'btn btn-small btn-primary', disabled: locked || part.isScrap, onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid), `Mounted ${part.name}`) }, 'Mount'));
           }
           bug.weapons.forEach((w, i) => actions.push(el('button', {
-            class: 'btn btn-small', disabled: locked,
+            class: 'btn btn-small', disabled: locked || part.isScrap,
             onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid, i), `Swapped in ${part.name}`),
           }, `Swap slot ${i + 1}`)));
         } else {
-          actions.push(el('button', { class: 'btn btn-small btn-primary', disabled: locked, onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid), `Fitted ${part.name}`) }, 'Fit'));
+          actions.push(el('button', { class: 'btn btn-small btn-primary', disabled: locked || part.isScrap, onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid), `Fitted ${part.name}`) }, 'Fit'));
         }
         actions.push(el('button', {
           class: 'btn btn-small',
           disabled: this.economy.inField,
           title: this.economy.inField ? "No selling while you're in the tournament" : null,
           onclick: () => this.act(() => this.economy.sellPart(part.uid), (v) => `Sold ${part.name} for ${formatMoney(v)}`),
-        }, `${part.isBroken ? 'Scrap' : 'Sell'} ${formatMoney(this.economy.partSellPrice(part))}`));
+        }, `${part.isScrap ? 'Scrap' : 'Sell'} ${formatMoney(this.economy.partSellPrice(part))}`));
         list.append(partCard(part, this.economy, { actions, compareTo: counterpart(bug, part) }));
       }
       section.append(list);

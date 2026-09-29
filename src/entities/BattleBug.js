@@ -83,12 +83,13 @@ export class BattleBug {
   }
 
   get isBattleReady() {
-    return !this.chassis.isBroken && !!this.engine && !!this.tires;
+    return !!this.engine && !!this.tires && !this.parts.some((p) => p.isScrap);
   }
 
   battleIssues() {
     const issues = [];
-    if (this.chassis.isBroken) issues.push('Hull destroyed — repair the frame');
+    if (this.chassis.isScrap) issues.push('The frame is scrap — this vehicle is finished; strip or sell it');
+    for (const p of this.parts) if (p !== this.chassis && p.isScrap) issues.push(`${p.name} is scrap — remove it and sell it`);
     if (!this.engine) issues.push('No engine fitted');
     if (!this.tires) issues.push('No tires fitted');
     if (this.engine?.isBroken) issues.push('Engine broken (no drive force)');
