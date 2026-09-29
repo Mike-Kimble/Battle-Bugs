@@ -777,12 +777,18 @@ export class EconomyManager {
   offerTitles(c) {
     const n = this.nego(c);
     n.log.push({ who: 'you', text: 'Let\'s play for titles — winner takes the loser\'s vehicle.' });
-    if (chance(ECONOMY.TITLE_REFUSAL)) {
+    // Sure things: the rookie's first title offer, and your first one after losing
+    // your only ride (everyone fancies taking a cheap replacement off you).
+    const s = this.state;
+    const sure = (c.rookie && !c.titleAsked) || s.comeback;
+    c.titleAsked = true;
+    if (!sure && chance(ECONOMY.TITLE_REFUSAL)) {
       n.log.push({ who: 'them', text: 'My ride? Not a chance. Get lost.' });
       return { status: 'reject', message: `${c.bug.pilot?.name || c.bug.name}: My ride? Not a chance. Get lost.`, ...this.reject(c) };
     }
     n.deal = { type: 'titles' };
     n.counter = null;
+    s.comeback = false;
     const line = pick(ACCEPT_LINES);
     n.log.push({ who: 'them', text: line });
     return { status: 'accept', message: line };
@@ -1322,7 +1328,10 @@ export class EconomyManager {
           }
           this.refreshPilot(challenger);
         }
-        if (!s.vehicles.length) report.lines.push('You have no vehicles left — find a replacement on the Marketplace.');
+        if (!s.vehicles.length) {
+          report.lines.push('You have no vehicles left — find a replacement on the Marketplace.');
+          s.comeback = true; // the next title offer will be snapped up
+        }
       } else {
         report.lines.push('Draw — both titles stay put.');
       }

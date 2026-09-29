@@ -120,7 +120,7 @@ export const ECONOMY = Object.freeze({
   RIDICULOUS_FACTOR: 3,      // offers ≥3× or ≤⅓ of their target are ridiculous
   RIDICULOUS_ACCEPT: 0.1,    // …but they still accept one 10% of the time
   BANKROLL_MULT: 2.5,        // most a challenger can stake = base stake × this
-  TITLE_REFUSAL: 0.2,        // chance a challenger refuses to play for titles
+  TITLE_REFUSAL: 0.3,        // chance a challenger refuses to play for titles (never the rookie's first offer, or right after you lose your only ride)
   RETURN_AFTER_REJECTIONS: 2,
   RETURN_CHANCE: 0.5,        // per rejection once the threshold is hit
 
