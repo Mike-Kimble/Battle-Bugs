@@ -1425,7 +1425,7 @@ export class EconomyManager {
     if (!bug) return;
     const before = this.state.money;
     const hp = this.repairAll(bug);
-    if (hp > 0) report.lines.push(`Mechanic repaired ${Math.round(hp)} HP on ${bug.name} for ${formatMoney(before - this.state.money)}`);
+    if (hp > 0) report.lines.push(`Mechanic patched up ${bug.name} (now ${Math.round(bug.condition * 100)}% condition) for ${formatMoney(before - this.state.money)}`);
     else if (this.repairAllCost(bug) > 0) report.lines.push('Mechanic: not enough funds for repairs.');
   }
 

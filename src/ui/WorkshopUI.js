@@ -1,5 +1,6 @@
 import { HOIST_REGIONS, WEAPON_CLASSES } from '../config/constants.js';
-import { PARTS, PART_KEYS_BY_TYPE } from '../config/partsData.js';
+import { PARTS } from '../config/partsData.js';
+import { PART_SCORES, VEHICLE_SCORES, REF, shown, partSummary } from '../config/scores.js';
 import { BattleBug } from '../entities/BattleBug.js';
 import { Part } from '../entities/Part.js';
 import { SpriteRenderer } from '../render/SpriteRenderer.js';
@@ -69,78 +70,16 @@ export function hpBar(ratio, { label } = {}) {
     el('span', { class: 'hpbar-label' }, label ?? `${pct}%`));
 }
 
+/** One-line summary under a part's name, in scores out of 100. */
 export function partStatLine(part) {
-  const s = part.stats;
-  switch (part.type) {
-    case 'chassis': return `Stamina ${s.staminaMax} · ${s.weaponSlots} hardpoint${s.weaponSlots === 1 ? '' : 's'} · turn ${s.turn}`;
-    case 'engine': return `F ${(s.force / 1000).toFixed(0)} kN · ${s.rpm} rpm · cool ${s.cooling}/s`;
-    case 'tires': return `μ ${s.mu} · tire r ${s.radius}`;
-    case 'armor': return `Absorbs ${Math.round(s.absorb * 100)}% of impacts`;
-    case 'weapon': return `${WEAPON_CLASSES[s.class].label} · ${s.cost} stamina · range ${s.range}`;
-    default: return '';
-  }
+  const line = partSummary(part);
+  return part.type === 'weapon' ? `${WEAPON_CLASSES[part.stats.class].label} · ${line}` : line;
 }
 
 // ───────────── Comparison bars ─────────────
-const kN = (v) => `${(v / 1000).toFixed(1)} kN`;
-const int = (v) => `${Math.round(v)}`;
-
-/**
- * Comparable stats per part type. `get` reads the part's *effective* value
- * (damage-scaled where the physics formulae scale it).
- */
-export const PART_COMPARE = {
-  engine: [
-    { label: 'Drive force', get: (p) => p.stats.force * p.hpRatio, fmt: kN },
-    { label: 'Motor RPM', get: (p) => p.stats.rpm, fmt: int },
-    { label: 'Cooling', get: (p) => p.stats.cooling, fmt: (v) => `${v}/s` },
-    { label: 'Mass', get: (p) => p.mass, fmt: (v) => `${v} kg`, better: 'neutral' },
-  ],
-  tires: [
-    { label: 'Grip μ', get: (p) => p.stats.mu * p.hpRatio, fmt: (v) => v.toFixed(2) },
-    { label: 'Tire radius', get: (p) => p.stats.radius, fmt: int },
-    { label: 'Mass', get: (p) => p.mass, fmt: (v) => `${v} kg`, better: 'neutral' },
-  ],
-  armor: [
-    { label: 'Absorb', get: (p) => p.stats.absorb * p.hpRatio, fmt: (v) => `${Math.round(v * 100)}%` },
-    { label: 'Plating HP', get: (p) => p.hp, fmt: int },
-    { label: 'Mass', get: (p) => p.mass, fmt: (v) => `${v} kg`, better: 'neutral' },
-  ],
-  chassis: [
-    { label: 'Hull HP', get: (p) => p.hp, fmt: int },
-    { label: 'Stamina', get: (p) => p.stats.staminaMax, fmt: int },
-    { label: 'Hardpoints', get: (p) => p.stats.weaponSlots, fmt: int },
-    { label: 'Turn rate', get: (p) => p.stats.turn, fmt: (v) => v.toFixed(1) },
-    { label: 'Mass', get: (p) => p.mass, fmt: (v) => `${v} kg`, better: 'neutral' },
-  ],
-  weapon: [
-    { label: 'Range', get: (p) => p.stats.range, fmt: int },
-    { label: 'Stamina cost', get: (p) => p.stats.cost, fmt: int, better: 'lower' },
-    { label: 'Cooldown', get: (p) => p.stats.cooldown, fmt: (v) => `${v}s`, better: 'lower' },
-    { label: 'Mass', get: (p) => p.mass, fmt: (v) => `${v} kg`, better: 'neutral' },
-  ],
-};
-
-/** Whole-vehicle stats; `get(stats, bug)`. Scales are the bar's full width. */
-export const VEHICLE_COMPARE = [
-  { label: 'Push', get: (s) => s.fUsable, fmt: kN, max: 65000 },
-  { label: 'Grip', get: (s) => s.fGrip, fmt: kN, max: 130000 },
-  { label: 'Top speed', get: (s) => s.vMax, fmt: (v) => `${Math.round(v)} px/s`, max: 480 },
-  { label: 'Accel', get: (s) => s.accel, fmt: (v) => `${Math.round(v)}`, max: 500 },
-  { label: 'Stamina', get: (s) => s.staminaMax, fmt: int, max: 180 },
-  { label: 'Cooling', get: (s) => s.cooling, fmt: (v) => `${v}/s`, max: 25 },
-  { label: 'Hull', get: (s, bug, repaired) => (repaired ? bug.chassis.maxHp : bug.chassis.hp), fmt: int, max: 380 },
-  { label: 'Mass', get: (s) => s.mass, fmt: (v) => `${v} kg`, max: 400, better: 'neutral' },
-];
-
-const partScaleCache = {};
-function partScale(type, row) {
-  const key = `${type}:${row.label}`;
-  if (!(key in partScaleCache)) {
-    partScaleCache[key] = Math.max(...PART_KEYS_BY_TYPE[type].map((k) => row.get(new Part(k))));
-  }
-  return partScaleCache[key];
-}
+// Every stat is a score out of 100 (see config/scores.js); the bar stops at 100.
+const int = (v) => `${shown(v)}`;
+const capped = (v) => Math.min(100, Math.max(0, v));
 
 /**
  * One stat bar: the fill is the current value, a red segment runs on to the
@@ -185,12 +124,12 @@ export function compareBars(rows, { neutral = false, legend = null } = {}) {
 }
 
 export function partCompare(part, current, { legend } = {}) {
-  const rows = PART_COMPARE[part.type];
+  const rows = PART_SCORES[part.type];
   if (!rows) return null;
   const full = (p) => new Part(p.key, { uid: p.uid });
   return compareBars(rows.map((r) => ({
-    label: r.label, fmt: r.fmt, better: r.better,
-    value: r.get(part), potential: r.get(full(part)), current: current ? r.get(full(current)) : null, max: partScale(part.type, r),
+    label: r.label, fmt: int, better: r.neutral ? 'neutral' : 'higher', max: 100,
+    value: capped(r.get(part)), potential: capped(r.get(full(part))), current: current ? capped(r.get(full(current))) : null,
   })), { legend: legend ?? (current ? `on hoist: ${current.name}` : 'nothing fitted in this slot') });
 }
 
@@ -201,10 +140,10 @@ export function vehicleCompare(bug, current, { neutral = false, exterior = false
   const s = bug.getStats();
   const ps = pristineStats(bug);
   const cs = current && current !== bug ? pristineStats(current) : null;
-  const rows = exterior ? VEHICLE_COMPARE.filter((r) => EXTERIOR.has(r.label)) : VEHICLE_COMPARE;
+  const rows = exterior ? VEHICLE_SCORES.filter((r) => EXTERIOR.has(r.label)) : VEHICLE_SCORES;
   return compareBars(rows.map((r) => ({
-    label: r.label, fmt: r.fmt, better: r.better, max: r.max,
-    value: r.get(s, bug), potential: r.get(ps, bug, true), current: cs ? r.get(cs, current, true) : null,
+    label: r.label, fmt: int, better: r.neutral ? 'neutral' : 'higher', max: 100,
+    value: capped(r.get(s, bug)), potential: capped(r.get(ps, bug, true)), current: cs ? capped(r.get(cs, current, true)) : null,
   })), { neutral, legend: cs ? `on hoist: ${current.name}` : null });
 }
 
@@ -224,10 +163,9 @@ export function partCard(part, economy, { actions = [], extra = null, compareTo,
     el('div', { class: 'part-head' },
       el('span', { class: `part-type type-${part.type}` }, part.type),
       el('strong', {}, part.name),
-      part.rarity !== 'common' ? el('span', { class: `rarity-tag rarity-${part.rarity}` }, part.rarity) : null,
-      el('span', { class: 'part-mass' }, `${part.mass} kg`)),
+      part.rarity !== 'common' ? el('span', { class: `rarity-tag rarity-${part.rarity}` }, part.rarity) : null),
     el('div', { class: 'part-stats' }, partStatLine(part)),
-    hpBar(part.hpRatio, { label: part.isBroken ? 'BROKEN' : `${Math.ceil(part.hp)}/${part.maxHp} HP` }),
+    hpBar(part.hpRatio, { label: part.isBroken ? 'BROKEN' : `Condition ${Math.round(part.hpRatio * 100)}%` }),
     compareTo !== undefined && compareTo !== part ? partCompare(part, compareTo, { legend: compareLegend }) : null,
     extra,
     actions.length ? el('div', { class: 'part-actions' }, actions) : null);
@@ -332,7 +270,7 @@ export class WorkshopUI {
           el('button', {
             class: 'btn btn-primary btn-small repair-btn',
             disabled: repairAll === 0 || this.state.money < 1,
-            onclick: () => this.act(() => this.economy.repairAll(bug), (hp) => (hp ? `Repaired ${Math.round(hp)} HP` : 'Nothing repaired')),
+            onclick: () => this.act(() => this.economy.repairAll(bug), (hp) => (hp ? `Repaired ${bug.name} — condition ${Math.round(bug.condition * 100)}%` : 'Nothing repaired')),
           }, repairAll ? `Repair all ${formatMoney(repairAll)}` : 'Fully repaired'),
           el('button', { class: 'btn btn-small', onclick: () => { this.renaming = true; this.render(); } }, 'Rename'),
           el('button', {
@@ -459,28 +397,31 @@ export class WorkshopUI {
     const ref = this.refBug;
     // The reference vehicle is compared fully repaired.
     const rs = ref ? pristineStats(ref) : null;
-    const row = (label, cur, full, fmt, hint, key) => {
+    // Scores out of 100 — the bar (and the number) stop at 100.
+    const refFor = { fDrive: REF.fDrive, fGrip: REF.fGrip, fUsable: REF.fUsable, accel: REF.accel, vMax: REF.vMax, staminaMax: REF.stamina, cooling: REF.cooling, mass: REF.mass };
+    const sc = (key, v) => capped((v / refFor[key]) * 100);
+    const row = (label, key, hint, neutral = false) => {
       // Bar = current value, red = what repairs would restore, white tick = reference.
-      const refVal = rs ? rs[key] : null;
-      return el('tr', { title: refVal != null ? `${hint} — ${ref.name} (repaired): ${fmt(refVal)}` : hint || '' },
+      const cur = sc(key, s[key]);
+      const full = sc(key, p[key]);
+      const refVal = rs ? sc(key, rs[key]) : null;
+      return el('tr', { title: refVal != null ? `${hint} — ${ref.name} (repaired): ${shown(refVal)}` : hint || '' },
         el('th', {}, label),
-        el('td', {}, fmt(cur)),
-        el('td', { class: 'stat-bar-cell' }, statBar({ value: cur, potential: full, ref: refVal, max: full, cls: 'stat-bar' })));
+        el('td', {}, `${shown(cur)}`),
+        el('td', { class: 'stat-bar-cell' }, statBar({ value: cur, potential: full, ref: refVal, max: 100, neutral, cls: 'stat-bar' })));
     };
-    const kn = (v) => `${(v / 1000).toFixed(1)} kN`;
     return el('div', { class: 'stats-block' },
       el('h3', {}, 'Derived stats'),
       el('table', { class: 'stats' },
         el('tbody', {},
-          el('tr', { title: 'm = m_chassis + Σ m_part' }, el('th', {}, 'Mass'), el('td', {}, `${s.mass} kg`),
-            el('td', { class: 'muted small' }, rs ? `vs ${rs.mass} kg` : '')),
-          row('Drive force', s.fDrive, p.fDrive, kn, 'F_drive = F_base × HP_engine / MaxHP', 'fDrive'),
-          row('Grip limit', s.fGrip, p.fGrip, kn, 'F_grip = μ × m × g × HP_tires / MaxHP', 'fGrip'),
-          row('Usable force', s.fUsable, p.fUsable, kn, 'F_usable = min(F_drive, F_grip)', 'fUsable'),
-          row('Acceleration', s.accel, p.accel, (v) => `${Math.round(v)} px/s²`, 'a = F_usable / m', 'accel'),
-          row('Top speed', s.vMax, p.vMax, (v) => `${Math.round(v)} px/s`, 'rpm × tire radius × wear', 'vMax'),
-          row('Stamina', s.staminaMax, p.staminaMax, (v) => `${v}`, 'Battery / thermal headroom', 'staminaMax'),
-          row('Cooling', s.cooling, p.cooling, (v) => `${v}/s`, 'Idle recovery R_cool', 'cooling'),
+          row('Drive', 'fDrive', "What the motor puts out (less damage)"),
+          row('Grip', 'fGrip', 'The most force your tires can put down before they spin'),
+          row('Push', 'fUsable', 'What actually moves you: the lower of Drive and Grip'),
+          row('Acceleration', 'accel', 'Push for your weight'),
+          row('Top speed', 'vMax', 'Motor revs × tire size'),
+          row('Stamina', 'staminaMax', 'How long you can push before a thermal stall'),
+          row('Cooling', 'cooling', 'How fast stamina comes back'),
+          row('Weight', 'mass', 'Heavier is harder to push around — and harder to move', true),
         )),
       el('p', { class: 'muted small stats-note' },
         s.fDrive > s.fGrip
@@ -613,7 +554,7 @@ export class WorkshopUI {
     return el('button', {
       class: 'btn btn-small btn-primary',
       disabled: this.state.money < 1,
-      onclick: () => this.act(() => this.economy.repairPart(part), (hp) => `Repaired ${Math.round(hp)} HP on ${part.name}`),
+      onclick: () => this.act(() => this.economy.repairPart(part), () => `Repaired ${part.name} — condition ${Math.round(part.hpRatio * 100)}%`),
     }, affordable ? `Repair ${formatMoney(cost)}` : `Patch (${formatMoney(this.state.money)})`);
   }
 
@@ -625,7 +566,7 @@ export class WorkshopUI {
       section.append(partCard(bug.chassis, this.economy, {
         ...this.refCompare(bug.chassis),
         actions: [this.repairButton(bug.chassis)].filter(Boolean),
-        extra: el('p', { class: 'muted small' }, 'The frame IS the vehicle. Hull at 0 HP = catastrophic damage.'),
+        extra: el('p', { class: 'muted small' }, 'The frame IS the vehicle. Hull at 0% = catastrophic damage.'),
       }));
       return section;
     }

@@ -12,9 +12,9 @@ const TABS = [
 ];
 
 const MARKET_CATEGORIES = [
-  ['engine', 'Propulsion', 'Motors & power cores. Drive force, RPM (top speed) and cooling.'],
+  ['engine', 'Propulsion', 'Motors & power cores. Power, revs (top speed) and cooling.'],
   ['weapon', 'Weapons', 'Hardpoint-mounted weapons. Every activation costs stamina.'],
-  ['tires', 'Running Gear', 'Tires & treads. Grip limit and top speed.'],
+  ['tires', 'Running Gear', 'Tires & treads. Grip and speed.'],
   ['chassis', 'Chassis', 'Whole vehicles — each frame comes with its fitted parts.'],
   ['armor', 'Armour', 'Plating that soaks impact damage before it reaches the hull.'],
   ['sell', 'Sell', 'Every spare component in your inventory, ready to sell.'],

@@ -47,7 +47,7 @@ export const PARTS = Object.freeze({
   rust_motor: engine('Rust-Bucket Motor', 1, C, 80, 30, 60, { force: 26000, rpm: 3800, cooling: 10, kind: 'combustion' }, '#ff8a3d', 'It turns. Mostly.'),
   lawn_thumper: engine('Lawn Thumper', 1, C, 90, 26, 55, { force: 24000, rpm: 4100, cooling: 11, kind: 'combustion' }, '#ffa04d', 'Pull-start single. Three pulls on a good day.'),
   sputter_single: engine('Sputter Single', 1, U, 140, 32, 62, { force: 28500, rpm: 3900, cooling: 9, kind: 'combustion' }, '#ff7a2d', 'Coughs like a smoker, pulls like a mule.'),
-  torque_block: engine('Torque Block V4', 2, C, 320, 45, 90, { force: 42000, rpm: 3400, cooling: 9, kind: 'torque' }, '#ffb03d', 'Low-revving shove monster.'),
+  torque_block: engine('Torque Block V4', 2, C, 320, 45, 90, { force: 46000, rpm: 3400, cooling: 9, kind: 'torque' }, '#ffb03d', 'Low-revving shove monster.'),
   spinner_x: engine('Spinner-X Turbine', 2, C, 380, 28, 55, { force: 30000, rpm: 5600, cooling: 12, kind: 'turbine' }, '#ffe14a', 'Screams to high RPM. Fast but fragile.'),
   volt_hub: engine('Volt-Hub Electric', 2, U, 420, 34, 70, { force: 36000, rpm: 4400, cooling: 14, kind: 'electric' }, '#5ad8ff', 'Silent, cool and very good at sharing its battery.'),
   grub_diesel: engine('Grub-Diesel Twin', 2, R, 520, 52, 100, { force: 46000, rpm: 3500, cooling: 8, kind: 'torque' }, '#ffc03d', 'Runs on larva oil. Pushes like it means it.'),
@@ -59,9 +59,9 @@ export const PARTS = Object.freeze({
   ion_screamer: engine('Ion Screamer', 4, U, 1050, 34, 75, { force: 44000, rpm: 6400, cooling: 14, kind: 'turbine' }, '#e8ff7a', 'Ion-fed turbine. The top speed is frankly irresponsible.'),
   tectonic_v12: engine('Tectonic V12', 4, R, 1300, 64, 130, { force: 60000, rpm: 4000, cooling: 10, kind: 'torque' }, '#ffb85d', 'Twelve cylinders of continental drift.'),
   nebula_cell: engine('Nebula Cell', 4, E, 1500, 38, 115, { force: 56000, rpm: 5400, cooling: 18, kind: 'electric' }, '#9ad8ff', 'A battery charged by a nebula. Doesn\'t like being asked to share.'),
-  plasma_twin: engine('Plasma Twin-Drive', 5, R, 1600, 55, 120, { force: 64000, rpm: 4600, cooling: 13, kind: 'plasma' }, '#c77dff', 'Alien twin-plasma drive. Pushes planets.'),
+  plasma_twin: engine('Plasma Twin-Drive', 5, R, 1600, 55, 170, { force: 68000, rpm: 4600, cooling: 13, kind: 'plasma' }, '#c77dff', 'Alien twin-plasma drive. Pushes planets.'),
   quasar_turbine: engine('Quasar Turbine', 5, E, 1800, 36, 90, { force: 54000, rpm: 6600, cooling: 15, kind: 'turbine' }, '#fffaa0', 'Spins at the speed of gossip.'),
-  hive_heart: engine('Hive-Heart Bio-Engine', 5, E, 1900, 48, 150, { force: 66000, rpm: 5000, cooling: 19, kind: 'bio' }, '#8aff7a', 'A living heart the size of a beach ball. It purrs in a bio-frame.'),
+  hive_heart: engine('Hive-Heart Bio-Engine', 5, E, 1900, 48, 150, { force: 66000, rpm: 5000, cooling: 21, kind: 'bio' }, '#8aff7a', 'A living heart the size of a beach ball. It purrs in a bio-frame.'),
   singularity_drive: engine('Singularity Drive', 5, L, 2600, 50, 140, { force: 72000, rpm: 5300, cooling: 16, kind: 'fusion' }, '#ffffff', 'A pinhole of collapsed star. Do not look directly at the exhaust.'),
   queen_engine: engine("The Queen's Engine", 5, L, 2800, 52, 160, { force: 70000, rpm: 5100, cooling: 22, kind: 'bio' }, '#ff7ad8', 'Stolen from the royal hive. It still expects to be obeyed.'),
 
@@ -99,7 +99,7 @@ export const PARTS = Object.freeze({
   boiler_plate: armor('Boiler Plate', 3, C, 560, 60, 190, { absorb: 0.6, heat: 0.25 }, 'steel_plate', 'Cut from an actual boiler. Keeps the heat in, as boilers do.'),
   vented_carapace: armor('Vented Carapace', 3, R, 650, 28, 130, { absorb: 0.5, heat: -0.1 }, 'titan_weave', 'Louvred shell plates that draw air over the motor.'),
   ceramic_tiles: armor('Ceramic Tiles', 3, R, 700, 34, 150, { absorb: 0.56, heat: 0.08 }, 'ablative_shell', 'Re-entry tiles. Shrug off hits, crack eventually.'),
-  ablative_shell: armor('Ablative Shell', 4, R, 850, 55, 200, { absorb: 0.6, heat: 0.15 }, 'ablative_shell', 'Sheds layers so your hull doesn\'t.'),
+  ablative_shell: armor('Ablative Shell', 4, R, 850, 55, 260, { absorb: 0.6, heat: 0.15 }, 'ablative_shell', 'Sheds layers so your hull doesn\'t.'),
   mirror_mesh: armor('Mirror Mesh', 4, R, 900, 30, 170, { absorb: 0.58, heat: 0 }, 'titan_weave', 'Reflective weave. Also great for checking your antennae.'),
   fortress_slab: armor('Fortress Slab', 4, U, 950, 80, 260, { absorb: 0.7, heat: 0.3 }, 'steel_plate', 'Nothing gets through. Including air.'),
   gel_armour: armor('Gel Armour', 4, E, 1250, 36, 190, { absorb: 0.62, heat: -0.05 }, 'ablative_shell', 'Wobbly, self-healing goo in a skin. Soaks hits and heat alike.'),
@@ -131,7 +131,7 @@ export const PARTS = Object.freeze({
   wedge_lifter: weapon('Wedge Lifter', 2, C, 380, 35, 90, { class: 'grip', effect: 'lift', cost: 16, range: 45, arc: 80, cooldown: 3, liftTime: 1.8, gripMod: 0.1, exposeTime: 1.2 }, 'wedge_lifter', 'Hydraulic wedge lifts drive wheels. μ → 0.'),
   grease_gun: weapon('Grease Gun', 2, U, 300, 20, 55, { class: 'grip', effect: 'slick', cost: 18, range: 120, arc: 360, cooldown: 5.5, puddleRadius: 50, puddleTime: 6, gripMod: 0.3, exposeTime: 1.1 }, 'slick_sprayer', 'Squirts. Aim is optional.'),
   slick_sprayer: weapon('Slick Sprayer', 3, U, 420, 25, 60, { class: 'grip', effect: 'slick', cost: 20, range: 150, arc: 360, cooldown: 5, puddleRadius: 60, puddleTime: 7, gripMod: 0.2, exposeTime: 1.0 }, 'slick_sprayer', 'Lays an oil slick ahead. Anything on it loses grip.'),
-  flipper_wedge: weapon('Flipper Wedge', 4, R, 1000, 38, 100, { class: 'grip', effect: 'lift', cost: 18, range: 50, arc: 90, cooldown: 2.8, liftTime: 2.2, gripMod: 0.05, exposeTime: 1.1 }, 'wedge_lifter', 'Gets under them and keeps them there.'),
+  flipper_wedge: weapon('Flipper Wedge', 4, R, 1000, 38, 100, { class: 'grip', effect: 'lift', cost: 13, range: 50, arc: 90, cooldown: 2.8, liftTime: 2.2, gripMod: 0.05, exposeTime: 1.1 }, 'wedge_lifter', 'Gets under them and keeps them there.'),
   frost_cannon: weapon('Frost Cannon', 4, E, 1400, 28, 80, { class: 'grip', effect: 'slick', cost: 20, range: 180, arc: 360, cooldown: 4.5, puddleRadius: 75, puddleTime: 8, gripMod: 0.12, exposeTime: 0.9 }, 'slick_sprayer', 'Freezes a patch of ring solid. Skating lessons not provided.'),
 });
 

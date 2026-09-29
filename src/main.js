@@ -258,7 +258,7 @@ class App {
         break;
       case 'lift':
         sp.smoke(front, 'rgba(200,190,140,0.6)', 4);
-        if (hit) label('LIFTED! μ→0');
+        if (hit) label('LIFTED! No grip');
         break;
       case 'slick':
         sp.spray(front, Vector2D.fromAngle(bug.angle));
