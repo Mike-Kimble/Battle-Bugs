@@ -1,5 +1,5 @@
 import { HOIST_REGIONS, WEAPON_CLASSES } from '../config/constants.js';
-import { PARTS } from '../config/partsData.js';
+import { PARTS, DRIVE_KINDS } from '../config/partsData.js';
 import { PART_SCORES, VEHICLE_SCORES, REF, shown, partSummary } from '../config/scores.js';
 import { BattleBug } from '../entities/BattleBug.js';
 import { Part } from '../entities/Part.js';
@@ -73,7 +73,13 @@ export function hpBar(ratio, { label } = {}) {
 /** One-line summary under a part's name, in scores out of 100. */
 export function partStatLine(part) {
   const line = partSummary(part);
-  return part.type === 'weapon' ? `${WEAPON_CLASSES[part.stats.class].label} · ${line}` : line;
+  if (part.type === 'weapon') return `${WEAPON_CLASSES[part.stats.class].label} · ${line}`;
+  if (part.type === 'cooling' || part.type === 'enhancement') {
+    const works = part.stats.works ? `Drives: ${part.stats.works.map((k) => DRIVE_KINDS[k]).join(', ')}` : 'Any drive';
+    const uses = part.usesLeft != null ? ` · ${part.usesLeft ? `${part.usesLeft} battle${part.usesLeft > 1 ? 's' : ''} left` : 'used up'}` : '';
+    return `${line} · ${works}${uses}`;
+  }
+  return line;
 }
 
 // ───────────── Comparison bars ─────────────
@@ -124,9 +130,10 @@ export function compareBars(rows, { neutral = false, legend = null } = {}) {
 }
 
 export function partCompare(part, current, { legend } = {}) {
-  const rows = PART_SCORES[part.type];
-  if (!rows) return null;
   const full = (p) => new Part(p.key, { uid: p.uid, hp: p.repairedHp });
+  // Add-ons only show the effects either side actually has.
+  const rows = (PART_SCORES[part.type] || []).filter((r) => r.neutral || r.get(full(part)) >= 1 || (current && r.get(full(current)) >= 1));
+  if (!rows.length) return null;
   return compareBars(rows.map((r) => ({
     label: r.label, fmt: int, better: r.neutral ? 'neutral' : 'higher', max: 100,
     value: capped(r.get(part)), potential: capped(r.get(full(part))), current: current ? capped(r.get(full(current))) : null,
@@ -150,6 +157,10 @@ export function vehicleCompare(bug, current, { neutral = false, exterior = false
 /** The fitted part a candidate would be compared against. */
 export function counterpart(bug, part) {
   if (!bug) return null;
+  if (part.type === 'cooling' || part.type === 'enhancement') {
+    const list = bug.slotList(part.type);
+    return list.find((x) => x.key === part.key) || list[0] || null;
+  }
   if (part.type === 'weapon') {
     return bug.weapons.find((w) => w.key === part.key)
       || bug.weapons.find((w) => w.stats.class === part.stats.class)
@@ -561,7 +572,10 @@ export class WorkshopUI {
 
   renderSlot(bug, type, locked) {
     const inv = this.state.inventory.filter((p) => p.type === type);
-    const section = el('section', { class: 'slot-section' }, el('h3', {}, type === 'armor' ? 'Armour' : type[0].toUpperCase() + type.slice(1)));
+    const title = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancement', tires: 'Tires', armor: 'Armour', weapon: 'Weapons', chassis: 'Chassis' }[type];
+    const section = el('section', { class: 'slot-section' }, el('h3', {}, title));
+    const multi = bug.slotList(type); // weapons, cooling and enhancements have several slots
+    const cap = bug.slotCapacity(type);
 
     if (type === 'chassis') {
       section.append(partCard(bug.chassis, this.economy, {
@@ -572,7 +586,7 @@ export class WorkshopUI {
       return section;
     }
 
-    const equipped = type === 'weapon' ? bug.weapons : [bug[type]].filter(Boolean);
+    const equipped = multi || [bug[type]].filter(Boolean);
     if (!equipped.length) section.append(el('div', { class: 'empty-slot' }, type === 'weapon' && bug.weaponSlots === 0 ? 'No hardpoints on this frame' : 'Empty slot'));
     for (const part of equipped) {
       section.append(partCard(part, this.economy, {
@@ -590,17 +604,19 @@ export class WorkshopUI {
 
     if (type === 'weapon') {
       section.append(el('p', { class: 'muted small' }, `${bug.weapons.length}/${bug.weaponSlots} hardpoints used. Weapons add mass and cost stamina per activation.`));
+    } else if (multi) {
+      section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} ${type === 'cooling' ? 'cooling' : 'enhancement'} slot${cap > 1 ? 's' : ''} used. Not every add-on suits every drive.`));
     }
 
     if (inv.length) {
       const list = el('div', { class: 'replace-list' }, el('h4', {}, type === 'weapon' ? 'Spares — mount or sell' : 'Spares — fit or sell'));
       for (const part of inv) {
         const actions = [];
-        if (type === 'weapon') {
-          if (bug.weapons.length < bug.weaponSlots) {
-            actions.push(el('button', { class: 'btn btn-small btn-primary', disabled: locked || part.isScrap, onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid), `Mounted ${part.name}`) }, 'Mount'));
+        if (multi) {
+          if (multi.length < cap) {
+            actions.push(el('button', { class: 'btn btn-small btn-primary', disabled: locked || part.isScrap, onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid), `Fitted ${part.name}`) }, type === 'weapon' ? 'Mount' : 'Fit'));
           }
-          bug.weapons.forEach((w, i) => actions.push(el('button', {
+          multi.forEach((w, i) => actions.push(el('button', {
             class: 'btn btn-small', disabled: locked || part.isScrap,
             onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid, i), `Swapped in ${part.name}`),
           }, `Swap slot ${i + 1}`)));
@@ -621,7 +637,7 @@ export class WorkshopUI {
     }
     // Straight to the right aisle of the Marketplace (closed while you're in the tournament).
     if (this.onShop && !this.economy.inField) {
-      const label = { engine: 'Propulsion', tires: 'Running Gear', armor: 'Armour', weapon: 'Weapons' }[type];
+      const label = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancements', tires: 'Running Gear', armor: 'Armour', weapon: 'Weapons' }[type];
       section.append(el('button', {
         class: 'btn btn-small shop-link',
         onclick: () => { closeModal(); this.onShop(type); },

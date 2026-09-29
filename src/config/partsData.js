@@ -19,6 +19,11 @@ const engine = (name, tier, rarity, value, mass, maxHp, stats, glow, description
 const tires = (name, tier, rarity, value, mass, maxHp, stats, look, description) => ({ type: 'tires', name, tier, rarity, value, mass, maxHp, stats, look, description });
 const armor = (name, tier, rarity, value, mass, maxHp, stats, look, description) => ({ type: 'armor', name, tier, rarity, value, mass, maxHp, stats, look, description });
 const weapon = (name, tier, rarity, value, mass, maxHp, stats, look, description) => ({ type: 'weapon', name, tier, rarity, value, mass, maxHp, stats, look, description });
+const cooler = (name, tier, rarity, value, mass, stats, description) => ({ type: 'cooling', name, tier, rarity, value, mass, maxHp: 40 + tier * 15, stats, description });
+const enhance = (name, tier, rarity, value, mass, stats, description) => ({ type: 'enhancement', name, tier, rarity, value, mass, maxHp: 40 + tier * 15, stats, description });
+// Drive types a part works with (omit `works` for "any").
+const HOT = ['combustion', 'torque'];
+const NOT_ELECTRIC = ['combustion', 'torque', 'turbine', 'plasma', 'fusion', 'bio'];
 
 export const PARTS = Object.freeze({
   // ───────────── CHASSIS (frames) ─────────────
@@ -132,6 +137,53 @@ export const PARTS = Object.freeze({
   grease_gun: weapon('Grease Gun', 2, U, 300, 20, 55, { class: 'grip', effect: 'slick', cost: 18, range: 120, arc: 360, cooldown: 5.5, puddleRadius: 50, puddleTime: 6, gripMod: 0.3, exposeTime: 1.1 }, 'slick_sprayer', 'Squirts. Aim is optional.'),
   slick_sprayer: weapon('Slick Sprayer', 3, U, 420, 25, 60, { class: 'grip', effect: 'slick', cost: 20, range: 150, arc: 360, cooldown: 5, puddleRadius: 60, puddleTime: 7, gripMod: 0.2, exposeTime: 1.0 }, 'slick_sprayer', 'Lays an oil slick ahead. Anything on it loses grip.'),
   flipper_wedge: weapon('Flipper Wedge', 4, R, 1000, 38, 100, { class: 'grip', effect: 'lift', cost: 13, range: 50, arc: 90, cooldown: 2.8, liftTime: 2.2, gripMod: 0.05, exposeTime: 1.1 }, 'wedge_lifter', 'Gets under them and keeps them there.'),
+  // ───────────── COOLING (propulsion add-ons, 2 slots) ─────────────
+  // stats: cool (+stamina/s recovered), kind, works?, uses? (battles), boost? (fans), ventBonus?, staminaMax?
+  tin_heat_sink: cooler('Tin Heat Sink', 1, C, 40, 4, { cool: 1.5, kind: 'fins' }, 'A slab of tin with ambitions.'),
+  radiator_fins: cooler('Radiator Fins', 1, C, 70, 6, { cool: 2.5, kind: 'fins' }, 'Thin fins, big surface, honest work.'),
+  desk_fan: cooler('Desk Fan', 1, C, 30, 3, { cool: 0.5, kind: 'fan', boost: 1.5, ventBonus: 3 }, 'Pretty useless on its own. Point it at water cooling, a heat exchanger or vented armour and it earns its keep.'),
+  water_mister: cooler('Water Mister', 1, U, 90, 8, { cool: 3, kind: 'mister', works: NOT_ELECTRIC }, 'Sprays the motor like a sweaty athlete. Shorts out electric motors.'),
+  heat_exchanger: cooler('Heat Exchanger', 2, C, 220, 12, { cool: 4, kind: 'exchanger' }, 'Swaps hot for cold like a very small, very dull magician.'),
+  oil_cooler: cooler('Oil Cooler', 2, C, 200, 10, { cool: 4.5, kind: 'oil', works: HOT }, 'Keeps the oil in piston engines from turning into soup.'),
+  water_cooling: cooler('Water Cooling Loop', 2, U, 300, 16, { cool: 5, kind: 'water' }, 'Pipes, pump, reservoir. Plumbing, but fast.'),
+  expansion_nozzle: cooler('Expansion Nozzle', 2, U, 280, 6, { cool: 7, kind: 'nozzle', works: ['turbine'] }, 'Bleeds turbine exhaust through a cold throat. Only works on turbines, and works very well.'),
+  twin_fans: cooler('Twin Fans', 2, R, 180, 5, { cool: 0.8, kind: 'fan', boost: 1.7, ventBonus: 4 }, 'Two fans, twice the draught. Still wants something to blow on.'),
+  mist_curtain: cooler('Mist Curtain', 3, U, 520, 10, { cool: 6, kind: 'mister', works: NOT_ELECTRIC }, 'A whole wall of spray. Electric motors hate it.'),
+  big_rig_radiator: cooler('Big Rig Radiator', 3, C, 480, 22, { cool: 6.5, kind: 'fins' }, 'Off a hauler. Enormous, heavy, very effective.'),
+  peltier_plates: cooler('Peltier Plates', 3, R, 700, 8, { cool: 5, kind: 'peltier', works: ['electric', 'fusion'], staminaMax: 1.05 }, 'Solid-state chillers. Need a proper power supply — electric or fusion only.'),
+  coolant_gland: cooler('Coolant Gland', 3, R, 650, 6, { cool: 7, kind: 'gland', works: ['bio'] }, 'A living organ that sweats for your bio-engine. Useless on metal motors.'),
+  ram_air_scoop: cooler('Ram-Air Scoop', 3, U, 560, 7, { cool: 5.5, kind: 'fins' }, 'Scoops air as you drive. Better than it looks.'),
+  plasma_vent: cooler('Plasma Vent', 4, R, 1100, 10, { cool: 9, kind: 'nozzle', works: ['plasma', 'fusion'] }, 'Dumps heat straight out of a plasma or fusion core.'),
+  nitrogen_loop: cooler('Liquid-Nitrogen Loop', 4, E, 1400, 18, { cool: 11, kind: 'water' }, 'Water cooling, but make it minus two hundred degrees.'),
+  turbo_fan_array: cooler('Turbo Fan Array', 4, R, 900, 9, { cool: 1.2, kind: 'fan', boost: 2, ventBonus: 6 }, 'A wall of screaming fans. Doubles a good cooler; does little alone.'),
+  cryo_block: cooler('Cryo Block', 4, E, 1300, 12, { cool: 18, kind: 'cryo', uses: 10 }, 'A slab of impossible cold. Unbeatable cooling — but it melts away after 10 battles.'),
+  void_radiator: cooler('Void Radiator', 5, L, 2400, 8, { cool: 14, kind: 'exchanger' }, 'Radiates heat into another dimension. They haven\'t complained yet.'),
+  glacier_heart: cooler('Glacier Heart', 5, L, 2600, 14, { cool: 12, kind: 'cryo', staminaMax: 1.1 }, 'The frozen core of a comet. It never melts.'),
+
+  // ───────────── ENHANCEMENTS (propulsion add-ons, 1 slot) ─────────────
+  // stats multipliers: force (power), accel, vMax (top speed), staminaMax, drain (<1 = sustain);
+  // cool (+stamina/s recovery); works?, uses? (battles)
+  air_filter: enhance('Air Filter', 1, C, 60, 1, { kind: 'intake', force: 1.05, works: HOT }, 'Lets a piston engine breathe. Modest, reliable.'),
+  lucky_dice: enhance('Fuzzy Dice', 1, C, 40, 1, { kind: 'charm', staminaMax: 1.04 }, 'Hang them from the mirror. Pilots swear by them.'),
+  chrome_exhaust: enhance('Chrome Exhaust', 1, U, 110, 4, { kind: 'exhaust', force: 1.05, vMax: 1.03, works: ['combustion', 'torque', 'turbine'] }, 'Louder is faster. Slightly.'),
+  sugar_feeder: enhance('Sugar-Syrup Feeder', 1, U, 90, 3, { kind: 'feeder', cool: 1.5, works: ['bio'] }, 'Keeps a bio-engine topped up on sweets.'),
+  turbocharger: enhance('Turbocharger', 2, C, 320, 8, { kind: 'turbo', force: 1.15, drain: 1.08, works: HOT }, 'Exhaust-driven boost for piston engines. Runs a little hotter.'),
+  nos_bottle: enhance('NOS Bottle', 2, U, 260, 6, { kind: 'nitro', force: 1.25, accel: 1.25, drain: 1.1, uses: 5, works: ['combustion', 'torque', 'turbine'] }, 'Nitrous for the brave. Huge kick — good for 5 battles.'),
+  capacitor_bank: enhance('Capacitor Bank', 2, U, 340, 7, { kind: 'capacitor', accel: 1.2, staminaMax: 1.05, works: ['electric'] }, 'Dumps stored charge on launch. Electric motors only.'),
+  nutrient_generator: enhance('Nutrient Generator', 2, R, 420, 6, { kind: 'feeder', cool: 3, staminaMax: 1.08, works: ['bio'] }, 'Brews food for a bio-engine mid-bout. Great recovery.'),
+  light_flywheel: enhance('Lightweight Flywheel', 2, C, 240, 3, { kind: 'flywheel', accel: 1.12 }, 'Less spinning mass, snappier launches. Works with anything.'),
+  supercharger: enhance('Supercharger', 3, U, 640, 12, { kind: 'turbo', force: 1.2, drain: 1.1, works: HOT }, 'Belt-driven boost. Big power, hotter running.'),
+  afterburner: enhance('Afterburner', 3, R, 780, 8, { kind: 'burner', vMax: 1.15, accel: 1.1, drain: 1.18, works: ['turbine', 'plasma'] }, 'Sets the exhaust on fire on purpose. Turbines and plasma only.'),
+  regen_brakes: enhance('Regen Brakes', 3, U, 560, 6, { kind: 'regen', cool: 2, drain: 0.93, works: ['electric', 'fusion'] }, 'Turns braking back into charge. Electric or fusion only.'),
+  stamina_governor: enhance('Stamina Governor', 3, C, 500, 4, { kind: 'governor', drain: 0.85, force: 0.95 }, 'Holds the motor back a touch so it lasts much longer.'),
+  adrenal_pump: enhance('Adrenal Pump', 3, R, 720, 5, { kind: 'gland', accel: 1.2, cool: 2, works: ['bio'] }, 'Floods a bio-engine with fight juice.'),
+  twin_turbo: enhance('Twin Turbo', 4, R, 1150, 14, { kind: 'turbo', force: 1.25, drain: 1.1, works: HOT }, 'Two turbos. Twice the whistle.'),
+  ion_injector: enhance('Ion Injector', 4, R, 1200, 6, { kind: 'injector', force: 1.15, vMax: 1.08, works: ['turbine', 'electric'] }, 'Charged-particle boost for turbines and electric drives.'),
+  fusion_stabiliser: enhance('Fusion Stabiliser', 4, E, 1500, 8, { kind: 'stabiliser', drain: 0.8, staminaMax: 1.1, works: ['fusion', 'plasma'] }, 'Tames a star in a can. Barely breaks a sweat all bout.'),
+  plasma_overdrive: enhance('Plasma Overdrive', 5, E, 1900, 10, { kind: 'overdrive', force: 1.3, vMax: 1.08, drain: 1.15, works: ['plasma'] }, 'Pushes a plasma drive past the red line. And keeps pushing.'),
+  hive_mind_link: enhance('Hive-Mind Link', 5, L, 2600, 4, { kind: 'link', accel: 1.25, cool: 4, drain: 0.9, works: ['bio'] }, 'Your bio-engine joins a hive of millions. They all want to win.'),
+  time_warp_nitro: enhance('Time-Warp Nitro', 5, L, 2800, 6, { kind: 'nitro', force: 1.4, accel: 1.4, uses: 3, works: null }, 'Nitro from next week. Unbelievable — for 3 battles.'),
+
   frost_cannon: weapon('Frost Cannon', 4, E, 1400, 28, 80, { class: 'grip', effect: 'slick', cost: 20, range: 180, arc: 360, cooldown: 4.5, puddleRadius: 75, puddleTime: 8, gripMod: 0.12, exposeTime: 0.9 }, 'slick_sprayer', 'Freezes a patch of ring solid. Skating lessons not provided.'),
 });
 
@@ -371,3 +423,15 @@ export const CHALLENGER_ROSTER = Object.freeze([
 ]);
 
 export const FIGHTING_STYLES = Object.freeze(Object.keys(PILOT_STYLES).filter((k) => k !== 'hapless'));
+
+/** Does this add-on (cooling / enhancement) work with the bug's drive? */
+export function worksWith(part, bug) {
+  const works = part.stats.works;
+  if (!works) return true;
+  return !!bug?.engine && works.includes(bug.engine.stats.kind);
+}
+
+/** Readable drive-type names for "works with" notes. */
+export const DRIVE_KINDS = Object.freeze({
+  combustion: 'Combustion', torque: 'Torque', turbine: 'Turbine', electric: 'Electric', fusion: 'Fusion', plasma: 'Plasma', bio: 'Bio',
+});

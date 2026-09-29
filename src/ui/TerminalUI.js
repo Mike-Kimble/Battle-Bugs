@@ -20,7 +20,15 @@ const MARKET_CATEGORIES = [
   ['sell', 'Sell', 'Every spare component in your inventory, ready to sell.'],
 ];
 
-const PART_GROUPS = [['engine', 'Propulsion'], ['weapon', 'Weapons'], ['tires', 'Running Gear'], ['armor', 'Armour']];
+const PART_GROUPS = [['engine', 'Drive'], ['cooling', 'Cooling'], ['enhancement', 'Enhancements'], ['weapon', 'Weapons'], ['tires', 'Running Gear'], ['armor', 'Armour']];
+
+/** Propulsion splits into three aisles. */
+const PROPULSION_SUBS = [
+  ['engine', 'Drive', 'Motors & power cores. Power, revs (top speed) and cooling.'],
+  ['cooling', 'Cooling', 'Heat exchangers, misters, radiators, fans… Two cooling slots. Not everything suits every drive.'],
+  ['enhancement', 'Enhancement', 'Turbos, nitro, afterburners, feeders… One enhancement slot. Not everything suits every drive.'],
+];
+const isPropulsion = (cat) => PROPULSION_SUBS.some(([k]) => k === cat);
 
 function streakText(n = 0) {
   if (n > 0) return `W${n}`;
@@ -406,7 +414,7 @@ export class TerminalUI {
     const manager = s.staff.manager;
     const active = s.activeBug;
     const cat = this.marketCat;
-    const [, catLabel, catBlurb] = MARKET_CATEGORIES.find(([k]) => k === cat);
+    const [, catLabel, catBlurb] = PROPULSION_SUBS.find(([k]) => k === cat) || MARKET_CATEGORIES.find(([k]) => k === cat);
     const pickKey = s.staff.mechanic && s.activeBug ? this.economy.mechanicAdvice(s.activeBug).pick?.key : null;
     const dealBadge = (l) => {
       const badges = [
@@ -427,12 +435,22 @@ export class TerminalUI {
       ? s.vehicles.filter((v) => v.id !== s.activeVehicleId && !s.isLocked(v))
       : s.inventory.filter((p) => p.type === cat);
 
-    const subnav = el('div', { class: 'subtabs', role: 'tablist' }, MARKET_CATEGORIES.map(([key, label]) => el('button', {
-      class: `subtab${key === cat ? ' active' : ''}`,
+    const on = (key) => key === cat || (key === 'engine' && isPropulsion(cat));
+    const topnav = el('div', { class: 'subtabs', role: 'tablist' }, MARKET_CATEGORIES.map(([key, label]) => el('button', {
+      class: `subtab${on(key) ? ' active' : ''}`,
       role: 'tab',
-      'aria-selected': key === cat ? 'true' : 'false',
-      onclick: () => { this.marketCat = key; this.keepScroll = false; this.render(); },
-    }, label, el('span', { class: 'subtab-count' }, countFor(key)))));
+      'aria-selected': on(key) ? 'true' : 'false',
+      onclick: () => { if (!(key === 'engine' && isPropulsion(cat))) this.marketCat = key; this.keepScroll = false; this.render(); },
+    }, label, el('span', { class: 'subtab-count' }, key === 'engine' ? PROPULSION_SUBS.reduce((n, [k]) => n + countFor(k), 0) : countFor(key)))));
+    // Propulsion's own aisles: Drive · Cooling · Enhancement.
+    const subnav = isPropulsion(cat)
+      ? el('div', {}, topnav, el('div', { class: 'subtabs subtabs-2', role: 'tablist' }, PROPULSION_SUBS.map(([key, label]) => el('button', {
+        class: `subtab${key === cat ? ' active' : ''}`,
+        role: 'tab',
+        'aria-selected': key === cat ? 'true' : 'false',
+        onclick: () => { this.marketCat = key; this.keepScroll = false; this.render(); },
+      }, label, el('span', { class: 'subtab-count' }, countFor(key))))))
+      : topnav;
 
     let forSale;
     if (cat === 'chassis') {

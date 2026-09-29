@@ -1,6 +1,6 @@
 import { ECONOMY } from '../config/constants.js';
 import {
-  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, RIVAL_EXCUSES, CHALLENGER_ROSTER, RARITY,
+  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, RIVAL_EXCUSES, CHALLENGER_ROSTER, RARITY, worksWith,
 } from '../config/partsData.js';
 import { BattleBug } from '../entities/BattleBug.js';
 import { Part, makeId } from '../entities/Part.js';
@@ -162,6 +162,7 @@ export class EconomyManager {
     if (!part) throw new Error('Part not in inventory');
     if (part.type === 'chassis') throw new Error('A chassis is a whole vehicle frame — it cannot be fitted');
     if (part.isScrap) throw new Error(`${part.name} is scrap — sell it for ${formatMoney(ECONOMY.SCRAP_PRICE)}`);
+    if (!this.fits(part, bug)) throw new Error("Doesn't look like you can fit that here");
     if (part.type === 'weapon' && bug.weaponSlots === 0) throw new Error('This chassis has no hardpoints');
     this.state.removePart(partUid);
     for (const displaced of bug.equip(part, slot)) this.state.addPart(displaced);
@@ -201,9 +202,17 @@ export class EconomyManager {
     return listing.part;
   }
 
+  /** Can this part go on this bug at all? (Some add-ons only suit certain drives.) */
+  fits(part, bug) {
+    if (part.type === 'weapon' && !bug.weaponSlots) return false;
+    return worksWith(part, bug);
+  }
+
   /** Buy a part and fit it straight onto `bug` (for an empty slot). */
   buyAndFit(listingId, bug) {
     this.assertUnlocked(bug);
+    const listing = this.state.market.parts.find((l) => l.id === listingId);
+    if (listing && !this.fits(listing.part, bug)) throw new Error("Doesn't look like you can fit that here");
     const part = this.buyPartListing(listingId);
     return this.equipFromInventory(bug, part.uid);
   }
@@ -211,7 +220,8 @@ export class EconomyManager {
   /** Does `bug` have a free slot for a part of this type? */
   hasFreeSlot(bug, type) {
     if (!bug) return false;
-    if (type === 'weapon') return bug.weapons.length < bug.weaponSlots;
+    const list = bug.slotList(type);
+    if (list) return list.length < bug.slotCapacity(type);
     return ['engine', 'tires', 'armor'].includes(type) && !bug[type];
   }
 
@@ -259,7 +269,7 @@ export class EconomyManager {
     const bug = this.state.getVehicle(id);
     if (!bug) throw new Error('No such vehicle');
     this.assertDisposable(bug);
-    const parts = [bug.engine, bug.tires, bug.armor, ...bug.weapons].filter(Boolean);
+    const parts = [bug.engine, bug.tires, bug.armor, ...bug.weapons, ...bug.coolers, ...bug.mods].filter(Boolean);
     parts.forEach((p) => this.state.addPart(p));
     const scrap = bug.chassis.isScrap
       ? ECONOMY.SCRAP_PRICE
@@ -303,6 +313,16 @@ export class EconomyManager {
     return clampTier(1 + Math.floor(this.state.record.challengerWins / 2));
   }
 
+  /** A compatible add-on of `type` for a bug (or null). */
+  pickAddOn(type, tier, bug) {
+    for (let i = 0; i < 8; i++) {
+      const key = pickPartKey(type, tier);
+      const p = new Part(key);
+      if (worksWith(p, bug)) return p;
+    }
+    return null;
+  }
+
   generateBug(tier, { condition = () => rand(0.7, 1), alien = true, fullSlots = false } = {}) {
     const chassis = pickPartKey('chassis', tier);
     const slots = PARTS[chassis].stats.weaponSlots;
@@ -314,7 +334,7 @@ export class EconomyManager {
 
     const weapons = Array.from({ length: weaponCount }, () => pickPartKey('weapon', tier + 1));
     const pilot = alien ? { name: alienName(), planet: pick(PLANETS) } : null;
-    return BattleBug.create({
+    const bug = BattleBug.create({
       name: `${pick(BUG_ADJECTIVES)} ${pick(BUG_NOUNS)}`,
       hue: randInt(0, 359),
       alien,
@@ -326,6 +346,10 @@ export class EconomyManager {
       weapons,
       condition,
     });
+    // Better-equipped pilots run cooling and enhancements that suit their drive.
+    if (tier >= 2 && chance(0.25 + tier * 0.1)) { const c = this.pickAddOn('cooling', tier, bug); if (c) bug.equip(c); }
+    if (tier >= 3 && chance(0.15 + tier * 0.08)) { const m = this.pickAddOn('enhancement', tier, bug); if (m) bug.equip(m); }
+    return bug;
   }
 
   // ───────────── Challenger pilots (a persistent pool) ─────────────
@@ -1110,10 +1134,14 @@ export class EconomyManager {
   ratingWith(bug, part) {
     const clone = BattleBug.fromJSON(bug.toJSON());
     const p = Part.fromJSON(part.toJSON());
-    if (p.type === 'weapon') {
-      if (clone.weapons.length >= clone.weaponSlots) {
-        if (!clone.weaponSlots) return -Infinity;
-        const worst = clone.weapons.reduce((w, x, i) => (x.value * x.hpRatio < clone.weapons[w].value * clone.weapons[w].hpRatio ? i : w), 0);
+    if (!this.fits(p, clone)) return -Infinity;
+    const list = clone.slotList(p.type);
+    if (list) {
+      const cap = clone.slotCapacity(p.type);
+      if (list.length >= cap) {
+        if (!cap) return -Infinity;
+        // Replace the weakest fitted one.
+        const worst = list.reduce((w, x, i) => (x.value * x.hpRatio < list[w].value * list[w].hpRatio ? i : w), 0);
         clone.equip(p, worst);
       } else clone.equip(p);
     } else {
@@ -1138,11 +1166,12 @@ export class EconomyManager {
       if (!this.affordable(key, budget, opts)) continue;
       const part = new Part(key);
       // Weapons all add the same raw rating, so break ties by quality (tier, then value).
+      if (!this.fits(part, bug)) continue;
       const gain = this.ratingWith(bug, part) - base + (type === 'weapon' ? PARTS[key].tier * 0.5 + PARTS[key].value / 1000 : 0);
       if (!best || gain > best.gain) best = { key, gain };
     }
     if (!best) return null;
-    const current = type === 'weapon' ? null : bug[type];
+    const current = bug.slotList(type) ? null : bug[type];
     if (current?.key === best.key) return null; // already fitted
     return best.gain > 0.5 ? best.key : null;
   }
@@ -1160,7 +1189,9 @@ export class EconomyManager {
     else if (s.fGrip > s.fDrive * 1.25) add('engine', 'power-limited — your tires can take more than the motor gives');
     if (!bug.armor) add('armor', "you've got no armour — every hit goes straight to the hull");
     if (bug.weapons.length < bug.weaponSlots) add('weapon', `you've got ${bug.weaponSlots - bug.weapons.length} empty hardpoint${bug.weaponSlots - bug.weapons.length > 1 ? 's' : ''}`);
-    if (s.cooling < 12) add('engine', "your motor runs hot — you'll stall in long pushes");
+    if (s.cooling < 12) add('cooling', "your motor runs hot — you'll stall in long pushes");
+    if (bug.coolers.length < 2 && s.cooling < 16) add('cooling', 'more cooling means longer pushes', false);
+    if (!bug.mods.length) add('enhancement', 'an enhancement would give you an edge', false);
     add('engine', 'more push always helps', false);
     add('tires', 'more grip always helps', false);
     add('armor', 'tougher plating', false);
@@ -1385,6 +1416,13 @@ export class EconomyManager {
     }
 
     if (beatRival) this.rivalExcuse(challenger, rivalRideName);
+    // Consumables (cryo blocks, nitro…) fitted to your bug lose a battle's worth.
+    for (const p of playerBug?.parts || []) {
+      if (p.usesLeft == null || p.usesLeft <= 0) continue;
+      p.usesLeft -= 1;
+      if (p.usesLeft === 0) report.lines.push(`Your ${p.name} is used up — strip it out and scrap it.`);
+      else if (p.usesLeft <= 2) report.lines.push(`Your ${p.name} has ${p.usesLeft} battle${p.usesLeft > 1 ? 's' : ''} left in it.`);
+    }
     if (!tournament && challenger.record && result !== 'tie') {
       if (result === 'win') challenger.record.l++; else challenger.record.w++;
     }

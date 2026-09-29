@@ -346,3 +346,5 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .codex-item.rarity-legendary { border-color: #e0a020; }
 .shop-link { margin-top: 8px; width: 100%; }
 .stat-bar .cmp-fill.weight { background: #6a6390; }
+.subtabs-2 { margin-top: 4px; }
+.subtabs-2 .subtab { font-size: 11px; }

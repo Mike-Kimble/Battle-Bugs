@@ -1,6 +1,6 @@
 import { PHYSICS, STAMINA, EVENTS } from '../config/constants.js';
 import { Vector2D, clamp, approach, wrapAngle } from './Vector2D.js';
-import { INTERACTIONS } from '../config/partsData.js';
+import { INTERACTIONS, worksWith } from '../config/partsData.js';
 
 /**
  * Physics & derived-stats engine.
@@ -34,6 +34,43 @@ export class PhysicsEngine {
   }
 
   /**
+   * Cooling add-ons and enhancements: folds their multipliers into `m` and
+   * returns the extra cooling (stamina/s). Parts that don't suit the drive,
+   * are used up, or are destroyed do nothing. Notes go into `interactions`
+   * so the mechanic can talk about them.
+   */
+  static addOns(bug, m, interactions) {
+    let cool = 0;
+    const live = (p) => !p.spent && !p.isBroken && worksWith(p, bug);
+    const coolers = (bug.coolers || []).filter(live);
+    const fans = coolers.filter((c) => c.stats.kind === 'fan');
+    const boost = fans.reduce((b, f) => Math.max(b, f.stats.boost || 1), 1);
+    for (const c of coolers) {
+      cool += c.stats.cool;
+      // A fan blowing on water cooling or a heat exchanger makes it far better.
+      if (boost > 1 && (c.stats.kind === 'water' || c.stats.kind === 'exchanger')) cool += c.stats.cool * (boost - 1);
+      if (c.stats.staminaMax) m.staminaMax *= c.stats.staminaMax;
+    }
+    const vented = (bug.armor?.stats.heat || 0) < 0 && !bug.armor.isBroken;
+    for (const f of fans) if (vented) cool += f.stats.ventBonus || 0;
+    const partner = coolers.some((c) => c.stats.kind === 'water' || c.stats.kind === 'exchanger');
+    if (fans.length && partner) interactions.push({ id: 'fan_boost', good: true, mods: {}, text: 'Your fan is blowing on the water cooling / heat exchanger — a big boost to cooling.' });
+    else if (fans.length && vented) interactions.push({ id: 'fan_vent', good: true, mods: {}, text: 'Your fan pushes air through the vented armour. Nice.' });
+    else if (fans.length) interactions.push({ id: 'fan_alone', good: false, mods: {}, text: 'A fan on its own does almost nothing — pair it with water cooling, a heat exchanger or vented armour.' });
+
+    for (const e of (bug.mods || []).filter(live)) {
+      const s = e.stats;
+      for (const k of ['force', 'accel', 'vMax', 'staminaMax', 'drain']) if (s[k]) m[k] *= s[k];
+      if (s.cool) cool += s.cool;
+    }
+    for (const p of [...(bug.coolers || []), ...(bug.mods || [])]) {
+      if (p.spent) interactions.push({ id: `spent_${p.uid}`, good: false, mods: {}, text: `Your ${p.name} is used up — strip it out.` });
+      else if (!worksWith(p, bug)) interactions.push({ id: `nofit_${p.uid}`, good: false, mods: {}, text: `Your ${p.name} doesn't work with this drive — it's dead weight.` });
+    }
+    return { cool };
+  }
+
+  /**
    * Derive live stats for a bug from its equipped parts.
    * @param {import('../entities/BattleBug.js').BattleBug} bug
    * @param {{gripMod?: number}} mods
@@ -48,15 +85,16 @@ export class PhysicsEngine {
     const engineRatio = engine ? engine.hpRatio : 0;
     const tireRatio = tires ? tires.hpRatio : 0;
     // Part combinations that help or hurt.
-    const m = { force: 1, grip: 1, vMax: 1, cooling: 1, staminaMax: 1, drain: 1 };
+    const m = { force: 1, grip: 1, vMax: 1, cooling: 1, staminaMax: 1, drain: 1, accel: 1 };
     const interactions = PhysicsEngine.interactions(bug);
     for (const it of interactions) for (const k in it.mods) m[k] *= it.mods[k];
+    const addOns = PhysicsEngine.addOns(bug, m, interactions);
 
     const fDrive = engine ? engine.stats.force * engineRatio * m.force : 0;
     const fGripBase = tires ? tires.stats.mu * mass * PHYSICS.GRAVITY * tireRatio * m.grip : 0;
     const fGrip = fGripBase * gripMod;
     const fUsable = Math.min(fDrive, fGrip);
-    const accel = mass > 0 ? fUsable / mass : 0;
+    const accel = mass > 0 ? (fUsable / mass) * m.accel : 0;
 
     const wear = PHYSICS.TIRE_WEAR_FLOOR + (1 - PHYSICS.TIRE_WEAR_FLOOR) * tireRatio;
     const vMax = engine && tires ? engine.stats.rpm * tires.stats.radius * PHYSICS.RPM_TO_SPEED * wear * m.vMax : 0;
@@ -74,7 +112,7 @@ export class PhysicsEngine {
       gripMod,
       radius: chassis.stats.radius * PHYSICS.BUG_SCALE,
       staminaMax: Math.round(chassis.stats.staminaMax * m.staminaMax),
-      cooling: engine ? Math.round(engine.stats.cooling * m.cooling * 10) / 10 : 0,
+      cooling: engine ? Math.round((engine.stats.cooling * m.cooling + addOns.cool) * 10) / 10 : 0,
       drainMult: m.drain,
       interactions,
       turnRate: chassis.stats.turn * (0.55 + 0.45 * tireRatio),

@@ -147,7 +147,7 @@ export const ECONOMY = Object.freeze({
   MIN_VEHICLE_PRICE: 100,
   FIND_CHANCE: { epic: 0.016, legendary: 0.003 }, // per part on a generated bug (scaled up for better pilots)
   TEASER_CHANCE: 0.25,       // a restock shows off an epic/legendary part you can't afford
-  MARKET_STOCK: { engine: 5, tires: 5, weapon: 6, armor: 5 },
+  MARKET_STOCK: { engine: 5, cooling: 4, enhancement: 4, tires: 5, weapon: 6, armor: 5 },
   MARKET_VEHICLES: 4,
   TOURNAMENT_UNLOCK_WINS: 5,
   TOURNAMENT_ROUNDS: 5,
@@ -188,7 +188,7 @@ export const PART_TYPES = Object.freeze({
 /** Hoist regions → which part types they expose. */
 export const HOIST_REGIONS = Object.freeze({
   front: { label: 'Front', types: ['weapon'], blurb: 'Weapon hardpoints' },
-  center: { label: 'Center', types: ['engine'], blurb: 'Drive motor & power cell' },
+  center: { label: 'Center', types: ['engine', 'cooling', 'enhancement'], blurb: 'Drive motor, cooling & enhancements' },
   sides: { label: 'Sides', types: ['tires'], blurb: 'Tires / treads' },
   hull: { label: 'Hull', types: ['chassis', 'armor'], blurb: 'Frame & armour plating' },
 });

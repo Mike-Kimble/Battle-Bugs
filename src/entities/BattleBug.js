@@ -10,7 +10,10 @@ const EMPTY_EFFECTS = () => ({ lifted: 0, liftGrip: 0.1, exposed: 0, spikes: 0, 
  * Hull HP is the chassis HP — reaching 0 is catastrophic damage.
  */
 export class BattleBug {
-  constructor({ id, name, hue = 30, alien = false, pilot = null, chassis, engine = null, tires = null, armor = null, weapons = [] }) {
+  static COOLER_SLOTS = 2;
+  static MOD_SLOTS = 1;
+
+  constructor({ id, name, hue = 30, alien = false, pilot = null, chassis, engine = null, tires = null, armor = null, weapons = [], coolers = [], mods = [] }) {
     if (!chassis) throw new Error('BattleBug requires a chassis');
     this.id = id || makeId('bug');
     this.name = name || 'Unnamed Bug';
@@ -22,11 +25,13 @@ export class BattleBug {
     this.tires = tires;
     this.armor = armor;
     this.weapons = weapons.slice(0, chassis.stats.weaponSlots);
+    this.coolers = coolers.filter(Boolean).slice(0, BattleBug.COOLER_SLOTS); // cooling add-ons
+    this.mods = mods.filter(Boolean).slice(0, BattleBug.MOD_SLOTS); // performance enhancements
     this.resetForBattle(new Vector2D(), 0);
   }
 
   /** Build from catalogue keys. `condition` may be a number or a () => number. */
-  static create({ name, hue, alien, pilot, chassis, engine, tires, armor, weapons = [], condition = 1 }) {
+  static create({ name, hue, alien, pilot, chassis, engine, tires, armor, weapons = [], coolers = [], mods = [], condition = 1 }) {
     const cond = typeof condition === 'function' ? condition : () => condition;
     const mk = (key) => (key ? Part.create(key, cond()) : null);
     return new BattleBug({
@@ -36,6 +41,8 @@ export class BattleBug {
       tires: mk(tires),
       armor: mk(armor),
       weapons: weapons.map(mk),
+      coolers: coolers.map(mk),
+      mods: mods.map(mk),
     });
   }
 
@@ -45,6 +52,8 @@ export class BattleBug {
       id: o.id, name: o.name, hue: o.hue, alien: o.alien, pilot: o.pilot,
       chassis: p(o.chassis), engine: p(o.engine), tires: p(o.tires), armor: p(o.armor),
       weapons: (o.weapons || []).map(p),
+      coolers: (o.coolers || []).map(p),
+      mods: (o.mods || []).map(p),
     });
   }
 
@@ -56,18 +65,29 @@ export class BattleBug {
       tires: this.tires?.toJSON() ?? null,
       armor: this.armor?.toJSON() ?? null,
       weapons: this.weapons.map((w) => w.toJSON()),
+      coolers: this.coolers.map((c) => c.toJSON()),
+      mods: this.mods.map((m) => m.toJSON()),
     };
   }
 
   // ───────────── Composition ─────────────
   get parts() {
-    return [this.chassis, this.engine, this.tires, this.armor, ...this.weapons].filter(Boolean);
+    return [this.chassis, this.engine, this.tires, this.armor, ...this.weapons, ...this.coolers, ...this.mods].filter(Boolean);
   }
   get hull() { return this.chassis; }
   /** World/collision radius. The catalogue radius is the sprite design size. */
   get radius() { return this.chassis.stats.radius * PHYSICS.BUG_SCALE; }
   get designRadius() { return this.chassis.stats.radius; }
   get weaponSlots() { return this.chassis.stats.weaponSlots; }
+
+  /** Multi-slot part types: the fitted list and how many fit. */
+  slotList(type) {
+    return type === 'weapon' ? this.weapons : type === 'cooling' ? this.coolers : type === 'enhancement' ? this.mods : null;
+  }
+
+  slotCapacity(type) {
+    return type === 'weapon' ? this.weaponSlots : type === 'cooling' ? BattleBug.COOLER_SLOTS : type === 'enhancement' ? BattleBug.MOD_SLOTS : 1;
+  }
   get mass() { return this.parts.reduce((s, p) => s + p.mass, 0); }
 
   getStats(mods) {
@@ -111,12 +131,18 @@ export class BattleBug {
         if (this[part.type]) displaced.push(this[part.type]);
         this[part.type] = part;
         break;
-      case 'weapon': {
-        const idx = slot ?? (this.weapons.length < this.weaponSlots ? this.weapons.length : this.weaponSlots - 1);
-        if (idx < 0 || this.weaponSlots === 0) throw new Error('No weapon hardpoints');
-        if (this.weapons[idx]) displaced.push(this.weapons[idx]);
-        this.weapons[idx] = part;
-        this.weapons = this.weapons.filter(Boolean);
+      case 'weapon':
+      case 'cooling':
+      case 'enhancement': {
+        const list = this.slotList(part.type);
+        const cap = this.slotCapacity(part.type);
+        const idx = slot ?? (list.length < cap ? list.length : cap - 1);
+        if (idx < 0 || cap === 0) throw new Error(part.type === 'weapon' ? 'No weapon hardpoints' : 'No free slot');
+        if (list[idx]) displaced.push(list[idx]);
+        list[idx] = part;
+        const packed = list.filter(Boolean);
+        list.length = 0;
+        list.push(...packed);
         break;
       }
       default:
@@ -131,8 +157,10 @@ export class BattleBug {
     for (const slot of ['engine', 'tires', 'armor']) {
       if (this[slot] === part) { this[slot] = null; return true; }
     }
-    const i = this.weapons.indexOf(part);
-    if (i >= 0) { this.weapons.splice(i, 1); return true; }
+    for (const list of [this.weapons, this.coolers, this.mods]) {
+      const i = list.indexOf(part);
+      if (i >= 0) { list.splice(i, 1); return true; }
+    }
     return false;
   }
 
