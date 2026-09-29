@@ -300,6 +300,23 @@ export const RIVAL_DM = Object.freeze([
 ]);
 
 /**
+ * What your rival DMs you every time you beat them again — a fresh excuse each
+ * time, in order, looping once they've run out. {bug} is the ride they fought in.
+ */
+export const RIVAL_EXCUSES = Object.freeze([
+  ['RIGGED.', 'The ring was smaller on my side. I measured it afterwards. With my feelings.'],
+  ["Funny how my {bug}'s motor cut out right when you touched it.", 'Magnets? Remote? Bribed the ring? I WILL find out.'],
+  ['The referee is clearly your cousin.', "Don't deny it. You have the same antennae."],
+  ['You call that a win? You drove like a coward and it worked. That\'s cheating with extra steps.'],
+  ['My spies say your mechanic put something in my fuel.', "I don't have spies yet. But when I do, they'll confirm it."],
+  ["The sun was in my eyes.", "Yes, it was an indoor arena. That's how bright your cheating was."],
+  ['I had a cold. Also a curse. Also you cheated.', 'Rematch. Name the day. I\'ll bring a lawyer.'],
+  ['Everyone saw you use a hidden turbo.', "Well, I saw it. Everyone I told also saw it, after I told them."],
+  ["My {bug} was clearly still running in when we fought. That doesn't count.", 'Nothing you do counts. I checked the rules. I wrote the rules.'],
+  ['This is the last time, you hear me? THE LAST TIME.', '…Until next time. Which will be different. Because I will win.'],
+]);
+
+/**
  * The challenger pool: 20 pilots, every one with a unique name, home world
  * and bio that hints at how they fight. {name} and {bug} are filled in.
  * The first entry is the rookie.

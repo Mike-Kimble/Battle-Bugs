@@ -1,6 +1,6 @@
 import { ECONOMY } from '../config/constants.js';
 import {
-  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, CHALLENGER_ROSTER, RARITY,
+  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, RIVAL_EXCUSES, CHALLENGER_ROSTER, RARITY,
 } from '../config/partsData.js';
 import { BattleBug } from '../entities/BattleBug.js';
 import { Part, makeId } from '../entities/Part.js';
@@ -487,6 +487,14 @@ export class EconomyManager {
     this.scheduleRival();
     s.pendingDM = { pilotId: pilot.id, lines: RIVAL_DM.map((l) => l.replaceAll('{bug}', lostBugName)) };
     return true;
+  }
+
+  /** Your rival's latest excuse, queued as a DM: a different one every time, looping when they run out. */
+  rivalExcuse(rival, rideName) {
+    const s = this.state;
+    const i = (s.rivalExcuses || 0) % RIVAL_EXCUSES.length;
+    s.rivalExcuses = (s.rivalExcuses || 0) + 1;
+    s.pendingDM = { pilotId: rival.id, lines: RIVAL_EXCUSES[i].map((l) => l.replaceAll('{bug}', rideName || 'ride')) };
   }
 
   get boutsPlayed() {
@@ -1277,6 +1285,9 @@ export class EconomyManager {
   settleMatch({ result, reason, challenger, opponentBug, playerBug, tournament, stake, bet }) {
     const s = this.state;
     const report = { result, reason, lines: [], bounty: 0, captured: null, lostVehicle: null, champion: false, arrest: false };
+    // Beating an established rival (not the win that makes them one) earns a fresh excuse by DM.
+    const beatRival = !tournament && result === 'win' && !!s.rivalId && challenger.id === s.rivalId;
+    const rivalRideName = opponentBug?.name;
     // Clear fight-only state (ring-out fall, stalls, effects) so neither bug is drawn mid-plunge afterwards.
     for (const b of [playerBug, opponentBug]) b?.resetForBattle(b.pos, 0);
 
@@ -1371,6 +1382,7 @@ export class EconomyManager {
       }
     }
 
+    if (beatRival) this.rivalExcuse(challenger, rivalRideName);
     if (!tournament && challenger.record && result !== 'tie') {
       if (result === 'win') challenger.record.l++; else challenger.record.w++;
     }
