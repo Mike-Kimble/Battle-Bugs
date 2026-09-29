@@ -10,7 +10,7 @@ const EMPTY_EFFECTS = () => ({ lifted: 0, liftGrip: 0.1, exposed: 0, spikes: 0, 
  * Hull HP is the chassis HP — reaching 0 is catastrophic damage.
  */
 export class BattleBug {
-  static COOLER_SLOTS = 2;
+  static COOLER_SLOTS = 3; // e.g. jacket + liquid cooler + fan
   static MOD_SLOTS = 1;
 
   constructor({ id, name, hue = 30, alien = false, pilot = null, chassis, engine = null, tires = null, armor = null, weapons = [], coolers = [], mods = [] }) {

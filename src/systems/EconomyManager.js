@@ -1227,7 +1227,7 @@ export class EconomyManager {
     if (!bug.armor) add('armor', "you've got no armour — every hit goes straight to the hull");
     if (bug.weapons.length < bug.weaponSlots) add('weapon', `you've got ${bug.weaponSlots - bug.weapons.length} empty hardpoint${bug.weaponSlots - bug.weapons.length > 1 ? 's' : ''}`);
     if (s.cooling < 12) add('cooling', "your motor runs hot — you'll stall in long pushes");
-    if (bug.coolers.length < 2 && s.cooling < 16) add('cooling', 'more cooling means longer pushes', false);
+    if (bug.coolers.length < BattleBug.COOLER_SLOTS && s.cooling < 16) add('cooling', 'more cooling means longer pushes', false);
     if (!bug.mods.length) add('enhancement', 'an enhancement would give you an edge', false);
     add('engine', 'more push always helps', false);
     add('tires', 'more grip always helps', false);

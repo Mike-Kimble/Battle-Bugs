@@ -25,7 +25,7 @@ const PART_GROUPS = [['engine', 'Drive'], ['cooling', 'Cooling'], ['enhancement'
 /** Propulsion splits into three aisles. */
 const PROPULSION_SUBS = [
   ['engine', 'Drive', 'Motors & power cores. Power, revs (top speed) and cooling.'],
-  ['cooling', 'Cooling', 'Heat exchangers, misters, radiators, fans… Two cooling slots. Not everything suits every drive.'],
+  ['cooling', 'Cooling', 'Heat exchangers, misters, radiators, fans, jackets… Three cooling slots. Not everything suits every drive.'],
   ['enhancement', 'Enhancement', 'Turbos, nitro, afterburners, feeders… One enhancement slot. Not everything suits every drive.'],
 ];
 const isPropulsion = (cat) => PROPULSION_SUBS.some(([k]) => k === cat);

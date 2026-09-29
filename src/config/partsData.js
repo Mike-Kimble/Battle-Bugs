@@ -137,11 +137,11 @@ export const PARTS = Object.freeze({
   grease_gun: weapon('Grease Gun', 2, U, 300, 20, 55, { class: 'grip', effect: 'slick', cost: 18, range: 120, arc: 360, cooldown: 5.5, puddleRadius: 50, puddleTime: 6, gripMod: 0.3, exposeTime: 1.1 }, 'slick_sprayer', 'Squirts. Aim is optional.'),
   slick_sprayer: weapon('Slick Sprayer', 3, U, 420, 25, 60, { class: 'grip', effect: 'slick', cost: 20, range: 150, arc: 360, cooldown: 5, puddleRadius: 60, puddleTime: 7, gripMod: 0.2, exposeTime: 1.0 }, 'slick_sprayer', 'Lays an oil slick ahead. Anything on it loses grip.'),
   flipper_wedge: weapon('Flipper Wedge', 4, R, 1000, 38, 100, { class: 'grip', effect: 'lift', cost: 13, range: 50, arc: 90, cooldown: 2.8, liftTime: 2.2, gripMod: 0.05, exposeTime: 1.1 }, 'wedge_lifter', 'Gets under them and keeps them there.'),
-  // ───────────── COOLING (propulsion add-ons, 2 slots) ─────────────
+  // ───────────── COOLING (propulsion add-ons, 3 slots) ─────────────
   // stats: cool (+stamina/s recovered), kind, works?, uses? (battles), boost? (fans), ventBonus?, staminaMax?
   tin_heat_sink: cooler('Tin Heat Sink', 1, C, 40, 4, { cool: 1.5, kind: 'fins' }, 'A slab of tin with ambitions.'),
   radiator_fins: cooler('Radiator Fins', 1, C, 70, 6, { cool: 2.5, kind: 'fins' }, 'Thin fins, big surface, honest work.'),
-  desk_fan: cooler('Desk Fan', 1, C, 30, 3, { cool: 0.5, kind: 'fan', boost: 1.5, ventBonus: 3 }, 'Pretty useless on its own. Point it at water cooling, a heat exchanger or vented armour and it earns its keep.'),
+  desk_fan: cooler('Fan', 1, C, 30, 3, { cool: 0.5, kind: 'fan', boost: 1.5, ventBonus: 3 }, 'Pretty useless on its own. Point it at water cooling, an oil cooler, a heat exchanger or vented armour and it earns its keep.'),
   water_mister: cooler('Water Mister', 1, U, 90, 8, { cool: 3, kind: 'mister', works: NOT_ELECTRIC }, 'Sprays the motor like a sweaty athlete. Shorts out electric motors.'),
   heat_exchanger: cooler('Heat Exchanger', 2, C, 220, 12, { cool: 4, kind: 'exchanger' }, 'Swaps hot for cold like a very small, very dull magician.'),
   oil_cooler: cooler('Oil Cooler', 2, C, 200, 10, { cool: 4.5, kind: 'oil', jacket: 'oil' }, 'Keeps the oil from turning into soup. Plugs straight into combustion motors; anything else needs an Oil Jacket fitted first.'),

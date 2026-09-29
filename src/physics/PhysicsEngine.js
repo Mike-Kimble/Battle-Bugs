@@ -2,6 +2,9 @@ import { PHYSICS, STAMINA, EVENTS } from '../config/constants.js';
 import { Vector2D, clamp, approach, wrapAngle } from './Vector2D.js';
 import { INTERACTIONS, worksWith, JACKET_NAMES } from '../config/partsData.js';
 
+/** Coolers a fan can blow on to boost. */
+const FAN_BOOSTS = ['water', 'oil', 'exchanger'];
+
 /**
  * Physics & derived-stats engine.
  *
@@ -48,15 +51,15 @@ export class PhysicsEngine {
     for (const c of coolers) {
       cool += c.stats.cool;
       // A fan blowing on water cooling or a heat exchanger makes it far better.
-      if (boost > 1 && (c.stats.kind === 'water' || c.stats.kind === 'exchanger')) cool += c.stats.cool * (boost - 1);
+      if (boost > 1 && FAN_BOOSTS.includes(c.stats.kind)) cool += c.stats.cool * (boost - 1);
       if (c.stats.staminaMax) m.staminaMax *= c.stats.staminaMax;
     }
     const vented = (bug.armor?.stats.heat || 0) < 0 && !bug.armor.isBroken;
     for (const f of fans) if (vented) cool += f.stats.ventBonus || 0;
-    const partner = coolers.some((c) => c.stats.kind === 'water' || c.stats.kind === 'exchanger');
-    if (fans.length && partner) interactions.push({ id: 'fan_boost', good: true, mods: {}, text: 'Your fan is blowing on the water cooling / heat exchanger — a big boost to cooling.' });
+    const partner = coolers.some((c) => FAN_BOOSTS.includes(c.stats.kind));
+    if (fans.length && partner) interactions.push({ id: 'fan_boost', good: true, mods: {}, text: 'Your fan is blowing on the liquid cooling / heat exchanger — a big boost to cooling.' });
     else if (fans.length && vented) interactions.push({ id: 'fan_vent', good: true, mods: {}, text: 'Your fan pushes air through the vented armour. Nice.' });
-    else if (fans.length) interactions.push({ id: 'fan_alone', good: false, mods: {}, text: 'A fan on its own does almost nothing — pair it with water cooling, a heat exchanger or vented armour.' });
+    else if (fans.length) interactions.push({ id: 'fan_alone', good: false, mods: {}, text: 'A fan on its own does almost nothing — pair it with water or oil cooling, a heat exchanger or vented armour.' });
 
     for (const e of (bug.mods || []).filter(live)) {
       const s = e.stats;
