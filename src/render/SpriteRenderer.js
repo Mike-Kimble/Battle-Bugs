@@ -584,10 +584,13 @@ export class SpriteRenderer {
 
   drawEyes(ctx, bug, r, time) {
     const shape = bug.chassis.stats.shape;
-    const ex = shape === 'mantis' || shape === 'hornet' ? r * 0.42 : shape === 'roach' ? r * 0.7 : r * 0.55;
-    const ys = bug.alien ? [-r * 0.24, 0, r * 0.24] : [-r * 0.2, r * 0.2];
+    const ex0 = shape === 'mantis' || shape === 'hornet' ? r * 0.42 : shape === 'roach' ? r * 0.7 : r * 0.55;
+    const eyes = shape === 'daddy'
+      // Two rows: a pair up front, three behind — like a real harvestman's eye cluster, only more of it.
+      ? [[r * 0.52, -r * 0.14], [r * 0.52, r * 0.14], [r * 0.28, -r * 0.27], [r * 0.28, 0], [r * 0.28, r * 0.27]]
+      : (bug.alien ? [-r * 0.24, 0, r * 0.24] : [-r * 0.2, r * 0.2]).map((ey) => [ex0, ey]);
     const blink = Math.sin(time * 1.3 + bug.hue) > 0.97;
-    for (const ey of ys) {
+    for (const [ex, ey] of eyes) {
       ctx.fillStyle = OUTLINE;
       ctx.fillRect(ex - 4, ey - 4, 8, 8);
       if (bug.stalled || bug.chassis.isBroken) {
