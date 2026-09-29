@@ -144,8 +144,8 @@ export const PARTS = Object.freeze({
   desk_fan: cooler('Desk Fan', 1, C, 30, 3, { cool: 0.5, kind: 'fan', boost: 1.5, ventBonus: 3 }, 'Pretty useless on its own. Point it at water cooling, a heat exchanger or vented armour and it earns its keep.'),
   water_mister: cooler('Water Mister', 1, U, 90, 8, { cool: 3, kind: 'mister', works: NOT_ELECTRIC }, 'Sprays the motor like a sweaty athlete. Shorts out electric motors.'),
   heat_exchanger: cooler('Heat Exchanger', 2, C, 220, 12, { cool: 4, kind: 'exchanger' }, 'Swaps hot for cold like a very small, very dull magician.'),
-  oil_cooler: cooler('Oil Cooler', 2, C, 200, 10, { cool: 4.5, kind: 'oil', works: HOT }, 'Keeps the oil in piston engines from turning into soup.'),
-  water_cooling: cooler('Water Cooling Loop', 2, U, 300, 16, { cool: 5, kind: 'water' }, 'Pipes, pump, reservoir. Plumbing, but fast.'),
+  oil_cooler: cooler('Oil Cooler', 2, C, 200, 10, { cool: 4.5, kind: 'oil', jacket: 'oil' }, 'Keeps the oil from turning into soup. Plugs straight into combustion motors; anything else needs an Oil Jacket fitted first.'),
+  water_cooling: cooler('Water Cooling Loop', 2, U, 300, 16, { cool: 5, kind: 'water', jacket: 'water' }, 'Pipes, pump, reservoir. Plumbs straight into combustion motors; anything else needs a Water Jacket fitted first.'),
   expansion_nozzle: cooler('Expansion Nozzle', 2, U, 280, 6, { cool: 7, kind: 'nozzle', works: ['turbine'] }, 'Bleeds turbine exhaust through a cold throat. Only works on turbines, and works very well.'),
   twin_fans: cooler('Twin Fans', 2, R, 180, 5, { cool: 0.8, kind: 'fan', boost: 1.7, ventBonus: 4 }, 'Two fans, twice the draught. Still wants something to blow on.'),
   mist_curtain: cooler('Mist Curtain', 3, U, 520, 10, { cool: 6, kind: 'mister', works: NOT_ELECTRIC }, 'A whole wall of spray. Electric motors hate it.'),
@@ -154,10 +154,14 @@ export const PARTS = Object.freeze({
   coolant_gland: cooler('Coolant Gland', 3, R, 650, 6, { cool: 7, kind: 'gland', works: ['bio'] }, 'A living organ that sweats for your bio-engine. Useless on metal motors.'),
   ram_air_scoop: cooler('Ram-Air Scoop', 3, U, 560, 7, { cool: 5.5, kind: 'fins' }, 'Scoops air as you drive. Better than it looks.'),
   plasma_vent: cooler('Plasma Vent', 4, R, 1100, 10, { cool: 9, kind: 'nozzle', works: ['plasma', 'fusion'] }, 'Dumps heat straight out of a plasma or fusion core.'),
-  nitrogen_loop: cooler('Liquid-Nitrogen Loop', 4, E, 1400, 18, { cool: 11, kind: 'water' }, 'Water cooling, but make it minus two hundred degrees.'),
+  nitrogen_loop: cooler('Liquid-Nitrogen Loop', 4, E, 1400, 18, { cool: 11, kind: 'water', jacket: 'nitrogen' }, 'Water cooling, but make it minus two hundred degrees. Non-combustion drives need a Cryo Jacket fitted first.'),
   turbo_fan_array: cooler('Turbo Fan Array', 4, R, 900, 9, { cool: 1.2, kind: 'fan', boost: 2, ventBonus: 6 }, 'A wall of screaming fans. Doubles a good cooler; does little alone.'),
   cryo_block: cooler('Cryo Block', 4, E, 1300, 12, { cool: 18, kind: 'cryo', uses: 10 }, 'A slab of impossible cold. Unbeatable cooling — but it melts away after 10 battles.'),
   void_radiator: cooler('Void Radiator', 5, L, 2400, 8, { cool: 14, kind: 'exchanger' }, 'Radiates heat into another dimension. They haven\'t complained yet.'),
+  // Encasement jackets: let liquid cooling run on non-combustion drives. Useless on their own.
+  water_jacket: cooler('Water Jacket', 2, C, 150, 8, { cool: 1, kind: 'jacket', jacketFor: 'water' }, 'A sealed sleeve around the drive so a Water Cooling Loop can hook up to anything, not just combustion motors.'),
+  oil_jacket: cooler('Oil Jacket', 2, C, 140, 8, { cool: 1, kind: 'jacket', jacketFor: 'oil' }, 'A sealed sleeve so an Oil Cooler can hook up to any drive.'),
+  cryo_jacket: cooler('Cryo Jacket', 4, R, 600, 10, { cool: 1.5, kind: 'jacket', jacketFor: 'nitrogen' }, 'An insulated casing rated for liquid nitrogen. Lets a Liquid-Nitrogen Loop run on any drive.'),
   glacier_heart: cooler('Glacier Heart', 5, L, 2600, 14, { cool: 12, kind: 'cryo', staminaMax: 1.1 }, 'The frozen core of a comet. It never melts.'),
 
   // ───────────── ENHANCEMENTS (propulsion add-ons, 1 slot) ─────────────
@@ -426,10 +430,19 @@ export const FIGHTING_STYLES = Object.freeze(Object.keys(PILOT_STYLES).filter((k
 
 /** Does this add-on (cooling / enhancement) work with the bug's drive? */
 export function worksWith(part, bug) {
-  const works = part.stats.works;
-  if (!works) return true;
-  return !!bug?.engine && works.includes(bug.engine.stats.kind);
+  const s = part.stats;
+  const drive = bug?.engine?.stats.kind;
+  // Liquid cooling plumbs straight into combustion motors; any other drive needs the matching jacket fitted.
+  if (s.jacket) {
+    if (drive === 'combustion') return true;
+    return !!drive && (bug.coolers || []).some((c) => c !== part && c.stats.jacketFor === s.jacket);
+  }
+  if (!s.works) return true;
+  return !!drive && s.works.includes(drive);
 }
+
+/** Which jacket a liquid cooler needs on a non-combustion drive. */
+export const JACKET_NAMES = Object.freeze({ water: 'Water Jacket', oil: 'Oil Jacket', nitrogen: 'Cryo Jacket' });
 
 /** Readable drive-type names for "works with" notes. */
 export const DRIVE_KINDS = Object.freeze({

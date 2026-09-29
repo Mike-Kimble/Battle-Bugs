@@ -1,6 +1,6 @@
 import { PHYSICS, STAMINA, EVENTS } from '../config/constants.js';
 import { Vector2D, clamp, approach, wrapAngle } from './Vector2D.js';
-import { INTERACTIONS, worksWith } from '../config/partsData.js';
+import { INTERACTIONS, worksWith, JACKET_NAMES } from '../config/partsData.js';
 
 /**
  * Physics & derived-stats engine.
@@ -65,7 +65,18 @@ export class PhysicsEngine {
     }
     for (const p of [...(bug.coolers || []), ...(bug.mods || [])]) {
       if (p.spent) interactions.push({ id: `spent_${p.uid}`, good: false, mods: {}, text: `Your ${p.name} is used up — strip it out.` });
-      else if (!worksWith(p, bug)) interactions.push({ id: `nofit_${p.uid}`, good: false, mods: {}, text: `Your ${p.name} doesn't work with this drive — it's dead weight.` });
+      else if (!worksWith(p, bug)) {
+        interactions.push({ id: `nofit_${p.uid}`, good: false, mods: {},
+          text: p.stats.jacket
+            ? `Your ${p.name} needs ${/^[AEIOU]/.test(JACKET_NAMES[p.stats.jacket]) ? 'an' : 'a'} ${JACKET_NAMES[p.stats.jacket]} on this drive — it's dead weight without one.`
+            : `Your ${p.name} doesn't work with this drive — it's dead weight.` });
+      }
+    }
+    const jackets = (bug.coolers || []).filter((c) => c.stats.jacketFor);
+    for (const j of jackets) {
+      if (!(bug.coolers || []).some((c) => c.stats.jacket === j.stats.jacketFor)) {
+        interactions.push({ id: `jacket_${j.uid}`, good: false, mods: {}, text: `Your ${j.name} isn't hooked up to anything — it needs its liquid cooler.` });
+      }
     }
     return { cool };
   }

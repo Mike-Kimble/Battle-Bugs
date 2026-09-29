@@ -1,5 +1,5 @@
 import { HOIST_REGIONS, WEAPON_CLASSES } from '../config/constants.js';
-import { PARTS, DRIVE_KINDS } from '../config/partsData.js';
+import { PARTS, DRIVE_KINDS, JACKET_NAMES } from '../config/partsData.js';
 import { PART_SCORES, VEHICLE_SCORES, REF, shown, partSummary } from '../config/scores.js';
 import { BattleBug } from '../entities/BattleBug.js';
 import { Part } from '../entities/Part.js';
@@ -75,7 +75,9 @@ export function partStatLine(part) {
   const line = partSummary(part);
   if (part.type === 'weapon') return `${WEAPON_CLASSES[part.stats.class].label} · ${line}`;
   if (part.type === 'cooling' || part.type === 'enhancement') {
-    const works = part.stats.works ? `Drives: ${part.stats.works.map((k) => DRIVE_KINDS[k]).join(', ')}` : 'Any drive';
+    const works = part.stats.jacket
+      ? `Combustion; other drives need ${/^[AEIOU]/.test(JACKET_NAMES[part.stats.jacket]) ? 'an' : 'a'} ${JACKET_NAMES[part.stats.jacket]}`
+      : part.stats.works ? `Drives: ${part.stats.works.map((k) => DRIVE_KINDS[k]).join(', ')}` : 'Any drive';
     const uses = part.usesLeft != null ? ` · ${part.usesLeft ? `${part.usesLeft} battle${part.usesLeft > 1 ? 's' : ''} left` : 'used up'}` : '';
     return `${line} · ${works}${uses}`;
   }
