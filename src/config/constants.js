@@ -95,6 +95,8 @@ export const ECONOMY = Object.freeze({
   PRICE_SWING: 0.25,         // buy/sell prices land within ±25% of base value
   PRICE_AGAINST: 0.7,        // chance the swing goes against you (dearer to buy, cheaper to sell)
   PRICE_AGAINST_MANAGER: 0.4, // …with a manager negotiating
+  HOT_STREAK_WINS: 3,        // on a win streak this long…
+  HOT_STREAK_PREMIUM: [0.1, 0.2], // …sale prices (after the swing) are multiplied by 1.1–1.2
   RARE_DEAL_THRESHOLD: 0.8,  // price < 80% of value → flagged by the manager
   MECHANIC_SHOWS_AT_WINS: 3,  // staff only appear on the Admin tab once you've made a name
   MANAGER_SHOWS_AT_WINS: 5,

@@ -511,6 +511,7 @@ export class TerminalUI {
       return el('div', { class: 'market' },
         subnav,
         el('p', { class: 'muted' }, catBlurb, ` Buyers pay ${Math.round(ECONOMY.SELL_RATE * 100)}% of value × condition; broken parts fetch scrap only.`),
+        this.economy.hotStreak ? el('div', { class: 'notice notice-gold' }, `🔥 You're on a ${s.record.streak}-win streak — buyers want some of your secret sauce and are paying 10–20% extra.`) : null,
         groups.length
           ? groups.map(([label, ps]) => [el('h3', {}, `${label} (${ps.length})`), el('div', { class: 'card-grid parts' }, ps.map((p) => this.sellPartCard(p)))])
           : el('p', { class: 'muted' }, 'No spare components. Remove parts on the hoist or strip a vehicle to sell them here.'));

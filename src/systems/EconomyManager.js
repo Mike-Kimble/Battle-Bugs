@@ -104,8 +104,16 @@ export class EconomyManager {
   /** A buyer's offer for an item, fixed until the next restock (so what you see is what you get). */
   sellQuote(id) {
     const q = this.state.sellQuotes;
-    if (!(id in q)) q[id] = this.priceSwing('sell');
+    if (!(id in q)) {
+      // On a hot streak, the usual haggle result is topped up by 10–20%.
+      q[id] = this.priceSwing('sell') * (this.hotStreak ? 1 + rand(...ECONOMY.HOT_STREAK_PREMIUM) : 1);
+    }
     return q[id];
+  }
+
+  /** On a 3+ win streak everyone wants some of your secret sauce. */
+  get hotStreak() {
+    return (this.state.record.streak || 0) >= ECONOMY.HOT_STREAK_WINS;
   }
 
   partSellBase(part) {
