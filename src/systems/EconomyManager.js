@@ -84,6 +84,8 @@ export class EconomyManager {
     this.state = state;
     // A mechanic can bring back anything that isn't completely destroyed.
     Part.scrapBelow = () => (state.staff.mechanic ? 0 : ECONOMY.SCRAP_BELOW);
+    // …and only a mechanic gets a part back to 100%.
+    Part.repairCap = () => (state.staff.mechanic ? 1 : ECONOMY.REPAIR_CAP);
   }
 
   // ───────────── Pricing ─────────────
@@ -115,8 +117,8 @@ export class EconomyManager {
   }
 
   repairCost(part) {
-    if (part.isScrap) return 0; // beyond repair
-    return part.missingHp > 0 ? Math.max(1, Math.ceil(part.missingHp * this.repairCostPerHp(part))) : 0;
+    const hp = part.repairableHp; // nothing for scrap; only up to 90% without a mechanic
+    return hp > 0.5 ? Math.max(1, Math.ceil(hp * this.repairCostPerHp(part))) : 0;
   }
 
   repairAllCost(bug) {
@@ -132,7 +134,7 @@ export class EconomyManager {
     let hp;
     let cost;
     if (budget >= full) {
-      hp = part.missingHp;
+      hp = part.repairableHp;
       cost = full;
     } else {
       hp = Math.floor(budget / per);

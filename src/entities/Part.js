@@ -16,6 +16,8 @@ export function makeId(prefix = 'id') {
 export class Part {
   /** Condition at or below which a part is scrap (set by the economy: 20%, or 0% with a mechanic). */
   static scrapBelow = () => 0;
+  /** How far a repair can bring a part back (set by the economy: 90%, or 100% with a mechanic). */
+  static repairCap = () => 1;
 
   constructor(key, { uid, hp } = {}) {
     this.def = getPartDef(key);
@@ -48,6 +50,10 @@ export class Part {
   get isBroken() { return this.hp <= 0; }
   /** Too far gone to fit or repair — scrap only. The limit depends on who's in your workshop. */
   get isScrap() { return this.hp <= this.maxHp * Part.scrapBelow(); }
+  /** HP a repair could restore right now (none for scrap). */
+  get repairableHp() { return this.isScrap ? 0 : Math.max(0, this.maxHp * Part.repairCap() - this.hp); }
+  /** HP after the best repair available. */
+  get repairedHp() { return this.hp + this.repairableHp; }
   get missingHp() { return this.maxHp - this.hp; }
 
   /** @returns {{dealt:number, broke:boolean}} */

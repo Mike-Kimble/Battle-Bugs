@@ -90,6 +90,7 @@ export const ECONOMY = Object.freeze({
   SCRAP_RATE: 0.2,           // a stripped bare frame sells for this share of its value
   SCRAP_BELOW: 0.2,          // parts at 80%+ damage are scrap: no repairs, no fitting (a mechanic can save anything above 0%)
   SCRAP_PRICE: 10,           // all a scrap part fetches
+  REPAIR_CAP: 0.9,           // DIY repairs only get a part back to 90% — a mechanic gets it to 100%
   REPAIR_RATE: 0.45,         // $ per missing HP = rate · value / maxHp
   MARKUP_MIN: 0.85,
   MARKUP_MAX: 1.3,

@@ -126,7 +126,7 @@ export function compareBars(rows, { neutral = false, legend = null } = {}) {
 export function partCompare(part, current, { legend } = {}) {
   const rows = PART_SCORES[part.type];
   if (!rows) return null;
-  const full = (p) => new Part(p.key, { uid: p.uid });
+  const full = (p) => new Part(p.key, { uid: p.uid, hp: p.repairedHp });
   return compareBars(rows.map((r) => ({
     label: r.label, fmt: int, better: r.neutral ? 'neutral' : 'higher', max: 100,
     value: capped(r.get(part)), potential: capped(r.get(full(part))), current: current ? capped(r.get(full(current))) : null,
@@ -174,7 +174,8 @@ export function partCard(part, economy, { actions = [], extra = null, compareTo,
 /** Stats with every part at full HP — used to show damage penalties. */
 function pristineStats(bug) {
   const j = bug.toJSON();
-  const strip = (p) => (p ? { key: p.key, uid: p.uid } : null);
+  // "Repaired" means as far as you can repair it right now (90%, or 100% with a mechanic).
+  const strip = (p) => (p ? { key: p.key, uid: p.uid, hp: Part.fromJSON(p).repairedHp } : null);
   return BattleBug.fromJSON({
     ...j, chassis: strip(j.chassis), engine: strip(j.engine), tires: strip(j.tires), armor: strip(j.armor), weapons: j.weapons.map(strip),
   }).getStats();
