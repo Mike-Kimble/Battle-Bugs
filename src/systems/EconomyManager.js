@@ -296,20 +296,18 @@ export class EconomyManager {
     return price;
   }
 
-  /** Strip a vehicle: parts go to inventory, the bare frame is sold as scrap. */
+  /** Strip a vehicle down to its frame: every fitted part goes to your spares; the bare chassis stays on the hoist. */
   stripVehicle(id) {
     this.assertNotInField();
     const bug = this.state.getVehicle(id);
     if (!bug) throw new Error('No such vehicle');
-    this.assertDisposable(bug);
-    const parts = [bug.engine, bug.tires, bug.armor, ...bug.weapons, ...bug.coolers, ...bug.mods].filter(Boolean);
-    parts.forEach((p) => this.state.addPart(p));
-    const scrap = bug.chassis.isScrap
-      ? ECONOMY.SCRAP_PRICE
-      : Math.max(ECONOMY.SCRAP_PRICE, Math.round(bug.chassis.value * ECONOMY.SCRAP_RATE * bug.chassis.hpRatio));
-    this.state.removeVehicle(id);
-    this.state.earn(scrap);
-    return { parts, scrap };
+    this.assertUnlocked(bug);
+    const parts = bug.parts.filter((p) => p !== bug.chassis);
+    for (const p of parts) {
+      bug.unequip(p);
+      this.state.addPart(p);
+    }
+    return { parts };
   }
 
   // ───────────── Staff ─────────────

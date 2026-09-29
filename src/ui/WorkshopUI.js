@@ -288,9 +288,9 @@ export class WorkshopUI {
           }, repairAll ? `Repair all ${formatMoney(repairAll)}` : 'Fully repaired'),
           el('button', { class: 'btn btn-small', onclick: () => { this.renaming = true; this.render(); } }, 'Rename'),
           el('button', {
-            class: 'btn btn-small', disabled: !canDispose,
-            onclick: () => this.confirm(`Strip ${bug.name}?`, 'Engine, tires, armour and weapons go to your spares; the bare frame is sold as scrap.',
-              () => this.act(() => this.economy.stripVehicle(bug.id), (r) => `Stripped ${r.parts.length} parts, frame scrapped for ${formatMoney(r.scrap)}`)),
+            class: 'btn btn-small', disabled: locked || this.economy.inField || bug.parts.length <= 1,
+            onclick: () => this.confirm(`Strip ${bug.name}?`, 'Every fitted part comes off and goes to your spares. The bare chassis stays on the hoist.',
+              () => this.act(() => this.economy.stripVehicle(bug.id), (r) => `Stripped ${r.parts.length} part${r.parts.length === 1 ? '' : 's'} — the bare chassis is on the hoist`)),
           }, 'Strip'),
           el('button', {
             class: 'btn btn-small btn-danger', disabled: !canDispose,
