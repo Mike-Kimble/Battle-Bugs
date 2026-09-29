@@ -22,12 +22,12 @@ const weapon = (name, tier, rarity, value, mass, maxHp, stats, look, description
 
 export const PARTS = Object.freeze({
   // ───────────── CHASSIS (frames) ─────────────
-  scrapper_frame: chassis('Scrapper Frame', 1, C, 120, 70, 120, { radius: 26, staminaMax: 100, weaponSlots: 1, turn: 4.2, shape: 'scrapper' }, 'Bolted-together junk. Honest, if unlovely.'),
-  shopping_cart: chassis('Shopping-Cart Frame', 1, C, 100, 65, 110, { radius: 25, staminaMax: 95, weaponSlots: 1, turn: 4.4, shape: 'scrapper' }, 'Liberated from a hypermarket on Glorp IV. One wheel still squeaks.'),
-  lawnmower_deck: chassis('Lawnmower Deck', 1, U, 150, 80, 135, { radius: 27, staminaMax: 102, weaponSlots: 1, turn: 3.9, shape: 'beetle' }, 'Heavy steel deck. Smells faintly of grass from a planet nobody remembers.'),
+  scrapper_frame: chassis('Aphid Husk', 1, C, 120, 70, 120, { radius: 26, staminaMax: 100, weaponSlots: 1, turn: 4.2, shape: 'aphid' }, 'A soft, pear-shaped shell patched with scrap. Honest, if unlovely.'),
+  shopping_cart: chassis('Ant Gaster', 1, C, 100, 65, 110, { radius: 25, staminaMax: 95, weaponSlots: 1, turn: 4.4, shape: 'ant' }, 'Mostly abdomen. Carries many times its own weight, apparently.'),
+  lawnmower_deck: chassis('Daddy No-Legs', 1, U, 150, 80, 135, { radius: 27, staminaMax: 102, weaponSlots: 1, turn: 3.9, shape: 'daddy' }, 'A daddy-long-legs that lost every leg in a bet. Round, tough and bitter about it.'),
   beetle_shell: chassis('Beetle Shell', 2, C, 380, 95, 180, { radius: 29, staminaMax: 110, weaponSlots: 1, turn: 3.8, shape: 'beetle' }, 'Domed elytra plating. Hard to tip, hard to hurt.'),
   roach_lowrider: chassis('Roach Lowrider', 2, C, 420, 60, 100, { radius: 24, staminaMax: 130, weaponSlots: 2, turn: 5.0, shape: 'roach' }, 'Light, twitchy, twin hardpoints.'),
-  tick_pod: chassis('Tick Pod', 2, U, 400, 85, 170, { radius: 26, staminaMax: 115, weaponSlots: 1, turn: 4.2, shape: 'beetle' }, 'Round, stubborn and very hard to get off you.'),
+  tick_pod: chassis('Ladybird Pod', 2, U, 400, 85, 170, { radius: 26, staminaMax: 115, weaponSlots: 1, turn: 4.2, shape: 'beetle' }, 'Round, spotty and surprisingly hard to knock over.'),
   cricket_chassis: chassis('Cricket Chassis', 2, R, 470, 58, 108, { radius: 24, staminaMax: 132, weaponSlots: 2, turn: 5.2, shape: 'roach', bio: true }, 'Grown, not built. Chirps when it corners.'),
   mantis_frame: chassis('Mantis Frame', 3, U, 560, 80, 140, { radius: 27, staminaMax: 120, weaponSlots: 2, turn: 4.6, shape: 'mantis' }, 'Segmented striker with raptorial fore-mounts.'),
   stag_brawler: chassis('Stag Brawler', 3, C, 620, 110, 210, { radius: 30, staminaMax: 110, weaponSlots: 2, turn: 3.8, shape: 'scarab' }, 'All shoulders. Built for leaning on people.'),
@@ -39,9 +39,9 @@ export const PARTS = Object.freeze({
   hive_carapace: chassis('Hive Carapace', 4, E, 1300, 85, 200, { radius: 28, staminaMax: 142, weaponSlots: 2, turn: 4.8, shape: 'mantis', bio: true }, 'A frame secreted by ten thousand drones. It hums along with a bio-engine.'),
   xeno_hornet: chassis('Xeno Hornet', 5, R, 1150, 75, 160, { radius: 26, staminaMax: 150, weaponSlots: 2, turn: 5.2, shape: 'hornet', bio: true }, 'Alien bio-alloy frame with a huge power reserve.'),
   goliath_hull: chassis('Goliath Hull', 5, R, 1400, 150, 330, { radius: 34, staminaMax: 115, weaponSlots: 2, turn: 3.2, shape: 'scarab' }, 'Less a vehicle, more a postcode.'),
-  widow_frame: chassis('Widow Frame', 5, E, 1800, 80, 190, { radius: 27, staminaMax: 156, weaponSlots: 2, turn: 5.2, shape: 'mantis', bio: true }, 'Elegant, black, and it has eaten previous owners.'),
-  empress_chassis: chassis('Empress Chassis', 5, L, 2600, 78, 230, { radius: 27, staminaMax: 172, weaponSlots: 2, turn: 5.4, shape: 'hornet', bio: true }, 'Grown for a hive queen. Nobody tells you how they got it.'),
-  titan_colossus: chassis('Titan Colossus', 5, L, 2500, 160, 380, { radius: 35, staminaMax: 132, weaponSlots: 2, turn: 3.6, shape: 'scarab' }, 'Salvaged from a war machine the size of a moon. Somehow still turns.'),
+  widow_frame: chassis('Assassin Bug Frame', 5, E, 1800, 80, 190, { radius: 27, staminaMax: 156, weaponSlots: 2, turn: 5.2, shape: 'mantis', bio: true }, 'Elegant, black, and it has eaten previous owners.'),
+  empress_chassis: chassis('Empress Wasp', 5, L, 2600, 78, 230, { radius: 27, staminaMax: 172, weaponSlots: 2, turn: 5.4, shape: 'hornet', bio: true }, 'Grown for a hive queen. Nobody tells you how they got it.'),
+  titan_colossus: chassis('Titan Beetle', 5, L, 2500, 160, 380, { radius: 35, staminaMax: 132, weaponSlots: 2, turn: 3.6, shape: 'scarab' }, 'Shell of the biggest beetle ever recorded. Somehow still turns.'),
 
   // ───────────── ENGINES (propulsion) ─────────────
   rust_motor: engine('Rust-Bucket Motor', 1, C, 80, 30, 60, { force: 26000, rpm: 3800, cooling: 10, kind: 'combustion' }, '#ff8a3d', 'It turns. Mostly.'),

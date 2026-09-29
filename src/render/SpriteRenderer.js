@@ -236,6 +236,24 @@ export class SpriteRenderer {
         ctx.moveTo(r * 0.72, 0);
         ctx.ellipse(r * 0.42, 0, r * 0.32, r * 0.42, 0, 0, Math.PI * 2);
         break;
+      case 'aphid':
+        // Plump pear-shaped body with a small head.
+        ctx.ellipse(-r * 0.15, 0, r * 0.78, r * 0.64, 0, 0, Math.PI * 2);
+        ctx.moveTo(r * 0.9, 0);
+        ctx.ellipse(r * 0.62, 0, r * 0.28, r * 0.3, 0, 0, Math.PI * 2);
+        break;
+      case 'ant':
+        // Big gaster, thorax, head.
+        ctx.ellipse(-r * 0.42, 0, r * 0.52, r * 0.6, 0, 0, Math.PI * 2);
+        ctx.moveTo(r * 0.5, 0);
+        ctx.ellipse(r * 0.24, 0, r * 0.26, r * 0.3, 0, 0, Math.PI * 2);
+        ctx.moveTo(r * 0.98, 0);
+        ctx.ellipse(r * 0.72, 0, r * 0.26, r * 0.28, 0, 0, Math.PI * 2);
+        break;
+      case 'daddy':
+        // A round little body — no legs.
+        ctx.arc(0, 0, r * 0.72, 0, Math.PI * 2);
+        break;
       case 'scrapper':
       default: {
         const pts = [[0.82, -0.45], [0.82, 0.45], [0.5, 0.62], [-0.78, 0.62], [-0.9, 0.4], [-0.9, -0.4], [-0.78, -0.62], [0.5, -0.62]];
@@ -292,6 +310,28 @@ export class SpriteRenderer {
         ctx.fillStyle = '#16131b';
         for (let i = 0; i < 3; i++) ctx.fillRect(-r * 0.8 + i * r * 0.28, -r * 0.5, r * 0.12, r);
         break;
+      case 'aphid':
+        // Soft body segments, scrap rivets and a patch.
+        for (let i = 0; i < 3; i++) ctx.fillRect(-r * 0.7 + i * r * 0.32, -r * 0.55, 2, r * 1.1);
+        for (const [px, py] of [[-0.55, -0.4], [-0.55, 0.4], [0.2, -0.38], [0.2, 0.38]]) ctx.fillRect(px * r - 2, py * r - 2, 4, 4);
+        ctx.fillStyle = '#7a6a5a';
+        ctx.fillRect(-r * 0.4, -r * 0.18, r * 0.36, r * 0.28);
+        break;
+      case 'ant':
+        // Gaster stripes and a pinched waist.
+        for (let i = 0; i < 3; i++) ctx.fillRect(-r * 0.75 + i * r * 0.24, -r * 0.5, 3, r);
+        ctx.fillRect(r * 0.06, -r * 0.3, 3, r * 0.6);
+        ctx.fillStyle = pal.accent;
+        ctx.fillRect(r * 0.62, -r * 0.1, 5, 5);
+        break;
+      case 'daddy':
+        // Dark saddle and a row of stitches.
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.38, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = pal.light;
+        for (let i = -2; i <= 2; i++) ctx.fillRect(i * r * 0.14 - 1, -r * 0.62, 2, 6);
+        break;
       default: {
         // Scrapper rivets & a patch
         ctx.fillStyle = pal.dark;
@@ -316,6 +356,33 @@ export class SpriteRenderer {
       ctx.beginPath();
       ctx.moveTo(-r * 0.9, -3); ctx.lineTo(-r * 1.15, 0); ctx.lineTo(-r * 0.9, 3);
       ctx.fill();
+    }
+    if (shape === 'ant') {
+      // Elbowed antennae
+      ctx.beginPath();
+      ctx.moveTo(r * 0.9, -r * 0.12); ctx.lineTo(r * 1.12, -r * 0.35); ctx.lineTo(r * 1.3, -r * 0.2);
+      ctx.moveTo(r * 0.9, r * 0.12); ctx.lineTo(r * 1.12, r * 0.35); ctx.lineTo(r * 1.3, r * 0.2);
+      ctx.stroke();
+    }
+    if (shape === 'aphid') {
+      // Cornicles — the two little tail-pipes aphids have — and short antennae
+      ctx.fillStyle = OUTLINE;
+      ctx.fillRect(-r * 1.0, -r * 0.38, r * 0.2, 5);
+      ctx.fillRect(-r * 1.0, r * 0.38 - 5, r * 0.2, 5);
+      ctx.beginPath();
+      ctx.moveTo(r * 0.8, -r * 0.1); ctx.lineTo(r * 1.1, -r * 0.3);
+      ctx.moveTo(r * 0.8, r * 0.1); ctx.lineTo(r * 1.1, r * 0.3);
+      ctx.stroke();
+    }
+    if (shape === 'daddy') {
+      // Eight sad little leg stumps
+      ctx.fillStyle = OUTLINE;
+      for (let i = 0; i < 8; i++) {
+        ctx.save();
+        ctx.rotate((i / 8) * Math.PI * 2 + Math.PI / 8);
+        ctx.fillRect(r * 0.7, -2, r * 0.14, 4);
+        ctx.restore();
+      }
     }
     if (shape === 'mantis') {
       ctx.lineWidth = 3;
