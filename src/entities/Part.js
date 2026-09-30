@@ -19,12 +19,14 @@ export class Part {
   /** How far a repair can bring a part back (set by the economy: 90%, or 100% with a mechanic). */
   static repairCap = () => 1;
 
-  constructor(key, { uid, hp, usesLeft } = {}) {
+  constructor(key, { uid, hp, usesLeft, failed } = {}) {
     this.def = getPartDef(key);
     this.key = key;
     this.uid = uid || makeId('pt');
     this.maxHp = this.def.maxHp;
     this.hp = hp == null ? this.maxHp : clamp(hp, 0, this.maxHp);
+    // Broke down in a fight (at 15% or below): stops working until it's repaired.
+    this.failed = !!failed;
     // Consumables (cryo blocks, nitro…) last a set number of battles.
     this.usesLeft = this.def.stats.uses ? (usesLeft ?? this.def.stats.uses) : null;
   }
@@ -52,7 +54,8 @@ export class Part {
   get description() { return this.def.description; }
 
   get hpRatio() { return this.maxHp > 0 ? this.hp / this.maxHp : 0; }
-  get isBroken() { return this.hp <= 0; }
+  /** Not working: wrecked (0 HP) or broken down until repaired. */
+  get isBroken() { return this.hp <= 0 || this.failed; }
   /** Too far gone to fit or repair — scrap only. The limit depends on who's in your workshop. */
   get isScrap() { return this.spent || this.hp <= this.maxHp * Part.scrapBelow(); }
   /** HP a repair could restore right now (none for scrap). */
@@ -73,12 +76,14 @@ export class Part {
   repair(amount = Infinity) {
     const before = this.hp;
     this.hp = Math.min(this.maxHp, this.hp + amount);
+    if (this.hp > before) this.failed = false; // any repair gets it working again
     return this.hp - before;
   }
 
   toJSON() {
     const o = { key: this.key, uid: this.uid, hp: Math.round(this.hp * 10) / 10 };
     if (this.usesLeft != null) o.usesLeft = this.usesLeft;
+    if (this.failed) o.failed = true;
     return o;
   }
 }

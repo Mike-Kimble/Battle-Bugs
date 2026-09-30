@@ -101,11 +101,11 @@ export class PhysicsEngine {
     const mass = bug.parts.reduce((sum, p) => sum + p.mass, 0);
     // Twin drives add their force; a damaged side pulls the bug off line.
     const drives = bug.drives || (engine ? [engine] : []);
-    const driveForces = drives.map((d) => d.stats.force * d.hpRatio);
+    const driveForces = drives.map((d) => (d.isBroken ? 0 : d.stats.force * d.hpRatio)); // broken down = no push
     const forceSum = driveForces.reduce((a, b) => a + b, 0);
     const twinBias = drives.length === 2 && forceSum > 0 ? (driveForces[0] - driveForces[1]) / forceSum : 0;
     const engineRatio = drives.length ? drives.reduce((t, d) => t + d.hpRatio, 0) / drives.length : 0;
-    const tireRatio = tires ? tires.hpRatio : 0;
+    const tireRatio = tires && !tires.isBroken ? tires.hpRatio : 0;
     // Part combinations that help or hurt.
     const m = { force: 1, grip: 1, vMax: 1, cooling: 1, staminaMax: 1, drain: 1, accel: 1 };
     const interactions = PhysicsEngine.interactions(bug);
@@ -118,7 +118,7 @@ export class PhysicsEngine {
     // limit), less the rolling resistance. What holds the line and brakes is
     // `hold` — as slippery as the rolling resistance on most castors.
     const castor = tires?.type === 'castor';
-    const thrust = castor && THRUST_DRIVES.includes(engine?.stats.kind);
+    const thrust = castor && !tires.isBroken && THRUST_DRIVES.includes(engine?.stats.kind);
     const rollForce = castor ? tires.stats.roll * (2 - tireRatio) * mass * PHYSICS.GRAVITY : 0; // damage adds drag
     const gripMu = castor ? (tires.stats.hold ?? tires.stats.roll) : tires?.stats.mu || 0;
     const fGripBase = tires ? gripMu * mass * PHYSICS.GRAVITY * (castor ? 1 : tireRatio) * m.grip : 0;

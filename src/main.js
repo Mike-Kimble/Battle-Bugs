@@ -141,8 +141,7 @@ class App {
     this.state.save();
 
     this.match = { challenger, tournament, stake, bet, player, moneyBefore, endTimer: null, banner: null };
-    // Title fights are to the death: nothing gets called off.
-    this.engine = new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty, style: challenger.style, toTheDeath: stake?.type === 'titles' });
+    this.engine = new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty, style: challenger.style });
     this.wireEngine(this.engine);
 
     $('#workshop-screen').classList.remove('active');
@@ -196,8 +195,8 @@ class App {
       sp.float(bug.pos.add(new Vector2D((Math.random() - 0.5) * 20, -bug.radius)), `-${Math.max(1, Math.round(amount))}`, isPlayer(bug) ? '#ff6a6a' : '#ffd24a', 10);
       if (kind === 'spikes') sp.sparks(bug.pos, 5, '#ff7a3d', 140);
     });
-    engine.on(EVENTS.PART_BROKEN, ({ bug, part }) => {
-      sp.float(bug.pos.add(new Vector2D(0, -bug.radius - 14)), `${part.name.toUpperCase()} BROKEN!`, '#ff4a4a', 9);
+    engine.on(EVENTS.PART_BROKEN, ({ bug, part, breakdown }) => {
+      sp.float(bug.pos.add(new Vector2D(0, -bug.radius - 14)), `${part.name.toUpperCase()} ${breakdown ? 'BROKE DOWN' : 'BROKEN'}!`, '#ff4a4a', 9);
       sp.debris(bug.pos, '#8d93a0', 10);
       this.renderer.addShake(6);
     });

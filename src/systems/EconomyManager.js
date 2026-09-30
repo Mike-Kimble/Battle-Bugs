@@ -1591,6 +1591,7 @@ export class EconomyManager {
     }
 
     if (beatRival) this.rivalExcuse(challenger, rivalRideName);
+    if (stake?.type === 'titles') this.salvageAfterTitle([playerBug, opponentBug], report);
     // Consumables (cryo blocks, nitro…) fitted to your bug lose a battle's worth.
     for (const p of playerBug?.parts || []) {
       if (p.usesLeft == null || p.usesLeft <= 0) continue;
@@ -1674,6 +1675,36 @@ export class EconomyManager {
       } else {
         s.arrears[role] = { amount: wage, bouts: 0 };
         report.lines.push(`Missed your ${role}'s wage (${formatMoney(wage)}). Pay it in the Admin tab within ${ECONOMY.STAFF_GRACE} bouts or they'll quit.`);
+      }
+    }
+  }
+
+  /** Chance your mechanic can bring a completely wrecked (0%) part back: cheap, common parts are easiest. */
+  salvageChance(part) {
+    const byRarity = ECONOMY.SALVAGE_CHANCE[part.rarity] ?? 0.6;
+    const pricey = Math.min(ECONOMY.SALVAGE_COST_MAX, Math.max(0, (part.value - 500) / 500) * ECONOMY.SALVAGE_COST_STEP);
+    return Math.max(ECONOMY.SALVAGE_MIN, byRarity - pricey);
+  }
+
+  /**
+   * After a title fight (to the death), a mechanic has a go at every part of
+   * yours that was wrecked to 0%. Salvaged parts come back at a sliver of HP,
+   * repairable; the rest are scrap.
+   */
+  salvageAfterTitle(bugs, report) {
+    const s = this.state;
+    if (!s.staff.mechanic) return;
+    for (const bug of bugs) {
+      if (!bug || !s.getVehicle(bug.id)) continue;
+      for (const p of bug.parts) {
+        if (p.hp > 0 || p.spent) continue;
+        if (chance(this.salvageChance(p))) {
+          p.hp = Math.max(1, p.maxHp * 0.01);
+          p.failed = true; // still not working until it's repaired
+          report.lines.push(`Mechanic: salvaged the wrecked ${p.name} on ${bug.name} — it can be repaired.`);
+        } else {
+          report.lines.push(`Mechanic: the ${p.name} on ${bug.name} is beyond saving — scrap only.`);
+        }
       }
     }
   }

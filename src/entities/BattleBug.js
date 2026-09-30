@@ -137,17 +137,19 @@ export class BattleBug {
   }
 
   get isBattleReady() {
-    return !!this.engine && !!this.tires && !this.stranded && !this.parts.some((p) => p.isScrap);
+    return !!this.engine && !!this.tires && !this.stranded && !this.parts.some((p) => p.isScrap)
+      && !this.chassis.isBroken && !this.tires.isBroken && !this.drives.some((d) => d.isBroken);
   }
 
   battleIssues() {
     const issues = [];
     if (this.chassis.isScrap) issues.push('The frame is scrap — this vehicle is finished; strip or sell it');
+    for (const p of this.parts) if (p.failed && !p.isScrap) issues.push(`${p.name} broke down — repair it to get it working`);
     for (const p of this.parts) if (p !== this.chassis && p.isScrap) issues.push(`${p.name} is scrap — remove it and sell it`);
     if (!this.engine) issues.push('No engine fitted');
     if (!this.tires) issues.push('No tires fitted');
-    if (this.engine?.isBroken) issues.push('Engine broken (no drive force)');
-    if (this.tires?.isBroken) issues.push(this.tires.type === 'castor' ? 'Castors wrecked' : 'Tires shredded (no grip)');
+    if (this.engine && this.engine.hp <= 0) issues.push('Engine broken (no drive force)');
+    if (this.tires && this.tires.hp <= 0) issues.push(this.tires.type === 'castor' ? 'Castors wrecked' : 'Tires shredded (no grip)');
     if (this.stranded) issues.push("Castors aren't driven — they need a turbine or plasma drive");
     return issues;
   }

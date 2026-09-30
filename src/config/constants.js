@@ -21,8 +21,8 @@ export const MATCH = Object.freeze({
   MAX_FRAME_DT: 0.1,
   DAMAGE_CAP: 0.425,    // most parts lose at most this share of max HP per match: from full, two fights to reach 15%
   FRAGILE_TIER: 2,      // …except armour and running gear at or below this tier, which can be wrecked in one
-  CRITICAL: 0.15,       // frame, drive or running gear at/below this share of max HP has stopped working…
-  CALL_OFF_CHANCE: 0.5, // …and there's this chance the fight is called off for catastrophic damage
+  CRITICAL: 0.15,       // frame, drive or running gear dropping to this share of max HP…
+  BREAKDOWN_CHANCE: 0.5, // …has this chance of breaking down (stops working until repaired; a frame = catastrophic damage)
 });
 
 export const PHYSICS = Object.freeze({
@@ -124,6 +124,12 @@ export const ECONOMY = Object.freeze({
   SCRAP_RATE: 0.2,           // a stripped bare frame sells for this share of its value
   SCRAP_BELOW: 0.2,          // parts at 80%+ damage are scrap: no repairs, no fitting (a mechanic can save anything above 0%)
   SCRAP_PRICE: 10,           // all a scrap part fetches
+  // After a title fight, a mechanic's chance to salvage a part wrecked to 0% (60% on average):
+  // by rarity, then less for pricier parts (−5% per §500 over §500, up to −15%), never below 15%.
+  SALVAGE_CHANCE: { common: 0.8, uncommon: 0.7, rare: 0.6, epic: 0.45, legendary: 0.3 },
+  SALVAGE_COST_STEP: 0.05,
+  SALVAGE_COST_MAX: 0.15,
+  SALVAGE_MIN: 0.15,
   REPAIR_CAP: 0.9,           // DIY repairs only get a part back to 90% — a mechanic gets it to 100%
   REPAIR_RATE: 0.45,         // $ per missing HP = rate · value / maxHp
   PRICE_SWING: 0.25,         // buy/sell prices land within ±25% of base value
