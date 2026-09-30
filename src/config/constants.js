@@ -38,6 +38,7 @@ export const PHYSICS = Object.freeze({
   REVERSE_ANGLE: (120 * Math.PI) / 180, // target this far off the travel direction flips forward/reverse
   REVERSE_SPEED: 0.65,      // reverse top speed as a share of v_max
   TWIN_POWER: 0.7,          // twin drives: each motor, its cooling and every add-on work at 70% (2 motors = 1.4× one)
+  PROP_BOOST: 0.2,          // a propeller / ducted fan on a turbine adds this × its efficiency to the thrust
   THRUST_ON_WHEELS: 0.5,    // a turbine or plasma drive on wheels with no working shaft pushes on thrust alone
   REVERSER_BRAKE: 0.8,      // reverse thrusters add this share of your acceleration as braking when you ease off
   CASTOR_THRUST: 1.3,       // a thrust drive on castors pushes this much harder than through wheels (before rolling resistance)
@@ -246,7 +247,7 @@ export const PART_TYPES = Object.freeze({
 export const HOIST_REGIONS = Object.freeze({
   front: { label: 'Weapons', types: ['weapon'], blurb: 'Weapon hardpoints' },
   center: { label: 'Inside', types: ['engine', 'cooling', 'enhancement', 'drivetrain'], blurb: 'Drive motor, cooling, enhancements & drive train' },
-  sides: { label: 'Running Gear', types: ['tires', 'castor'], blurb: 'Tyres, treads or castors' },
+  sides: { label: 'Running Gear', types: ['tires'], blurb: 'Driven tyres and tracks, or gliding castors' },
   hull: { label: 'Shell', types: ['chassis', 'armor'], blurb: 'Frame & armour plating' },
 });
 

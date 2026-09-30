@@ -181,7 +181,10 @@ export class PhysicsEngine {
     const thrust = castor && !tires.isBroken && pushesThrust(bug);
     const rpmAvg = drives.length ? drives.reduce((t, d) => t + d.stats.rpm, 0) / drives.length : 0;
     // A propeller or ducted fan turns shaft power into thrust (a ducted fan makes more of high revs).
-    const thrustEff = thrustDrive ? PHYSICS.CASTOR_THRUST : dt.prop * (dt.propRpm ? 0.7 + 0.5 * (rpmAvg / 6400) : 1);
+    const propEff = dt.prop * (dt.propRpm ? 0.7 + 0.5 * (rpmAvg / 6400) : 1);
+    // A prop or fan on a turbine adds to its thrust (a fifth of the prop's own efficiency).
+    const propBoost = thrustDrive ? propEff * PHYSICS.PROP_BOOST : 0;
+    const thrustEff = thrustDrive ? PHYSICS.CASTOR_THRUST + propBoost : propEff;
     const rollForce = castor ? tires.stats.roll * (2 - tireRatio) * mass * PHYSICS.GRAVITY : 0; // damage adds drag
     const gripMu = castor ? (tires.stats.hold ?? tires.stats.roll) : tires?.stats.mu || 0;
     const fGripBase = tires ? gripMu * mass * PHYSICS.GRAVITY * (castor ? 1 : tireRatio) * m.grip : 0;
@@ -192,7 +195,7 @@ export class PhysicsEngine {
     const wheelThrust = !castor && !shaftDrive && thrustDrive;
     const push = (f) => (castor ? (thrust ? Math.max(0, f * thrustEff - rollForce) : 0)
       : shaftDrive ? Math.min(f, fGrip)
-        : wheelThrust ? f * PHYSICS.THRUST_ON_WHEELS : 0);
+        : wheelThrust ? f * (PHYSICS.THRUST_ON_WHEELS + propBoost) : 0);
     const fUsable = push(fDrive);
     const accel = mass > 0 ? (fUsable / mass) * m.accel : 0;
     // Back-to-front shells: the forward penalty is undone and then some in reverse.

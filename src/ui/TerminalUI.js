@@ -14,13 +14,13 @@ const TABS = [
 const MARKET_CATEGORIES = [
   ['engine', 'Propulsion', 'Motors & power cores. Power, revs (top speed) and cooling.'],
   ['weapon', 'Weapons', 'Hardpoint-mounted weapons. Every activation costs stamina.'],
-  ['tires', 'Running Gear', 'Tyres, treads & castors.'],
+  ['tires', 'Running Gear', 'Driven tyres & tracks (need a drive shaft), and gliding castors (need thrust: a turbine or plasma drive, or a propeller or ducted fan).'],
   ['chassis', 'Chassis', 'Whole vehicles — each frame comes with its fitted parts.'],
   ['armor', 'Armour', 'Plating that soaks impact damage before it reaches the hull.'],
   ['sell', 'Sell', 'Every spare component in your inventory, ready to sell.'],
 ];
 
-const PART_GROUPS = [['engine', 'Drive'], ['cooling', 'Cooling'], ['enhancement', 'Enhancements'], ['drivetrain', 'Drive Train'], ['weapon', 'Weapons'], ['tires', 'Tyres'], ['castor', 'Castors'], ['armor', 'Armour']];
+const PART_GROUPS = [['engine', 'Drive'], ['cooling', 'Cooling'], ['enhancement', 'Enhancements'], ['drivetrain', 'Drive Train'], ['weapon', 'Weapons'], ['tires', 'Running Gear'], ['armor', 'Armour']];
 
 /** Propulsion splits into three aisles. */
 const PROPULSION_SUBS = [
@@ -29,13 +29,10 @@ const PROPULSION_SUBS = [
   ['enhancement', 'Enhancement', 'Turbos, nitro, afterburners… One enhancement slot per drive. Not everything suits every drive.'],
   ['drivetrain', 'Drive Train', 'Gearboxes, shafts, props, rudders and diffs. Four drive-train slots. Some suit thrust drives, some shaft drives — and some combos work far better together.'],
 ];
-/** Running Gear splits into tyres and castors. */
-const RUNNING_SUBS = [
-  ['tires', 'Tyres', 'Tyres & treads — driven wheels. Grip and speed.'],
-  ['castor', 'Castors', "Undriven castors that sit out of sight under the chassis. Turbine & plasma drives only: they accelerate hardest on castors, but you glide — thrust the other way to slow down."],
-];
 /** Categories with their own aisles, keyed by the top-level tab. */
-const SUB_AISLES = { engine: PROPULSION_SUBS, tires: RUNNING_SUBS };
+const SUB_AISLES = { engine: PROPULSION_SUBS };
+/** Castors sit in the Running Gear aisle alongside tyres. */
+const aisleOf = (part) => (part.type === 'castor' ? 'tires' : part.type);
 const aisleGroup = (cat) => Object.keys(SUB_AISLES).find((g) => SUB_AISLES[g].some(([k]) => k === cat)) || null;
 
 function streakText(n = 0) {
@@ -448,11 +445,11 @@ export class TerminalUI {
     const countFor = (key) => {
       if (key === 'sell') return s.inventory.length;
       if (key === 'chassis') return s.market.vehicles.length;
-      return s.market.parts.filter((l) => l.part.type === key).length;
+      return s.market.parts.filter((l) => aisleOf(l.part) === key).length;
     };
     const spares = cat === 'chassis'
       ? s.vehicles.filter((v) => !s.isLocked(v))
-      : s.inventory.filter((p) => p.type === cat);
+      : s.inventory.filter((p) => aisleOf(p) === cat);
 
     const on = (key) => key === cat || key === group;
     const topnav = el('div', { class: 'subtabs', role: 'tablist' }, MARKET_CATEGORIES.map(([key, label]) => el('button', {
@@ -492,7 +489,7 @@ export class TerminalUI {
           el('div', { class: 'bounty' }, el('small', {}, 'Price'), el('strong', {}, formatMoney(l.price))),
           el('button', { class: 'btn btn-primary', disabled: s.money < l.price, onclick: () => this.act(() => this.economy.buyVehicleListing(l.id), `${l.bug.name} added to your hangar`) }, 'Buy')))));
     } else {
-      forSale = el('div', { class: 'card-grid parts' }, s.market.parts.filter((l) => l.part.type === cat).map((l) => partCard(l.part, this.economy, {
+      forSale = el('div', { class: 'card-grid parts' }, s.market.parts.filter((l) => aisleOf(l.part) === cat).map((l) => partCard(l.part, this.economy, {
         compareTo: counterpart(active, l.part),
         extra: dealBadge(l),
         actions: [this.economy.hasFreeSlot(active, l.part.type)
@@ -526,7 +523,7 @@ export class TerminalUI {
       : spares.map((p) => this.sellPartCard(p));
 
     if (cat === 'sell') {
-      const groups = PART_GROUPS.map(([type, label]) => [label, s.inventory.filter((p) => p.type === type)]).filter(([, ps]) => ps.length);
+      const groups = PART_GROUPS.map(([type, label]) => [label, s.inventory.filter((p) => aisleOf(p) === type)]).filter(([, ps]) => ps.length);
       return el('div', { class: 'market' },
         subnav,
         el('p', { class: 'muted' }, catBlurb, ` Buyers pay ${Math.round(ECONOMY.SELL_RATE * 100)}% of value × condition; broken parts fetch scrap only.`),
@@ -621,7 +618,7 @@ export class TerminalUI {
     return el('div', { class: 'card codex' },
       el('h3', {}, `Parts Codex · ${found}/${total} discovered`),
       [['chassis', 'Frames'], ...PART_GROUPS].map(([type, label]) => {
-        const keys = Object.keys(PARTS).filter((k) => PARTS[k].type === type)
+        const keys = Object.keys(PARTS).filter((k) => aisleOf(PARTS[k]) === type)
           .sort((a, b) => PARTS[a].tier - PARTS[b].tier || RARITY[PARTS[a].rarity].rank - RARITY[PARTS[b].rarity].rank);
         return [
           el('div', { class: 'small muted' }, `${label} ${keys.filter((k) => s.discovered.has(k)).length}/${keys.length}`),

@@ -145,7 +145,7 @@ export function partSummary(part) {
       const drawbacks = [(s.vMax || 1) < 1 ? 'less top speed' : null, (s.drain || 1) > 1 ? 'runs warm' : null].filter(Boolean);
       return [s.note, ...drawbacks].join(' · ');
     }
-    case 'castor': return `${s.wearPerMatch ? 'Wears out: rebuild every 2 matches · ' : ''}Glide ${n(PART_SCORES.castor[0].get(part))} · Control ${n(PART_SCORES.castor[1].get(part))} · turbine & plasma only`;
+    case 'castor': return `${s.wearPerMatch ? 'Wears out: rebuild every 2 matches · ' : ''}Glide ${n(PART_SCORES.castor[0].get(part))} · Control ${n(PART_SCORES.castor[1].get(part))} · needs thrust`;
     case 'armor': return `Protection ${n(pct(s.absorb, REF.absorb))} · Airflow ${n(airflow(s.heat))}`;
     case 'weapon': return `Power ${n(weaponPower(s))} · Range ${n(pct(s.range, REF.range))}`;
     case 'cooling':
