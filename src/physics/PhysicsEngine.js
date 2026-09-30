@@ -1,6 +1,6 @@
 import { PHYSICS, STAMINA, EVENTS } from '../config/constants.js';
 import { Vector2D, clamp, approach, wrapAngle } from './Vector2D.js';
-import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES } from '../config/partsData.js';
+import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES, pushesThrust } from '../config/partsData.js';
 
 /** Coolers a fan can blow on to boost. */
 const FAN_BOOSTS = ['water', 'oil', 'exchanger'];
@@ -88,6 +88,42 @@ export class PhysicsEngine {
   }
 
   /**
+   * Drive-train parts: folds their multipliers into `m` (force, accel, vMax,
+   * turn, grip, drain, brake, lateral) and returns the special effects. Only
+   * one part per group works (one gearbox, one shaft, one prop); parts that
+   * don't suit the drive, or are broken, do nothing.
+   */
+  static driveTrain(bug, m, interactions, castor) {
+    const fx = { vector: false, prop: 0, propRpm: false, lsl: false, tcu: false, guard: 1 };
+    const groups = new Set();
+    for (const p of bug.drivetrain || []) {
+      const s = p.stats;
+      if (p.isBroken || !worksWith(p, bug)) {
+        if (!p.isBroken) interactions.push({ id: `dt_nofit_${p.uid}`, good: false, mods: {}, text: `Your ${p.name} doesn't suit this drive — it's dead weight.` });
+        continue;
+      }
+      if (s.group) {
+        if (groups.has(s.group)) {
+          interactions.push({ id: `dt_dup_${p.uid}`, good: false, mods: {}, text: `You've got two ${s.group === 'prop' ? 'propellers' : `${s.group}s`} — only one can do anything. The ${p.name} is dead weight.` });
+          continue;
+        }
+        groups.add(s.group);
+      }
+      const onTyres = (k) => !(castor && s.tyresOnly?.includes(k)); // some parts only matter on driven wheels
+      for (const k of ['force', 'accel', 'vMax', 'turn', 'grip', 'drain', 'brake']) if (s[k] && onTyres(k)) m[k] *= s[k];
+      if (s.vector) fx.vector = true;
+      if (s.prop) { fx.prop = s.prop; fx.propRpm = !!s.propRpm; }
+      if (s.lsl) fx.lsl = true;
+      if (s.tcu && onTyres('tcu')) fx.tcu = true;
+      if (s.rudder) fx.rudder = true;
+      if (s.kind === 'reverser') fx.reverser = true;
+    }
+    // Prop or ducted fan plus rudders on castors: steers like a fish.
+    if (castor && fx.prop && fx.rudder) { m.turn *= 1.4; m.lateral *= 2.5; }
+    return fx;
+  }
+
+  /**
    * Derive live stats for a bug from its equipped parts.
    * @param {import('../entities/BattleBug.js').BattleBug} bug
    * @param {{gripMod?: number}} mods
@@ -103,27 +139,33 @@ export class PhysicsEngine {
     const drives = bug.drives || (engine ? [engine] : []);
     const driveForces = drives.map((d) => (d.isBroken ? 0 : d.stats.force * d.hpRatio)); // broken down = no push
     const forceSum = driveForces.reduce((a, b) => a + b, 0);
-    const twinBias = drives.length === 2 && forceSum > 0 ? (driveForces[0] - driveForces[1]) / forceSum : 0;
+    let twinBias = drives.length === 2 && forceSum > 0 ? (driveForces[0] - driveForces[1]) / forceSum : 0;
     const engineRatio = drives.length ? drives.reduce((t, d) => t + d.hpRatio, 0) / drives.length : 0;
     const tireRatio = tires && !tires.isBroken ? tires.hpRatio : 0;
     // Part combinations that help or hurt.
-    const m = { force: 1, grip: 1, vMax: 1, cooling: 1, staminaMax: 1, drain: 1, accel: 1 };
+    const m = { force: 1, grip: 1, vMax: 1, cooling: 1, staminaMax: 1, drain: 1, accel: 1, turn: 1, brake: 1, lateral: 1 };
     const interactions = PhysicsEngine.interactions(bug);
     for (const it of interactions) for (const k in it.mods) m[k] *= it.mods[k];
     const addOns = PhysicsEngine.addOns(bug, m, interactions);
+    const castor = tires?.type === 'castor';
+    const dt = PhysicsEngine.driveTrain(bug, m, interactions, castor);
+    if (dt.lsl) twinBias = 0; // a Limited-Slip Link shares torque: no pulling to one side
 
     // Two motors through one set of running gear: each gives at most 70% of its power.
     const fDrive = forceSum * (drives.length > 1 ? PHYSICS.TWIN_POWER : 1) * m.force;
     // Castors aren't driven: a thrust drive pushes the body straight (no traction
     // limit), less the rolling resistance. What holds the line and brakes is
     // `hold` — as slippery as the rolling resistance on most castors.
-    const castor = tires?.type === 'castor';
-    const thrust = castor && !tires.isBroken && THRUST_DRIVES.includes(engine?.stats.kind);
+    const thrustDrive = THRUST_DRIVES.includes(engine?.stats.kind);
+    const thrust = castor && !tires.isBroken && pushesThrust(bug);
+    const rpmAvg = drives.length ? drives.reduce((t, d) => t + d.stats.rpm, 0) / drives.length : 0;
+    // A propeller or ducted fan turns shaft power into thrust (a ducted fan makes more of high revs).
+    const thrustEff = thrustDrive ? PHYSICS.CASTOR_THRUST : dt.prop * (dt.propRpm ? 0.7 + 0.5 * (rpmAvg / 6400) : 1);
     const rollForce = castor ? tires.stats.roll * (2 - tireRatio) * mass * PHYSICS.GRAVITY : 0; // damage adds drag
     const gripMu = castor ? (tires.stats.hold ?? tires.stats.roll) : tires?.stats.mu || 0;
     const fGripBase = tires ? gripMu * mass * PHYSICS.GRAVITY * (castor ? 1 : tireRatio) * m.grip : 0;
     const fGrip = fGripBase * gripMod;
-    const push = (f) => (castor ? (thrust ? Math.max(0, f * PHYSICS.CASTOR_THRUST - rollForce) : 0) : Math.min(f, fGrip));
+    const push = (f) => (castor ? (thrust ? Math.max(0, f * thrustEff - rollForce) : 0) : Math.min(f, fGrip));
     const fUsable = push(fDrive);
     const accel = mass > 0 ? (fUsable / mass) * m.accel : 0;
     // Back-to-front shells: the forward penalty is undone and then some in reverse.
@@ -132,8 +174,7 @@ export class PhysicsEngine {
     const accelRev = mass > 0 ? (push(fDriveRev) / mass) * m.accel : 0;
 
     const wear = PHYSICS.TIRE_WEAR_FLOOR + (1 - PHYSICS.TIRE_WEAR_FLOOR) * tireRatio;
-    const rpm = drives.length ? drives.reduce((t, d) => t + d.stats.rpm, 0) / drives.length : 0;
-    const vMax = engine && tires ? rpm * tires.stats.radius * PHYSICS.RPM_TO_SPEED * wear * m.vMax : 0;
+    const vMax = engine && tires ? rpmAvg * tires.stats.radius * PHYSICS.RPM_TO_SPEED * wear * m.vMax : 0;
 
     return {
       mass,
@@ -153,11 +194,23 @@ export class PhysicsEngine {
       twinBias,
       drainMult: m.drain,
       interactions,
-      turnRate: chassis.stats.turn * (0.55 + 0.45 * tireRatio),
+      turnRate: chassis.stats.turn * (0.55 + 0.45 * tireRatio) * m.turn,
+      brakeMult: m.brake,     // braking and holding ground when not driving
+      lateralMult: m.lateral, // sideways grip (castors slide less with a prop & rudders)
+      vector: castor && thrust && dt.vector,
+      tcu: dt.tcu,
+      reverser: !!dt.reverser,
       tractionLimited: !castor && fGrip < fDrive,
       castor,
       pinned: castor && !!tires.stats.pinned,
     };
+  }
+
+  /** Deceleration when not driving: grip-braking (times any drive-train brake), plus reverse thrusters firing. */
+  static idleBrake(s) {
+    if (!(s.mass > 0)) return 0;
+    const grip = (s.fGrip / s.mass) * PHYSICS.IDLE_BRAKE * (s.brakeMult ?? 1);
+    return grip + (s.reverser ? s.accel * PHYSICS.REVERSER_BRAKE : 0);
   }
 
   /** Current grip modifier from status effects and the environment (slick puddles). */
@@ -169,6 +222,8 @@ export class PhysicsEngine {
         mod = Math.min(mod, puddle.gripMod);
       }
     }
+    // Traction control cuts the power the instant a wheel slips: half the grip loss.
+    if (bug.stats?.tcu) mod = 1 - (1 - mod) * 0.5;
     return mod;
   }
 
@@ -271,7 +326,7 @@ export class PhysicsEngine {
         // Flux-pinned castors brake onto the spot: coast off the power once the
         // stopping distance reaches the target.
         if (s.pinned && s.mass > 0) {
-          const brake = (s.fGrip / s.mass) * PHYSICS.IDLE_BRAKE * 0.8;
+          const brake = PhysicsEngine.idleBrake(s) * 0.8;
           if (bug.vel.length() > Math.sqrt(2 * brake * dist)) throttle = 0;
         }
       }
@@ -293,11 +348,11 @@ export class PhysicsEngine {
     } else if (throttle > 0) {
       if (fwd > -vCapRev) fwd = Math.max(-vCapRev, fwd - (s.accelRev ?? s.accel) * throttle * dt);
     } else {
-      fwd = approach(fwd, 0, gripDecel * PHYSICS.IDLE_BRAKE * dt);
+      fwd = approach(fwd, 0, PhysicsEngine.idleBrake(s) * dt);
     }
     if (fwd > vCap) fwd = approach(fwd, vCap, PHYSICS.OVERSPEED_DECEL * dt);
     if (fwd < -vCapRev) fwd = approach(fwd, -vCapRev, PHYSICS.OVERSPEED_DECEL * dt);
-    lat = approach(lat, 0, gripDecel * lateralGrip * dt);
+    lat = approach(lat, 0, gripDecel * lateralGrip * (s.lateralMult ?? 1) * dt);
 
     bug.vel = heading.scale(fwd).addInPlace(side, lat);
     bug.pos.addInPlace(bug.vel, dt);

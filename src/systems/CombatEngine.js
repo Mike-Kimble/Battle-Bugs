@@ -88,7 +88,7 @@ export class CombatEngine extends EventEmitter {
     if (this.phase === 'fight') this.ai.update(dt, this);
 
     this.physics.step(this.bugs, dt, { puddles: this.puddles });
-    if (this.live) for (const bug of this.bugs) this.spinHit(bug);
+    if (this.live) for (const bug of this.bugs) { this.spinHit(bug); this.shaftStrain(bug); }
     this.updateFallen(dt);
     this.updatePuddles(dt);
 
@@ -344,6 +344,20 @@ export class CombatEngine extends EventEmitter {
     return true;
   }
 
+  /**
+   * A Standard Drive Shaft on a turbine with no Reduction Gearbox can't take
+   * the revs: it snaps halfway through the match, leaving only the thrust.
+   */
+  shaftStrain(bug) {
+    if (this.time < MATCH.DURATION / 2 || bug.out) return;
+    const shaft = bug.drivetrain.find((p) => p.stats.shaft === 'std' && !p.isBroken);
+    if (!shaft || bug.engine?.stats.kind !== 'turbine') return;
+    if (bug.drivetrain.some((p) => p.stats.reducer && !p.isBroken)) return;
+    shaft.hp = Math.min(shaft.hp, shaft.maxHp * 0.3);
+    shaft.failed = true;
+    this.emit(EVENTS.PART_BROKEN, { bug, part: shaft, breakdown: true });
+  }
+
   /** A spinning bug catches the opponent once per spin and flings them away. */
   spinHit(bug) {
     if (!bug.spin || bug.spin.hit || bug.out) return;
@@ -381,6 +395,19 @@ export class CombatEngine extends EventEmitter {
     if (bug.actionCooldown > 0) return false;
     if (!this.canAct(bug, ACTIONS.DASH_COST)) return false;
     const d = dir.normalize();
+    // Thrust vectoring on castors: no steering — the bug just shoots off the way you swiped.
+    if (bug.stats.vector) {
+      const speed = Math.max(bug.vel.length(), bug.stats.vMax * ACTIONS.VECTOR_KICK);
+      bug.vel = d.scale(speed);
+      bug.control.target = null;
+      bug.control.backing = false;
+      bug.control.reverse = false;
+      bug.control.cruise = { angle: wrapAngle(d.angle()) };
+      bug.stamina -= ACTIONS.DASH_COST;
+      bug.actionCooldown = ACTIONS.ACTION_COOLDOWN;
+      this.emit(EVENTS.ACTION, { bug, type: 'swerve', dir: d });
+      return true;
+    }
     const heading = Vector2D.fromAngle(bug.angle);
     const fwd = bug.vel.dot(heading);
     let reverse = Math.abs(fwd) > ACTIONS.SWERVE_MOVING_SPEED ? fwd < 0 : bug.control.reverse;

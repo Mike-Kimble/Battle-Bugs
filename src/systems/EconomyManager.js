@@ -450,6 +450,7 @@ export class EconomyManager {
     // Better-equipped pilots run cooling and enhancements that suit their drive.
     if (tier >= 2 && chance(0.25 + tier * 0.1)) { const c = this.pickAddOn('cooling', tier, bug); if (c) bug.equip(c); }
     if (tier >= 3 && chance(0.15 + tier * 0.08)) { const m = this.pickAddOn('enhancement', tier, bug); if (m) bug.equip(m); }
+    if (tier >= 2 && chance(0.2 + tier * 0.08)) { const d = this.pickAddOn('drivetrain', tier, bug); if (d) bug.equip(d); }
     return bug;
   }
 

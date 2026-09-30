@@ -20,13 +20,14 @@ const MARKET_CATEGORIES = [
   ['sell', 'Sell', 'Every spare component in your inventory, ready to sell.'],
 ];
 
-const PART_GROUPS = [['engine', 'Drive'], ['cooling', 'Cooling'], ['enhancement', 'Enhancements'], ['weapon', 'Weapons'], ['tires', 'Tyres'], ['castor', 'Castors'], ['armor', 'Armour']];
+const PART_GROUPS = [['engine', 'Drive'], ['cooling', 'Cooling'], ['enhancement', 'Enhancements'], ['drivetrain', 'Drive Train'], ['weapon', 'Weapons'], ['tires', 'Tyres'], ['castor', 'Castors'], ['armor', 'Armour']];
 
 /** Propulsion splits into three aisles. */
 const PROPULSION_SUBS = [
   ['engine', 'Drive', 'Motors & power cores. Power, revs (top speed) and cooling.'],
   ['cooling', 'Cooling', 'Heat exchangers, misters, radiators, fans, jackets… Three cooling slots. Not everything suits every drive.'],
-  ['enhancement', 'Enhancement', 'Turbos, nitro, afterburners, feeders… One enhancement slot. Not everything suits every drive.'],
+  ['enhancement', 'Enhancement', 'Turbos, nitro, afterburners… One enhancement slot per drive. Not everything suits every drive.'],
+  ['drivetrain', 'Drive Train', 'Gearboxes, shafts, props, rudders and diffs. Four drive-train slots. Some suit thrust drives, some shaft drives — and some combos work far better together.'],
 ];
 /** Running Gear splits into tyres and castors. */
 const RUNNING_SUBS = [

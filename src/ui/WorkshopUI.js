@@ -74,7 +74,7 @@ export function hpBar(ratio, { label } = {}) {
 export function partStatLine(part) {
   const line = partSummary(part);
   if (part.type === 'weapon') return `${WEAPON_CLASSES[part.stats.class].label} · ${line}`;
-  if (part.type === 'cooling' || part.type === 'enhancement') {
+  if (part.type === 'cooling' || part.type === 'enhancement' || part.type === 'drivetrain') {
     const works = part.stats.jacket
       ? `Combustion; other drives need ${/^[AEIOU]/.test(JACKET_NAMES[part.stats.jacket]) ? 'an' : 'a'} ${JACKET_NAMES[part.stats.jacket]}`
       : part.stats.works ? `Drives: ${part.stats.works.map((k) => DRIVE_KINDS[k]).join(', ')}` : 'Any drive';
@@ -176,7 +176,7 @@ export function counterpart(bug, part) {
 export function partCard(part, economy, { actions = [], extra = null, compareTo, compareLegend } = {}) {
   return el('div', { class: `part-card rarity-${part.rarity}${part.isScrap ? ' broken' : ''}` },
     el('div', { class: 'part-head' },
-      el('span', { class: `part-type type-${part.type}` }, part.type),
+      el('span', { class: `part-type type-${part.type}` }, part.type === 'drivetrain' ? 'drive train' : part.type),
       el('strong', {}, part.name),
       part.rarity !== 'common' ? el('span', { class: `rarity-tag rarity-${part.rarity}` }, part.rarity) : null),
     el('div', { class: 'part-stats' }, partStatLine(part)),
@@ -554,7 +554,7 @@ export class WorkshopUI {
     const locked = this.state.isLocked(bug);
     // Areas with several part types get a tab each (Inside: Drive · Cooling · Enhancement; Shell: Chassis · Armour).
     const type = region.types.includes(this.regionTab) ? this.regionTab : region.types[0];
-    const TAB_LABELS = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancement', chassis: 'Chassis', armor: 'Armour', tires: 'Tyres', castor: 'Castors' };
+    const TAB_LABELS = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancement', drivetrain: 'Drive Train', chassis: 'Chassis', armor: 'Armour', tires: 'Tyres', castor: 'Castors' };
     const tabs = region.types.length > 1
       ? el('div', { class: 'subtabs region-tabs', role: 'tablist' }, region.types.map((t) => {
         const list = bug.slotList(t);
@@ -596,7 +596,7 @@ export class WorkshopUI {
 
   renderSlot(bug, type, locked) {
     const inv = this.state.inventory.filter((p) => p.type === type);
-    const title = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancement', tires: 'Tyres', castor: 'Castors', armor: 'Armour', weapon: 'Weapons', chassis: 'Chassis' }[type];
+    const title = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancement', drivetrain: 'Drive Train', tires: 'Tyres', castor: 'Castors', armor: 'Armour', weapon: 'Weapons', chassis: 'Chassis' }[type];
     const section = el('section', { class: 'slot-section' }, el('h3', {}, title));
     const multi = bug.slotList(type); // weapons, cooling and enhancements have several slots
     const cap = bug.slotCapacity(type);
@@ -639,6 +639,8 @@ export class WorkshopUI {
       section.append(el('p', { class: 'muted small' }, `${bug.weapons.length}/${bug.weaponSlots} hardpoints used. Weapons add mass and cost stamina per activation.`));
     } else if (type === 'engine' && multi) {
       section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} drive bays used. Twin drives must be the same motor type — with both working, a swipe spins you 360° on the spot. Keep them evenly repaired or she'll pull to one side.`));
+    } else if (type === 'drivetrain') {
+      section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} drive-train slots used. Only one gearbox, one shaft and one prop count at a time; your mechanic knows which combinations pay off.`));
     } else if (multi && !bug.drives.length) {
       section.append(el('p', { class: 'muted small' }, `No drive fitted — ${type === 'cooling' ? 'cooling' : 'enhancements'} mount on the drive, so fit one first.`));
     } else if (multi) {
@@ -674,7 +676,7 @@ export class WorkshopUI {
     }
     // Straight to the right aisle of the Marketplace (closed while you're in the tournament).
     if (this.onShop && !this.economy.inField) {
-      const label = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancements', tires: 'Tyres', castor: 'Castors', armor: 'Armour', weapon: 'Weapons' }[type];
+      const label = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancements', drivetrain: 'Drive Train', tires: 'Tyres', castor: 'Castors', armor: 'Armour', weapon: 'Weapons' }[type];
       section.append(el('button', {
         class: 'btn btn-small shop-link',
         onclick: () => { closeModal(); this.onShop(type); },

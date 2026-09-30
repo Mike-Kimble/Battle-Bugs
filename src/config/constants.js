@@ -38,6 +38,7 @@ export const PHYSICS = Object.freeze({
   REVERSE_ANGLE: (120 * Math.PI) / 180, // target this far off the travel direction flips forward/reverse
   REVERSE_SPEED: 0.65,      // reverse top speed as a share of v_max
   TWIN_POWER: 0.7,          // twin drives: each motor, its cooling and every add-on work at 70% (2 motors = 1.4× one)
+  REVERSER_BRAKE: 0.8,      // reverse thrusters add this share of your acceleration as braking when you ease off
   CASTOR_THRUST: 1.3,       // a thrust drive on castors pushes this much harder than through wheels (before rolling resistance)
   TWIN_SKEW: 0.7,           // rad off line at full imbalance between twin drives (one side dead)
   PUSHED_SPEED: 25,         // moving this fast against your drive direction = being pushed
@@ -70,6 +71,7 @@ export const ACTIONS = Object.freeze({
   SHOVE_IMPACT_MULT: 1.8,
   SHOVE_DURATION: 0.55,
   DASH_COST: 8,               // swipe handbrake turn
+  VECTOR_KICK: 0.8,           // thrust vectoring: a swipe fires you off at least this share of top speed
   SPIN_COST: 28,              // twin drives: a swipe spins 360° on the spot instead
   SPIN_COOLDOWN: 3,           // seconds before you can spin again
   SPIN_DURATION: 0.5,
@@ -197,7 +199,7 @@ export const ECONOMY = Object.freeze({
   MIN_VEHICLE_PRICE: 100,
   FIND_CHANCE: { epic: 0.016, legendary: 0.003 }, // per part on a generated bug (scaled up for better pilots)
   TEASER_CHANCE: 0.25,       // a restock shows off an epic/legendary part you can't afford
-  MARKET_STOCK: { engine: 5, cooling: 4, enhancement: 4, tires: 5, castor: 3, weapon: 6, armor: 5 },
+  MARKET_STOCK: { engine: 5, cooling: 4, enhancement: 4, drivetrain: 4, tires: 5, castor: 3, weapon: 6, armor: 5 },
   MARKET_VEHICLES: 4,
   TOURNAMENT_UNLOCK_WINS: 5,
   TOURNAMENT_ROUNDS: 5,
@@ -241,7 +243,7 @@ export const PART_TYPES = Object.freeze({
 /** Hoist regions → which part types they expose. */
 export const HOIST_REGIONS = Object.freeze({
   front: { label: 'Weapons', types: ['weapon'], blurb: 'Weapon hardpoints' },
-  center: { label: 'Inside', types: ['engine', 'cooling', 'enhancement'], blurb: 'Drive motor, cooling & enhancements' },
+  center: { label: 'Inside', types: ['engine', 'cooling', 'enhancement', 'drivetrain'], blurb: 'Drive motor, cooling, enhancements & drive train' },
   sides: { label: 'Running Gear', types: ['tires', 'castor'], blurb: 'Tyres, treads or castors' },
   hull: { label: 'Shell', types: ['chassis', 'armor'], blurb: 'Frame & armour plating' },
 });

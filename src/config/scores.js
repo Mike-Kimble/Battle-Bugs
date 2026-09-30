@@ -24,8 +24,8 @@ export const REF = Object.freeze({
   // weapons, by effect
   drain: 48, ram: 40, spikes: 41, lift: 2.1, slick: 336, range: 230,
   // durability (max HP) and weight (kg) per part type
-  durability: { chassis: 330, engine: 130, tires: 170, castor: 90, armor: 320, weapon: 130, cooling: 115, enhancement: 115 },
-  weight: { chassis: 160, engine: 64, tires: 38, castor: 14, armor: 95, weapon: 50, cooling: 22, enhancement: 14 },
+  durability: { chassis: 330, engine: 130, tires: 170, castor: 90, armor: 320, weapon: 130, cooling: 115, enhancement: 115, drivetrain: 150 },
+  weight: { chassis: 160, engine: 64, tires: 38, castor: 14, armor: 95, weapon: 50, cooling: 22, enhancement: 14, drivetrain: 30 },
   // castors: glide = how little rolling resistance (0.12 scores 20); control = hold vs the best tyres
   castorRoll: 0.12,
   // add-ons: cooling added (stamina/s) and enhancement boosts (multiplier over 1)
@@ -100,6 +100,18 @@ export const PART_SCORES = {
     { label: 'Stamina', get: (p) => pct((p.stats.staminaMax || 1) - 1, REF.boostStamina) },
     { label: 'Weight', get: (p) => pct(p.mass, REF.weight.enhancement), neutral: true },
   ],
+  // Drive train: only the effects a part actually has are shown (like add-ons).
+  drivetrain: [
+    { label: 'Power', get: (p) => pct((p.stats.force || 1) - 1, 0.35) },
+    { label: 'Acceleration', get: (p) => pct((p.stats.accel || 1) - 1, REF.boostAccel) },
+    { label: 'Top speed', get: (p) => pct((p.stats.vMax || 1) - 1, REF.boostSpeed) },
+    { label: 'Steering', get: (p) => pct((p.stats.turn || 1) - 1, 0.3) },
+    { label: 'Grip', get: (p) => pct((p.stats.grip || 1) - 1, 0.12) },
+    { label: 'Holding', get: (p) => pct((p.stats.brake || 1) - 1, 2) },
+    { label: 'Drive protection', get: (p) => pct(1 - (p.stats.driveGuard || 1), 0.45) },
+    { label: 'Durability', get: (p) => pct(p.hp, REF.durability.drivetrain) },
+    { label: 'Weight', get: (p) => pct(p.mass, REF.weight.drivetrain), neutral: true },
+  ],
   weapon: [
     { label: 'Power', get: (p) => weaponPower(p.stats) },
     { label: 'Range', get: (p) => pct(p.stats.range, REF.range) },
@@ -129,6 +141,10 @@ export function partSummary(part) {
     case 'chassis': return `Stamina ${n(pct(s.staminaMax, REF.stamina))} · Agility ${n(pct(s.turn, REF.turn))} · ${s.weaponSlots} hardpoint${s.weaponSlots === 1 ? '' : 's'}${s.drives > 1 ? ' · twin drive bays' : ''}`;
     case 'engine': return `Power ${n(pct(s.force, REF.force))} · Revs ${n(pct(s.rpm, REF.rpm))} · Cooling ${n(pct(s.cooling, REF.cooling))}`;
     case 'tires': return `Grip ${n(pct(s.mu, REF.mu))} · Speed ${n(pct(s.radius, REF.tireRadius))}`;
+    case 'drivetrain': {
+      const drawbacks = [(s.vMax || 1) < 1 ? 'less top speed' : null, (s.drain || 1) > 1 ? 'runs warm' : null].filter(Boolean);
+      return [s.note, ...drawbacks].join(' · ');
+    }
     case 'castor': return `Glide ${n(PART_SCORES.castor[0].get(part))} · Control ${n(PART_SCORES.castor[1].get(part))} · turbine & plasma only`;
     case 'armor': return `Protection ${n(pct(s.absorb, REF.absorb))} · Airflow ${n(airflow(s.heat))}`;
     case 'weapon': return `Power ${n(weaponPower(s))} · Range ${n(pct(s.range, REF.range))}`;
