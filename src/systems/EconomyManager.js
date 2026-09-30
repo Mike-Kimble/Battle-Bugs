@@ -559,7 +559,8 @@ export class EconomyManager {
       s.pool.filter((p) => !p.rookie && p.id !== s.rivalId).sort((x, y) => this.strength(y) - this.strength(x))
         .slice(0, ECONOMY.ELITE_PILOTS).forEach((p) => { p.elite = true; });
     }
-    if (s.pool.some((p) => !p.home)) this.assignHomes();
+    for (const p of s.pool) if (this.isRoamer(p)) delete p.home; // the rookie roams
+    if (s.pool.some((p) => !p.home && !this.isRoamer(p))) this.assignHomes();
     for (const p of s.pool) this.refreshPilot(p);
   }
 
@@ -569,7 +570,7 @@ export class EconomyManager {
    */
   assignHomes() {
     const s = this.state;
-    const others = s.pool.filter((p) => p.id !== s.rivalId).sort(() => Math.random() - 0.5);
+    const others = s.pool.filter((p) => p.id !== s.rivalId && !this.isRoamer(p)).sort(() => Math.random() - 0.5);
     others.forEach((p, i) => { p.home = i < ECONOMY.HOME_ONE_PILOTS ? 1 : 2 + ((i - ECONOMY.HOME_ONE_PILOTS) % 4); });
     if (this.rival) this.rival.home = 1;
   }
@@ -591,7 +592,14 @@ export class EconomyManager {
     return this.boutsPlayed % 2 === 0;
   }
 
+  /** The rookie has no home dohyo — until they become your rival. */
+  isRoamer(p) {
+    return p?.name === CHALLENGER_ROSTER[0].name && p.id !== this.state.rivalId;
+  }
+
+  /** The dohyo for a bout: the rookie's is random; everyone else plays home and away. */
   venueFor(challenger) {
+    if (this.isRoamer(challenger)) return 1 + Math.floor(Math.random() * 5);
     return this.nextIsHome ? 1 : challenger?.home || 1;
   }
 

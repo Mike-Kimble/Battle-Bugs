@@ -213,6 +213,7 @@ export class TerminalUI {
 
   /** Home dohyo, and where the next bout against them would be. */
   venueLine(c) {
+    if (this.economy.isRoamer(c)) return el('div', { class: 'small muted venue' }, 'No home dohyo · the ring is picked at random');
     const home = c.home || 1;
     const venue = this.economy.venueFor(c);
     const at = this.economy.nextIsHome ? 'home' : 'away';
