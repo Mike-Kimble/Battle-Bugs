@@ -389,7 +389,7 @@ export class EconomyManager {
    * a purse, a record and their own bug. Pilots live in `state.pool`, the
    * board shows a handful of them, and they all progress between fights.
    */
-  makePilot(tier, entry, { bug = null, rookie = false } = {}) {
+  makePilot(tier, entry, { bug = null, rookie = false, elite = false } = {}) {
     const { name, planet, style, story } = entry;
     const theBug = bug || this.generateBug(tier);
     // A zapper's story promises an arsenal — make sure there's at least something to zap with.
@@ -401,7 +401,8 @@ export class EconomyManager {
       planet,
       style,
       story,
-      ...this.pilotHistory(tier),
+      ...this.pilotHistory(tier, elite),
+      elite,
       purse: roundTo((ECONOMY.BOUNTY_BASE + tier * ECONOMY.BOUNTY_PER_TIER) * rand(1, 2.5), 10),
       rookie,
       bug: theBug,
@@ -414,13 +415,13 @@ export class EconomyManager {
    * handful of fights, mostly lost), a regular or a veteran (a long record).
    * The win/loss split follows their skill.
    */
-  pilotHistory(tier) {
+  pilotHistory(tier, elite = false) {
     const kinds = [PILOT_SKILL.NOVICE, PILOT_SKILL.REGULAR, PILOT_SKILL.VETERAN];
     let roll = Math.random() * kinds.reduce((t, k) => t + k.weight, 0);
-    const kind = kinds.find((k) => (roll -= k.weight) < 0) || kinds[0];
+    const kind = elite ? PILOT_SKILL.VETERAN : kinds.find((k) => (roll -= k.weight) < 0) || kinds[0];
     const fights = randInt(...kind.fights);
     const [base, per] = PILOT_SKILL.TIER_CAP;
-    const skill = Math.min(rand(...kind.skill), base + tier * per, 0.95);
+    const skill = elite ? rand(...PILOT_SKILL.ELITE) : Math.min(rand(...kind.skill), base + tier * per, 0.95);
     let w = 0;
     for (let i = 0; i < fights; i++) if (chance(winRate(skill))) w++;
     return { skill, record: { w, l: fights - w } };
@@ -465,8 +466,16 @@ export class EconomyManager {
     if (!s.pool.length) {
       const [rookie, ...rest] = CHALLENGER_ROSTER;
       s.pool.push(this.makeRookie(rookie));
-      const tiers = [...ECONOMY.POOL_TIERS].sort(() => Math.random() - 0.5);
-      rest.forEach((entry, i) => s.pool.push(this.makePilot(tiers[i] ?? 3, entry)));
+      // A random handful are the elite: tournament veterans in 5★ rides.
+      const tiers = [...ECONOMY.POOL_TIERS, ...Array(ECONOMY.ELITE_PILOTS).fill(5)].sort(() => Math.random() - 0.5);
+      rest.forEach((entry, i) => {
+        const tier = tiers[i] ?? 3;
+        s.pool.push(this.makePilot(tier, entry, { elite: tier === 5 }));
+      });
+    } else if (!s.pool.some((p) => p.elite)) {
+      // Older saves: the strongest pilots become the elite.
+      s.pool.filter((p) => !p.rookie && p.id !== s.rivalId).sort((x, y) => this.strength(y) - this.strength(x))
+        .slice(0, ECONOMY.ELITE_PILOTS).forEach((p) => { p.elite = true; });
     }
     for (const p of s.pool) this.refreshPilot(p);
   }
@@ -488,8 +497,13 @@ export class EconomyManager {
   get availablePilots() {
     const s = this.state;
     const taken = new Set([...s.challengers, ...s.board.rejected].map((c) => c.id));
-    // The rival only turns up every few bouts.
-    return s.pool.filter((p) => !taken.has(p.id) && (p.id !== s.rivalId || this.rivalDue));
+    // The rival only turns up every few bouts; the elite wait for the first 5★ regular.
+    return s.pool.filter((p) => !taken.has(p.id) && (p.id !== s.rivalId || this.rivalDue) && (!p.elite || s.elitesOut || p.id === s.rivalId));
+  }
+
+  /** A pilot's all-round strength: skill plus their ride. */
+  strength(p) {
+    return p.skill + this.rating(p.bug) / 1000;
   }
 
   sortBoard() {
@@ -540,6 +554,10 @@ export class EconomyManager {
       s.challengers.push(rest[idx]);
     }
     for (const c of s.challengers) this.refreshPilot(c);
+    // The elite come out once 5★ pilots are your level: a 5★ regular on the board,
+    // a 4★ ride of your own, or a board that's scrolled up after walk-offs.
+    const best = this.bestVehicle;
+    if (s.challengers.some((c) => !c.elite && c.tier >= 5) || (best && this.vehicleStars(best) >= ECONOMY.ELITE_AT_STARS) || s.board.tierShift > 0) s.elitesOut = true;
     this.sortBoard();
   }
 
@@ -1120,8 +1138,9 @@ export class EconomyManager {
   tournamentField() {
     const s = this.state;
     const rival = this.rival;
+    // The elite first, then the strongest of the rest if any are missing.
     const byStrength = s.pool.filter((p) => p !== rival)
-      .sort((x, y) => (y.skill + this.rating(y.bug) / 1000) - (x.skill + this.rating(x.bug) / 1000));
+      .sort((x, y) => (y.elite - x.elite) || this.strength(y) - this.strength(x));
     const n = ECONOMY.TOURNAMENT_ROUNDS;
     const field = byStrength.slice(0, rival ? n - 1 : n).reverse();
     if (rival) field.push(rival);
@@ -1156,8 +1175,8 @@ export class EconomyManager {
 
   /**
    * Tournament entrants are the hardest pilots in the game: every one runs
-   * the strongest possible build, pristine and fully armed, and the pilots
-   * get better each round (the Grand Final is flown at maximum skill).
+   * the strongest possible build, pristine and fully armed. The pilots are
+   * the elite, weakest first, each flying at their own skill.
    * Earlier rounds vary the weapon loadout; the final carries the best pair.
    */
   tournamentOpponentJSON(round) {
@@ -1195,8 +1214,8 @@ export class EconomyManager {
       record: { ...pilot.record },
       tier: 5,
       bounty: ECONOMY.TOURNAMENT_PRIZE,
-      // Sharper every round; the Grand Final is flown at maximum skill.
-      difficulty: Math.min(1, 0.8 + (round / (n - 1)) * 0.2),
+      // Each pilot flies at their own skill — your rival finally learns to drive in the final.
+      difficulty: isRival ? Math.max(pilot.skill, PILOT_SKILL.RIVAL_FINAL) : pilot.skill,
       roundName: ECONOMY.TOURNAMENT_ROUND_NAMES[round] || `Round ${round + 1}`,
       bug,
     };

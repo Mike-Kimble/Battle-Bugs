@@ -96,6 +96,8 @@ export const PILOT_SKILL = Object.freeze({
   LEARN: 0.004,           // skill gained per fight
   BACKS_IN: 0.6,          // skill needed to know a back-to-front shell pushes harder in reverse
   RIVAL: 0.15,            // your rival's skill: hopeless, until the tournament
+  RIVAL_FINAL: 0.9,       // …where they finally learn to drive
+  ELITE: [0.75, 0.95],    // tournament pilots: veterans, every one
 });
 
 /** A pilot's chance of winning a fight, from their skill. */
@@ -126,7 +128,9 @@ export const ECONOMY = Object.freeze({
   BOUNTY_BASE: 110,          // base stake a challenger expects (scaled by tier)
   BOUNTY_PER_TIER: 120,
   BOARD_SIZE: 5,             // challengers on the board, spread across difficulties
-  POOL_TIERS: [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 5, 5], // the 19 roster pilots after the rookie (pool of 20)
+  POOL_TIERS: [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4], // the regular pilots (pool of 20: the rookie, these 14 and 5 elites)
+  ELITE_PILOTS: 5,           // tournament pilots: held off the board until 5★ pilots are your level
+  ELITE_AT_STARS: 4,         // …i.e. your best ride reaches this many stars
   PILOT_STIPEND: 40,         // sponsors' pocket money per fight cycle
   RIVAL_EDGE: 1.05,          // your rival keeps their bug rated this far above your best
                              // (your rival is the first alien you beat in a title match)
