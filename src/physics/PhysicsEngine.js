@@ -186,8 +186,8 @@ export class PhysicsEngine {
     };
 
     if (canDrive && bug.lunge) {
-      // Rams/shoves: heading already snapped, full power forward.
-      ctl.reverse = false;
+      // Rams/shoves: heading already snapped, full power (tail first for a reverse ram).
+      ctl.reverse = !!bug.lunge.reverse;
       throttle = 1;
     } else if (canDrive && ctl.cruise) {
       // Swipe: a sharp, drifting 90° arc, then straight on at the new angle.
@@ -201,6 +201,13 @@ export class PhysicsEngine {
       const dist = to.length();
       if (dist < PHYSICS.ARRIVE_RADIUS) {
         ctl.target = null;
+      } else if (ctl.backing) {
+        // Backing in on purpose: tail first, and hold it even when shoved.
+        ctl.reverse = true;
+        const diff = wrapAngle(to.angle() - travelAngle());
+        steer(diff, s.turnRate);
+        const align = Math.cos(diff);
+        throttle = (align > 0.2 ? align : 0) * clamp(dist / PHYSICS.SLOW_RADIUS, 0.3, 1);
       } else {
         // Being pushed? (moving against the way we're driving — backwards while
         // driving forward, or forwards while reversing.)
@@ -241,7 +248,9 @@ export class PhysicsEngine {
     let lat = bug.vel.dot(side);
 
     const vCap = s.vMax * (bug.lunge ? bug.lunge.speedMult : 1);
-    const vCapRev = s.vMax * PHYSICS.REVERSE_SPEED;
+    // Back-to-front shells are geared for reverse: no reverse speed penalty.
+    const revShare = bug.chassis?.stats.backwards ? 1 : PHYSICS.REVERSE_SPEED;
+    const vCapRev = s.vMax * revShare * (bug.lunge?.reverse ? bug.lunge.speedMult : 1);
     const gripDecel = s.mass > 0 ? s.fGrip / s.mass : 0;
 
     if (throttle > 0 && !ctl.reverse) {

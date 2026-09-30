@@ -1,4 +1,4 @@
-import { ECONOMY } from '../config/constants.js';
+import { ECONOMY, PILOT_SKILL, winRate } from '../config/constants.js';
 import {
   PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, RIVAL_EXCUSES, CHALLENGER_ROSTER, RARITY, worksWith,
 } from '../config/partsData.js';
@@ -401,13 +401,29 @@ export class EconomyManager {
       planet,
       style,
       story,
-      skill: Math.min(0.95, 0.1 + tier * 0.16 + rand(-0.05, 0.05)),
+      ...this.pilotHistory(tier),
       purse: roundTo((ECONOMY.BOUNTY_BASE + tier * ECONOMY.BOUNTY_PER_TIER) * rand(1, 2.5), 10),
-      record: { w: 0, l: 0 },
       rookie,
       bug: theBug,
     };
     return this.refreshPilot(p);
+  }
+
+  /**
+   * How good a pilot is and the record that gives it away: a novice (a
+   * handful of fights, mostly lost), a regular or a veteran (a long record).
+   * The win/loss split follows their skill.
+   */
+  pilotHistory(tier) {
+    const kinds = [PILOT_SKILL.NOVICE, PILOT_SKILL.REGULAR, PILOT_SKILL.VETERAN];
+    let roll = Math.random() * kinds.reduce((t, k) => t + k.weight, 0);
+    const kind = kinds.find((k) => (roll -= k.weight) < 0) || kinds[0];
+    const fights = randInt(...kind.fights);
+    const [base, per] = PILOT_SKILL.TIER_CAP;
+    const skill = Math.min(rand(...kind.skill), base + tier * per, 0.95);
+    let w = 0;
+    for (let i = 0; i < fights; i++) if (chance(winRate(skill))) w++;
+    return { skill, record: { w, l: fights - w } };
   }
 
   /** Recompute the board-facing numbers after a pilot's bug or skill changes. */
@@ -436,6 +452,7 @@ export class EconomyManager {
     });
     const p = this.makePilot(1, entry, { bug, rookie: true });
     p.skill = 0.05;
+    p.record = { w: 0, l: 0 };
     return this.refreshPilot(p);
   }
 
@@ -541,6 +558,7 @@ export class EconomyManager {
     if (s.rivalId || !pilot?.record) return false;
     s.rivalId = pilot.id;
     pilot.rookie = false; // no longer anybody's easy first fight
+    pilot.skill = Math.min(pilot.skill, PILOT_SKILL.RIVAL); // rattled for good — until the tournament
     this.scheduleRival();
     s.pendingDM = { pilotId: pilot.id, lines: RIVAL_DM.map((l) => l.replaceAll('{bug}', lostBugName)) };
     return true;
@@ -571,9 +589,10 @@ export class EconomyManager {
   }
 
   /**
-   * Your rival keeps pace: once past their rookie days they take on a real
-   * fighting style, get sharper every fight, and upgrade (or buy a whole
-   * new ride) to stay just ahead of your best vehicle.
+   * Your rival keeps pace — with money, not talent: they take on a real
+   * fighting style and upgrade (or buy a whole new ride) to stay just ahead
+   * of your best vehicle, but they never learn to drive it. Only in the
+   * tournament do they finally get good.
    */
   advanceRival() {
     const r = this.rival;
@@ -581,18 +600,20 @@ export class EconomyManager {
     if (!r || !best || this.rookieSlot(r)) return;
     if (r.style === 'hapless') r.style = pick(FIGHTING_STYLES); // they've learned a thing or two since
     r.story = RIVAL_STORIES.beaten;
-    r.skill = Math.min(0.95, r.skill + 0.03);
+    r.skill = Math.min(r.skill, PILOT_SKILL.RIVAL);
     const target = this.rating(best) * ECONOMY.RIVAL_EDGE;
     for (let i = 0; i < 3 && this.rating(r.bug) < target; i++) {
       r.purse += 300;
       this.maintainPilot(r);
     }
-    if (this.rating(r.bug) < target * 0.9) {
-      // Parts alone won't do it — a new ride, rated just above yours.
+    const mine = this.rating(best);
+    if (this.rating(r.bug) <= mine) {
+      // Parts alone won't do it — a new ride, always rated above yours.
+      const score = (bug) => (this.rating(bug) > mine ? 0 : 1e6) + Math.abs(this.rating(bug) - target);
       let bestBug = r.bug;
-      for (let i = 0; i < 24; i++) {
-        const bug = this.generateBug(clampTier(this.vehicleStars(best) + (i % 2)), { condition: () => 1 });
-        if (Math.abs(this.rating(bug) - target) < Math.abs(this.rating(bestBug) - target)) bestBug = bug;
+      for (let i = 0; i < 40; i++) {
+        const bug = this.generateBug(clampTier(this.vehicleStars(best) + (i % 3 ? 1 : 0)), { condition: () => 1 });
+        if (score(bug) < score(bestBug)) bestBug = bug;
       }
       r.bug = bestBug;
     }
@@ -604,10 +625,11 @@ export class EconomyManager {
     for (const p of this.state.pool) {
       if (p.rookie && this.wantsRookie) continue; // the rookie stays green until you've found your feet
       if (p !== fought) {
-        const won = chance(0.4 + 0.2 * p.skill);
+        const won = chance(winRate(p.skill));
         const swing = p.bounty * (won ? rand(0.6, 1.2) : -rand(0.2, 0.4));
         p.purse = Math.max(0, Math.round(p.purse + swing + ECONOMY.PILOT_STIPEND));
-        if (won) { p.record.w++; p.skill = Math.min(0.95, p.skill + 0.01); } else p.record.l++;
+        if (won) p.record.w++; else p.record.l++;
+        if (p.id !== this.state.rivalId) p.skill = Math.min(0.95, p.skill + PILOT_SKILL.LEARN);
         for (const part of p.bug.parts) part.applyDamage(part.maxHp * rand(0, won ? 0.12 : 0.25));
       }
       this.maintainPilot(p);

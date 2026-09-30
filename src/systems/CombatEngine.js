@@ -1,4 +1,4 @@
-import { ARENA, MATCH, PHYSICS, ACTIONS, EVENTS } from '../config/constants.js';
+import { ARENA, MATCH, PHYSICS, ACTIONS, EVENTS, PILOT_SKILL } from '../config/constants.js';
 import { PILOT_STYLES } from '../config/partsData.js';
 import { EventEmitter } from '../core/EventEmitter.js';
 import { PhysicsEngine } from '../physics/PhysicsEngine.js';
@@ -185,7 +185,8 @@ export class CombatEngine extends EventEmitter {
   impactDamage(attacker, victim, dir, impact) {
     const zone = victim.zoneFacing(dir.negate());
     let mult = attacker.lunge ? attacker.lunge.impactMult : 1;
-    if (zone === 'front') mult *= PHYSICS.FRONT_HIT_REDUCTION;
+    // A back-to-front shell is built to take hits on its tail, too.
+    if (zone === 'front' || (zone === 'rear' && victim.chassis?.stats.backwards)) mult *= PHYSICS.FRONT_HIT_REDUCTION;
     const dmg = PHYSICS.IMPACT_DAMAGE_K * (impact - PHYSICS.IMPACT_THRESHOLD) * attacker.stats.mass * mult;
     const res = victim.takeDamage(dmg, zone);
     victim.lastHitBy = attacker;
@@ -225,19 +226,23 @@ export class CombatEngine extends EventEmitter {
   }
 
   /** Steer toward a point (tap or held/dragged finger). Cancels any swipe cruise. */
-  moveTo(bug, point) {
+  /** @param {{backing?: boolean}} opts backing: drive there tail first */
+  moveTo(bug, point, { backing = false } = {}) {
     if (!this.live || bug.out) return;
     bug.control.target = Vector2D.from(point);
     bug.control.cruise = null;
+    bug.control.backing = backing;
   }
 
   stop(bug) {
     bug.control.target = null;
     bug.control.cruise = null;
+    bug.control.backing = false;
   }
 
   /** Standard Ram (power=false) or Power Shove (power=true) toward the opponent. */
-  ram(bug, power = false) {
+  /** @param {{reverse?: boolean}} opts reverse: a tail-first ram */
+  ram(bug, power = false, { reverse = false } = {}) {
     const target = this.other(bug);
     const cost = power ? ACTIONS.SHOVE_COST : ACTIONS.RAM_COST;
     if (bug.actionCooldown > 0 || target.out) return false;
@@ -245,7 +250,7 @@ export class CombatEngine extends EventEmitter {
 
     const dir = target.pos.sub(bug.pos).normalize();
     const speedMult = power ? ACTIONS.SHOVE_SPEED_MULT : ACTIONS.RAM_SPEED_MULT;
-    bug.angle = dir.angle();
+    bug.angle = dir.angle() + (reverse ? Math.PI : 0);
     const fwd = Math.max(0, bug.vel.dot(dir));
     bug.vel = dir.scale(Math.max(fwd, bug.stats.vMax * speedMult * 0.85));
     bug.lunge = {
@@ -253,11 +258,13 @@ export class CombatEngine extends EventEmitter {
       speedMult,
       impactMult: power ? ACTIONS.SHOVE_IMPACT_MULT : ACTIONS.RAM_IMPACT_MULT,
       power,
+      reverse,
     };
     // Follow through, but never aim past the edge — shove them out, not yourself.
     bug.control.target = this.clampInside(target.pos.add(dir.scale(ACTIONS.PUSH_THROUGH)), bug.radius * 1.2);
     bug.control.cruise = null;
-    bug.control.reverse = false;
+    bug.control.reverse = reverse;
+    bug.control.backing = false;
     bug.stamina -= cost;
     bug.actionCooldown = ACTIONS.ACTION_COOLDOWN;
     this.emit(EVENTS.ACTION, { bug, type: power ? 'shove' : 'ram', dir });
@@ -291,6 +298,7 @@ export class CombatEngine extends EventEmitter {
     }
     bug.control.target = null;
     bug.control.reverse = reverse;
+    bug.control.backing = false;
     bug.control.cruise = { angle: wrapAngle(angle) };
     bug.stamina -= ACTIONS.DASH_COST;
     bug.actionCooldown = ACTIONS.ACTION_COOLDOWN;
@@ -385,6 +393,8 @@ export class AIController {
     this.think = 0.4;
     this.reaction = 0.5 - 0.35 * difficulty;
     this.resting = false;
+    // A good pilot in a back-to-front shell knows its secret: back into every fight.
+    this.backs = !!me.chassis?.stats.backwards && difficulty >= PILOT_SKILL.BACKS_IN;
   }
 
   update(dt, engine) {
@@ -439,17 +449,19 @@ export class AIController {
       engine.moveTo(me, engine.clampInside(foe.pos.sub(toFoe.normalize().scale(200)), me.radius * 1.5));
     } else if (style.holdCenter && foeD < R * 0.6 && dist > 170) {
       // Turtles sit near the middle and wait for you to come to them (then brace and push back).
-      engine.moveTo(me, engine.clampInside(foe.pos.scale(0.35), me.radius * 1.5));
+      engine.moveTo(me, engine.clampInside(foe.pos.scale(0.35), me.radius * 1.5), { backing: this.backs });
     } else {
       // Everyone else closes in, aiming past the opponent to shove them outward.
-      engine.moveTo(me, engine.clampInside(foe.pos.add(outward.scale(45)), me.radius * 1.2));
+      engine.moveTo(me, engine.clampInside(foe.pos.add(outward.scale(45)), me.radius * 1.2), { backing: this.backs });
     }
 
     // 5. Rams & shoves when lined up.
-    const aligned = Math.abs(wrapAngle(toFoe.angle() - me.angle)) < 0.55;
+    const facing = me.angle + (this.backs ? Math.PI : 0);
+    const aligned = Math.abs(wrapAngle(toFoe.angle() - facing)) < 0.55;
+    const how = { reverse: this.backs };
     if (dist < 180 && aligned && me.actionCooldown <= 0) {
-      if (foeD > R * 0.5 && sFrac > 0.6 && Math.random() < (0.1 + 0.35 * difficulty) * style.shove) engine.ram(me, true);
-      else if (sFrac > 0.4 && Math.random() < (0.05 + 0.25 * difficulty) * style.ram) engine.ram(me, false);
+      if (foeD > R * 0.5 && sFrac > 0.6 && Math.random() < (0.1 + 0.35 * difficulty) * style.shove) engine.ram(me, true, how);
+      else if (sFrac > 0.4 && Math.random() < (0.05 + 0.25 * difficulty) * style.ram) engine.ram(me, false, how);
     }
 
     // 6. Dodge incoming lunges.

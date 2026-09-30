@@ -82,6 +82,25 @@ export const INPUT = Object.freeze({
   MENU_TIME_SCALE: 0.3,
 });
 
+/**
+ * Pilot ability. Skill has nothing to do with the vehicle: anyone can buy a
+ * good bug. The fight record is the tell — few fights or all losses means a
+ * novice, the win/loss split shows how good they are, a long record a veteran.
+ */
+export const PILOT_SKILL = Object.freeze({
+  // [weight, fights before you meet them, skill range]
+  NOVICE: { weight: 0.3, fights: [0, 4], skill: [0.05, 0.25] },
+  REGULAR: { weight: 0.45, fights: [8, 30], skill: [0.25, 0.85] },
+  VETERAN: { weight: 0.25, fights: [40, 120], skill: [0.35, 0.95] },
+  TIER_CAP: [0.4, 0.15],  // skill ≤ 0.4 + tier × 0.15, so the cheapest bugs aren't flown by aces
+  LEARN: 0.004,           // skill gained per fight
+  BACKS_IN: 0.6,          // skill needed to know a back-to-front shell pushes harder in reverse
+  RIVAL: 0.15,            // your rival's skill: hopeless, until the tournament
+});
+
+/** A pilot's chance of winning a fight, from their skill. */
+export const winRate = (skill) => Math.min(0.95, Math.max(0.05, 0.1 + 0.8 * skill));
+
 export const ECONOMY = Object.freeze({
   CURRENCY_SYMBOL: '§',
   START_SPARE: 3,            // starting cash covers repairs + the cheapest motor, leaving just this — play for titles to get ahead
