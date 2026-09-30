@@ -23,8 +23,10 @@ export class CombatEngine extends EventEmitter {
    * @param {{player: BattleBug, opponent: BattleBug, difficulty?: number}} opts
    */
   /** @param {{dohyo?: Dohyo}} opts dohyo: which ring (defaults to the classic) */
-  constructor({ player, opponent, difficulty = 0.5, style = null, dohyo = null, ai = true }) {
+  /** training: a practice session — nothing wears out (no per-match wear, no chain wear). */
+  constructor({ player, opponent, difficulty = 0.5, style = null, dohyo = null, ai = true, training = false }) {
     super();
+    this.training = training;
     this.dohyo = dohyo || new Dohyo(1);
     this.player = player;
     this.opponent = opponent;
@@ -170,7 +172,7 @@ export class CombatEngine extends EventEmitter {
     this.phase = 'over';
     for (const bug of this.bugs) for (const p of bug.parts) p.battleFloor = null;
     // Parts that grind themselves down (graphite discs) lose a set share every match.
-    for (const bug of this.bugs) {
+    for (const bug of this.training ? [] : this.bugs) {
       for (const p of bug.parts) if (p.stats.wearPerMatch) p.hp = Math.max(p.maxHp * 0.01, p.hp - p.maxHp * p.stats.wearPerMatch);
     }
     let reason = REASONS[reasonKey] || reasonKey;
@@ -358,7 +360,7 @@ export class CombatEngine extends EventEmitter {
     if (bug.out) return;
     // A chain driving heavy tyres or tracks wears while you drive.
     const chain = bug.drivetrain.find((p) => p.stats.shaft === 'chain' && !p.isBroken);
-    if (chain && bug.throttle > 0 && heavyGear(bug)) {
+    if (chain && !this.training && bug.throttle > 0 && heavyGear(bug)) {
       const res = { total: 0, hits: [], broken: [] };
       const r = chain.applyDamage(chain.maxHp * ACTIONS.CHAIN_WEAR * bug.throttle * dt);
       if (r.dealt > 0) res.hits.push({ part: chain, dealt: r.dealt });

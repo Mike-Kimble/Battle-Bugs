@@ -133,7 +133,7 @@ class App {
       training: { mode, snapshot },
       engine: new CombatEngine({
         player, opponent: foe.bug, difficulty: foe.difficulty, style: foe.style,
-        dohyo: dohyoKind ? new Dohyo(dohyoKind) : Dohyo.random(), ai: mode !== 'dummy',
+        dohyo: dohyoKind ? new Dohyo(dohyoKind) : Dohyo.random(), ai: mode !== 'dummy', training: true,
       }),
     });
   }
@@ -356,18 +356,23 @@ class App {
     this.showResults(report, engine);
   }
 
-  /** Training is free: put the vehicle back exactly as it was and go back to the Training tab. */
+  /**
+   * After training. Sparring still knocks you about, but only a share of the
+   * damage sticks (nothing wears or uses up a match); the dummy costs nothing.
+   */
   endTraining(training, res) {
+    const keep = training.mode === 'spar' ? ECONOMY.SPAR_DAMAGE : 0;
     for (const { p, hp, failed, usesLeft } of training.snapshot) {
-      p.hp = hp;
-      p.failed = failed;
+      p.hp = Math.max(0, hp - Math.max(0, hp - p.hp) * keep);
+      p.failed = failed || (keep > 0 && p.failed && p.hpRatio <= MATCH.CRITICAL);
       p.usesLeft = usesLeft;
       p.battleFloor = null;
     }
+    this.state.commit();
     this.match.player.resetForBattle(this.match.player.pos, 0);
     if (res && res.reasonKey !== 'forfeit') {
       const word = res.result === 'win' ? 'Won' : res.result === 'loss' ? 'Lost' : 'Drew';
-      toast(`Training: ${word} — ${res.reason}. Your vehicle is untouched.`, res.result === 'win' ? 'good' : 'bad');
+      toast(`Training: ${word} — ${res.reason}. ${keep ? 'Sparring damage is light — check the hoist.' : 'Your vehicle is untouched.'}`, res.result === 'win' ? 'good' : 'bad');
     }
     this.terminal.setTab('training');
     this.showWorkshop();

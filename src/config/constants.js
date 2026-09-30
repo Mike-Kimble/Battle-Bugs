@@ -123,6 +123,7 @@ export const winRate = (skill) => Math.min(0.95, Math.max(0.05, 0.1 + 0.8 * skil
 
 export const ECONOMY = Object.freeze({
   CURRENCY_SYMBOL: '§',
+  SPAR_DAMAGE: 0.4,          // share of the damage from a sparring session that sticks (the rest is padding and blunted weapons)
   START_SPARE: 3,            // starting cash covers repairs + the cheapest motor, leaving just this — play for titles to get ahead
   JUNK_CONDITION: [0.25, 0.5], // starter parts are at least 50% damaged
   SELL_RATE: 0.6,            // resale fraction of value × condition

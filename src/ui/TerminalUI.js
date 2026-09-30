@@ -694,13 +694,13 @@ export class TerminalUI {
       el('button', { class: 'btn btn-fight', disabled: !ready, onclick: () => this.onTrain(mode, this.trainingDohyo) }, label));
     return el('div', {},
       el('h2', {}, 'Training'),
-      el('p', { class: 'muted' }, 'Practice for free: no stakes, no wages, no record, and your vehicle comes back exactly as it went in. Press Exit to leave whenever you like.'),
+      el('p', { class: 'muted' }, 'Practice for free: no stakes, no wages, no record. Sparring still dents you a little (40% of the damage sticks), but nothing wears out or uses up a match; the dummy costs nothing at all. Press Exit to leave whenever you like.'),
       !bug?.isBattleReady ? el('div', { class: 'notice notice-warn' }, bug ? bug.battleIssues()[0] : 'You need a vehicle.') : null,
       this.economy.inField ? el('div', { class: 'notice notice-warn' }, "You're in the tournament — no time for training.") : null,
       el('h3', {}, 'Dohyo'),
       pickDohyo,
       el('div', { class: 'card-grid' },
-        card('Spar', 'A random opponent in a vehicle matched to yours, flown by a pilot of middling skill.', 'spar', 'SPAR'),
+        card('Spar', 'A random opponent in a vehicle matched to yours, flown by a pilot of middling skill. Light damage only.', 'spar', 'SPAR'),
         card('Training Dummy', 'A motorless dummy vehicle with no weapons. It just sits there and gets pushed around — perfect for practising rams, shoves and ring-outs.', 'dummy', 'PRACTISE')));
   }
 
