@@ -21,8 +21,10 @@ export class CombatEngine extends EventEmitter {
   /**
    * @param {{player: BattleBug, opponent: BattleBug, difficulty?: number}} opts
    */
-  constructor({ player, opponent, difficulty = 0.5, style = null }) {
+  /** toTheDeath: a title fight — never called off for catastrophic damage. */
+  constructor({ player, opponent, difficulty = 0.5, style = null, toTheDeath = false }) {
     super();
+    this.toTheDeath = toTheDeath;
     this.player = player;
     this.opponent = opponent;
     this.bugs = [player, opponent];
@@ -236,7 +238,7 @@ export class CombatEngine extends EventEmitter {
    * that level (a mechanic can still repair it). One roll per part per match.
    */
   checkCritical(bug, res) {
-    if (!this.live || bug.out) return;
+    if (!this.live || bug.out || this.toTheDeath) return;
     for (const { part } of res.hits) {
       const vital = part === bug.chassis || part === bug.tires || bug.drives.includes(part);
       if (!vital || part.hpRatio > MATCH.CRITICAL || this.critRolled.has(part.uid)) continue;

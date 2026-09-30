@@ -141,7 +141,8 @@ class App {
     this.state.save();
 
     this.match = { challenger, tournament, stake, bet, player, moneyBefore, endTimer: null, banner: null };
-    this.engine = new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty, style: challenger.style });
+    // Title fights are to the death: nothing gets called off.
+    this.engine = new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty, style: challenger.style, toTheDeath: stake?.type === 'titles' });
     this.wireEngine(this.engine);
 
     $('#workshop-screen').classList.remove('active');
