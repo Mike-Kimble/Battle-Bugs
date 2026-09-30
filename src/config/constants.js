@@ -33,7 +33,8 @@ export const PHYSICS = Object.freeze({
   ARRIVE_RADIUS: 14,
   REVERSE_ANGLE: (120 * Math.PI) / 180, // target this far off the travel direction flips forward/reverse
   REVERSE_SPEED: 0.65,
-  TWIN_EFFICIENCY: 0.55,    // twin drives' combined force: 2 × 0.55 = 1.1× one motor
+  TWIN_POWER: 0.7,          // twin drives: each gives at most 70% of its power (2 × 0.7 = 1.4× one motor)
+  TWIN_COOLING: 0.55,       // …and their cooling combines to 1.1× one motor's — twin drives run hot
   TWIN_SKEW: 0.7,           // rad off line at full imbalance between twin drives (one side dead)      // reverse top speed as a share of v_max
   PUSHED_SPEED: 25,         // moving this fast against your drive direction = being pushed
   PUSH_BACK_ARC: Math.PI / 4, // while pushed, aim within 45° of the pusher to keep pushing back

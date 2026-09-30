@@ -109,8 +109,8 @@ export class PhysicsEngine {
     for (const it of interactions) for (const k in it.mods) m[k] *= it.mods[k];
     const addOns = PhysicsEngine.addOns(bug, m, interactions);
 
-    // Two motors through one set of running gear: not quite double.
-    const fDrive = forceSum * (drives.length > 1 ? PHYSICS.TWIN_EFFICIENCY : 1) * m.force;
+    // Two motors through one set of running gear: each gives at most 70% of its power.
+    const fDrive = forceSum * (drives.length > 1 ? PHYSICS.TWIN_POWER : 1) * m.force;
     const fGripBase = tires ? tires.stats.mu * mass * PHYSICS.GRAVITY * tireRatio * m.grip : 0;
     const fGrip = fGripBase * gripMod;
     const fUsable = Math.min(fDrive, fGrip);
@@ -138,7 +138,7 @@ export class PhysicsEngine {
       gripMod,
       radius: chassis.stats.radius * PHYSICS.BUG_SCALE,
       staminaMax: Math.round(chassis.stats.staminaMax * m.staminaMax),
-      cooling: engine ? Math.round((drives.reduce((t, d) => t + d.stats.cooling, 0) * (drives.length > 1 ? PHYSICS.TWIN_EFFICIENCY : 1) * m.cooling + addOns.cool) * 10) / 10 : 0,
+      cooling: engine ? Math.round((drives.reduce((t, d) => t + d.stats.cooling, 0) * (drives.length > 1 ? PHYSICS.TWIN_COOLING : 1) * m.cooling + addOns.cool) * 10) / 10 : 0,
       twinBias,
       drainMult: m.drain,
       interactions,
