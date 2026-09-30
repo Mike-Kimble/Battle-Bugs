@@ -30,7 +30,7 @@ export const PARTS = Object.freeze({
   scrapper_frame: chassis('Aphid Husk', 1, C, 120, 70, 120, { radius: 26, staminaMax: 100, weaponSlots: 1, turn: 4.2, shape: 'aphid' }, 'A soft, pear-shaped shell patched with scrap. Honest, if unlovely.'),
   shopping_cart: chassis('Ant Gaster', 1, C, 100, 65, 110, { radius: 25, staminaMax: 95, weaponSlots: 1, turn: 4.4, shape: 'ant' }, 'Mostly abdomen. Carries many times its own weight, apparently.'),
   lawnmower_deck: chassis('Daddy No-Legs', 1, U, 150, 80, 135, { radius: 27, staminaMax: 102, weaponSlots: 1, turn: 3.9, shape: 'daddy' }, 'A daddy-long-legs that lost every leg in a bet. Round, tough and bitter about it.'),
-  beetle_shell: chassis('Beetle Shell', 2, C, 380, 95, 180, { radius: 29, staminaMax: 110, weaponSlots: 1, turn: 3.8, shape: 'beetle' }, 'Domed elytra plating. Hard to tip, hard to hurt.'),
+  beetle_shell: chassis('Beetle Shell', 2, C, 380, 95, 180, { radius: 29, staminaMax: 110, weaponSlots: 1, turn: 3.8, shape: 'beetle', backwards: { fwd: 0.85, rev: 1.25 } }, 'Domed elytra plating. Hard to tip, hard to hurt.'),
   roach_lowrider: chassis('Roach Lowrider', 2, C, 420, 60, 100, { radius: 24, staminaMax: 130, weaponSlots: 2, turn: 5.0, shape: 'roach' }, 'Light, twitchy, twin hardpoints.'),
   tick_pod: chassis('Ladybird Pod', 2, U, 400, 85, 170, { radius: 26, staminaMax: 115, weaponSlots: 1, turn: 4.2, shape: 'beetle' }, 'Round, spotty and surprisingly hard to knock over.'),
   cricket_chassis: chassis('Cricket Chassis', 2, R, 470, 58, 108, { radius: 24, staminaMax: 132, weaponSlots: 2, turn: 5.2, shape: 'roach', bio: true }, 'Grown, not built. Chirps when it corners.'),
@@ -38,7 +38,7 @@ export const PARTS = Object.freeze({
   stag_brawler: chassis('Stag Brawler', 3, C, 620, 110, 210, { radius: 30, staminaMax: 110, weaponSlots: 2, turn: 3.8, shape: 'scarab' }, 'All shoulders. Built for leaning on people.'),
   weevil_wedge: chassis('Weevil Wedge', 3, U, 640, 90, 175, { radius: 28, staminaMax: 120, weaponSlots: 2, turn: 4.2, shape: 'beetle' }, 'A low nose that gets under things it shouldn\'t.'),
   wasp_dart: chassis('Wasp Dart', 3, R, 760, 70, 132, { radius: 25, staminaMax: 136, weaponSlots: 2, turn: 5.3, shape: 'hornet', bio: true }, 'Living carapace, all nerve and no patience.'),
-  scarab_bulwark: chassis('Scarab Bulwark', 4, R, 900, 130, 260, { radius: 32, staminaMax: 105, weaponSlots: 2, turn: 3.2, shape: 'scarab' }, 'A rolling fortress. Slow to turn, slower to die.'),
+  scarab_bulwark: chassis('Scarab Bulwark', 4, R, 900, 130, 260, { radius: 32, staminaMax: 105, weaponSlots: 2, turn: 3.2, shape: 'scarab', backwards: { fwd: 0.85, rev: 1.25 } }, 'A rolling fortress. Slow to turn, slower to die.'),
   rhino_ram: chassis('Rhino Ram', 4, U, 880, 135, 270, { radius: 33, staminaMax: 104, weaponSlots: 2, turn: 3.3, shape: 'scarab' }, 'Horn first, questions never.'),
   locust_racer: chassis('Locust Racer', 4, R, 1000, 65, 150, { radius: 25, staminaMax: 145, weaponSlots: 2, turn: 5.5, shape: 'roach' }, 'Stripped to the rivets for speed. Swarms well.'),
   hive_carapace: chassis('Hive Carapace', 4, E, 1300, 85, 200, { radius: 28, staminaMax: 142, weaponSlots: 2, turn: 4.8, shape: 'mantis', bio: true }, 'A frame secreted by ten thousand drones. It hums along with a bio-engine.'),
@@ -206,6 +206,12 @@ export const RARITY = Object.freeze({
  * Only a mechanic will point these out — without one you just see the numbers.
  */
 export const INTERACTIONS = Object.freeze([
+  // Secret: these shells are built back to front — weaker going forward, much stronger pushing in reverse.
+  // Nobody tells you about the reverse part.
+  { id: 'backwards', good: false, mods: {},
+    when: (b) => !!b.engine && !!b.chassis?.stats.backwards,
+    dynamic: (b) => ({ force: b.chassis.stats.backwards.fwd }),
+    text: "Drive force is down 15%, I just don't get it, this is all backwards." },
   { id: 'turbine_tracks', good: false, mods: { force: 0.75 },
     when: (b) => b.engine?.stats.kind === 'turbine' && b.tires?.stats.kind === 'track',
     text: 'That turbine bogs down in heavy tracks — it needs revs, tracks give it none. −25% drive.' },

@@ -109,6 +109,10 @@ export class PhysicsEngine {
     const fGrip = fGripBase * gripMod;
     const fUsable = Math.min(fDrive, fGrip);
     const accel = mass > 0 ? (fUsable / mass) * m.accel : 0;
+    // Back-to-front shells: the forward penalty is undone and then some in reverse.
+    const back = chassis.stats.backwards;
+    const fDriveRev = back ? (fDrive / back.fwd) * back.rev : fDrive;
+    const accelRev = mass > 0 ? (Math.min(fDriveRev, fGrip) / mass) * m.accel : 0;
 
     const wear = PHYSICS.TIRE_WEAR_FLOOR + (1 - PHYSICS.TIRE_WEAR_FLOOR) * tireRatio;
     const vMax = engine && tires ? engine.stats.rpm * tires.stats.radius * PHYSICS.RPM_TO_SPEED * wear * m.vMax : 0;
@@ -120,6 +124,7 @@ export class PhysicsEngine {
       fGripBase,
       fUsable,
       accel,
+      accelRev,
       vMax,
       engineRatio,
       tireRatio,
@@ -242,7 +247,7 @@ export class PhysicsEngine {
     if (throttle > 0 && !ctl.reverse) {
       if (fwd < vCap) fwd = Math.min(vCap, fwd + s.accel * throttle * dt);
     } else if (throttle > 0) {
-      if (fwd > -vCapRev) fwd = Math.max(-vCapRev, fwd - s.accel * throttle * dt);
+      if (fwd > -vCapRev) fwd = Math.max(-vCapRev, fwd - (s.accelRev ?? s.accel) * throttle * dt);
     } else {
       fwd = approach(fwd, 0, gripDecel * PHYSICS.IDLE_BRAKE * dt);
     }
