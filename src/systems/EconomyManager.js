@@ -194,6 +194,7 @@ export class EconomyManager {
     if (!part) throw new Error('Part not in inventory');
     if (part.type === 'chassis') throw new Error('A chassis is a whole vehicle frame — it cannot be fitted');
     if (part.isScrap) throw new Error(`${part.name} is scrap — sell it for ${formatMoney(ECONOMY.SCRAP_PRICE)}`);
+    if ((part.type === 'cooling' || part.type === 'enhancement') && !bug.drives.length) throw new Error('Fit a drive first — cooling and enhancements mount on it');
     if (part.type === 'engine' && bug.drives.length === 2 && !bug.driveFits(part, slot ?? 1)) throw new Error(`Twin drives must be the same motor type — these are ${bug.engine.stats.kind}`);
     if (!this.fits(part, bug)) throw new Error("Doesn't look like you can fit that here");
     if (part.type === 'weapon' && bug.weaponSlots === 0) throw new Error('This chassis has no hardpoints');
@@ -202,11 +203,13 @@ export class EconomyManager {
     return part;
   }
 
+  /** Take a part off into your spares. Returns every part that came off (a drive brings its add-ons). */
   unequipToInventory(bug, partUid) {
     const part = bug.findPart(partUid);
-    if (!part || !bug.unequip(part)) throw new Error('Cannot remove that part');
-    this.state.addPart(part);
-    return part;
+    const off = part && bug.unequip(part);
+    if (!off) throw new Error('Cannot remove that part');
+    for (const p of off) this.state.addPart(p);
+    return off;
   }
 
 
@@ -369,7 +372,10 @@ export class EconomyManager {
     const pool = [...s.inventory.map((p) => [p, null]), ...fitted];
     if (!pool.length) return;
     const [part, bug] = pick(pool);
-    if (bug) bug.unequip(part); else s.removePart(part.uid);
+    if (bug) {
+      // Whatever was bolted to it falls off into your spares.
+      for (const p of bug.unequip(part) || []) if (p !== part) s.addPart(p);
+    } else s.removePart(part.uid);
     c.taken += Math.max(ECONOMY.SCRAP_PRICE, Math.round(part.value * part.hpRatio));
     report.lines.push(`Your ${part.name} has gone missing${bug ? ` from ${bug.name}` : ' from your spares'}…`);
     if (c.taken >= c.owed) {

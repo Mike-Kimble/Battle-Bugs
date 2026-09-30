@@ -616,7 +616,8 @@ export class WorkshopUI {
           el('button', {
             class: 'btn btn-small',
             disabled: locked,
-            onclick: () => this.act(() => this.economy.unequipToInventory(bug, part.uid), `${part.name} moved to inventory`),
+            onclick: () => this.act(() => this.economy.unequipToInventory(bug, part.uid),
+              (off) => (off.length > 1 ? `${part.name} moved to inventory — its cooling & enhancements came off too` : `${part.name} moved to inventory`)),
           }, 'Remove'),
         ].filter(Boolean),
       }));
@@ -626,8 +627,10 @@ export class WorkshopUI {
       section.append(el('p', { class: 'muted small' }, `${bug.weapons.length}/${bug.weaponSlots} hardpoints used. Weapons add mass and cost stamina per activation.`));
     } else if (type === 'engine' && multi) {
       section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} drive bays used. Twin drives must be the same motor type — with both working, a swipe spins you 360° on the spot. Keep them evenly repaired or she'll pull to one side.`));
+    } else if (multi && !bug.drives.length) {
+      section.append(el('p', { class: 'muted small' }, `No drive fitted — ${type === 'cooling' ? 'cooling' : 'enhancements'} mount on the drive, so fit one first.`));
     } else if (multi) {
-      section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} ${type === 'cooling' ? 'cooling' : 'enhancement'} slot${cap > 1 ? 's' : ''} used. Not every add-on suits every drive.`));
+      section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} ${type === 'cooling' ? 'cooling' : 'enhancement'} slot${cap > 1 ? 's' : ''} used${bug.drives.length > 1 ? ' (across both drives)' : ''}. Not every add-on suits every drive.`));
     }
 
     if (inv.length) {

@@ -99,8 +99,9 @@ export class BattleBug {
   slotCapacity(type) {
     if (type === 'engine') return this.driveSlots;
     return type === 'weapon' ? this.weaponSlots
-      : type === 'cooling' ? BattleBug.COOLER_SLOTS * this.driveSlots
-        : type === 'enhancement' ? BattleBug.MOD_SLOTS * this.driveSlots : 1;
+      // Cooling and enhancements mount on a drive: slots for each one fitted.
+      : type === 'cooling' ? BattleBug.COOLER_SLOTS * this.drives.length
+        : type === 'enhancement' ? BattleBug.MOD_SLOTS * this.drives.length : 1;
   }
 
   /** Twin drives must be the same motor type: can `part` go in drive bay `slot`? */
@@ -185,15 +186,27 @@ export class BattleBug {
     return displaced;
   }
 
-  /** Remove an equipped (non-chassis) part. Returns true if removed. */
+  /**
+   * Remove an equipped (non-chassis) part. Returns the parts that came off
+   * (a drive takes its cooling and enhancements with it), or false.
+   */
   unequip(part) {
     if (part === this.chassis) return false;
-    for (const slot of ['tires', 'armor']) {
-      if (this[slot] === part) { this[slot] = null; return true; }
+    const d = this.drives.indexOf(part);
+    if (d >= 0) {
+      this.drives.splice(d, 1);
+      const off = [part];
+      for (const [list, per] of [[this.coolers, BattleBug.COOLER_SLOTS], [this.mods, BattleBug.MOD_SLOTS]]) {
+        off.push(...list.splice(per * this.drives.length));
+      }
+      return off;
     }
-    for (const list of [this.drives, this.weapons, this.coolers, this.mods]) {
+    for (const slot of ['tires', 'armor']) {
+      if (this[slot] === part) { this[slot] = null; return [part]; }
+    }
+    for (const list of [this.weapons, this.coolers, this.mods]) {
       const i = list.indexOf(part);
-      if (i >= 0) { list.splice(i, 1); return true; }
+      if (i >= 0) { list.splice(i, 1); return [part]; }
     }
     return false;
   }
