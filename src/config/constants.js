@@ -32,7 +32,9 @@ export const PHYSICS = Object.freeze({
   RESTITUTION: 0.15,
   ARRIVE_RADIUS: 14,
   REVERSE_ANGLE: (120 * Math.PI) / 180, // target this far off the travel direction flips forward/reverse
-  REVERSE_SPEED: 0.65,      // reverse top speed as a share of v_max
+  REVERSE_SPEED: 0.65,
+  TWIN_EFFICIENCY: 0.55,    // twin drives' combined force: 2 × 0.55 = 1.1× one motor
+  TWIN_SKEW: 0.7,           // rad off line at full imbalance between twin drives (one side dead)      // reverse top speed as a share of v_max
   PUSHED_SPEED: 25,         // moving this fast against your drive direction = being pushed
   PUSH_BACK_ARC: Math.PI / 4, // while pushed, aim within 45° of the pusher to keep pushing back
   PULL_OUT_HOLD: 0.8,       // seconds spent rolling with the push while steering out
@@ -63,6 +65,11 @@ export const ACTIONS = Object.freeze({
   SHOVE_IMPACT_MULT: 1.8,
   SHOVE_DURATION: 0.55,
   DASH_COST: 8,               // swipe handbrake turn
+  SPIN_COST: 14,              // twin drives: a swipe spins 360° on the spot instead
+  SPIN_DURATION: 0.5,
+  SPIN_REACH: 10,             // px beyond touching that the spin still catches the opponent
+  SPIN_KNOCK: 1.6,            // knock-back speed as a share of the spinner's v_max: sends them ~1.3× as far as a ram
+  SPIN_IMPACT_MULT: 1.4,
   SWERVE_MOVING_SPEED: 25,   // above this, a swipe follows the actual direction of motion
   SWERVE_SIDE_THRESHOLD: 0.35, // |sin| of swipe vs travel needed for a left/right turn
   ACTION_COOLDOWN: 0.35,

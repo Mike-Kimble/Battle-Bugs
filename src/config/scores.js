@@ -117,7 +117,7 @@ export function partSummary(part) {
   const s = part.stats;
   const n = (v) => shown(v);
   switch (part.type) {
-    case 'chassis': return `Stamina ${n(pct(s.staminaMax, REF.stamina))} · Agility ${n(pct(s.turn, REF.turn))} · ${s.weaponSlots} hardpoint${s.weaponSlots === 1 ? '' : 's'}`;
+    case 'chassis': return `Stamina ${n(pct(s.staminaMax, REF.stamina))} · Agility ${n(pct(s.turn, REF.turn))} · ${s.weaponSlots} hardpoint${s.weaponSlots === 1 ? '' : 's'}${s.drives > 1 ? ' · twin drive bays' : ''}`;
     case 'engine': return `Power ${n(pct(s.force, REF.force))} · Revs ${n(pct(s.rpm, REF.rpm))} · Cooling ${n(pct(s.cooling, REF.cooling))}`;
     case 'tires': return `Grip ${n(pct(s.mu, REF.mu))} · Speed ${n(pct(s.radius, REF.tireRadius))}`;
     case 'armor': return `Protection ${n(pct(s.absorb, REF.absorb))} · Airflow ${n(airflow(s.heat))}`;

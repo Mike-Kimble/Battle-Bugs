@@ -186,7 +186,7 @@ export class EconomyManager {
   }
 
   repairPriority(bug) {
-    return [bug.chassis, bug.engine, bug.tires, bug.armor, ...bug.weapons].filter((p) => p && p.missingHp > 0);
+    return [bug.chassis, ...bug.drives, bug.tires, bug.armor, ...bug.weapons].filter((p) => p && p.missingHp > 0);
   }
 
   equipFromInventory(bug, partUid, slot) {
@@ -194,6 +194,7 @@ export class EconomyManager {
     if (!part) throw new Error('Part not in inventory');
     if (part.type === 'chassis') throw new Error('A chassis is a whole vehicle frame — it cannot be fitted');
     if (part.isScrap) throw new Error(`${part.name} is scrap — sell it for ${formatMoney(ECONOMY.SCRAP_PRICE)}`);
+    if (part.type === 'engine' && bug.drives.length === 2 && !bug.driveFits(part, slot ?? 1)) throw new Error(`Twin drives must be the same motor type — these are ${bug.engine.stats.kind}`);
     if (!this.fits(part, bug)) throw new Error("Doesn't look like you can fit that here");
     if (part.type === 'weapon' && bug.weaponSlots === 0) throw new Error('This chassis has no hardpoints');
     this.state.removePart(partUid);
@@ -233,6 +234,8 @@ export class EconomyManager {
   /** Can this part go on this bug at all? (Some add-ons only suit certain drives.) */
   fits(part, bug) {
     if (part.type === 'weapon' && !bug.weaponSlots) return false;
+    // Twin drives both fitted: a second motor type goes in neither bay.
+    if (part.type === 'engine' && bug.drives.length === 2 && !bug.driveFits(part, 0)) return false;
     return worksWith(part, bug);
   }
 
@@ -422,13 +425,16 @@ export class EconomyManager {
 
     const weapons = Array.from({ length: weaponCount }, () => pickPartKey('weapon', tier + 1));
     const pilot = alien ? { name: alienName(), planet: pick(PLANETS) } : null;
+    const motor = pickPartKey('engine', tier);
     const bug = BattleBug.create({
       name: `${pick(BUG_ADJECTIVES)} ${pick(BUG_NOUNS)}`,
       hue: randInt(0, 359),
       alien,
       pilot,
       chassis,
-      engine: pickPartKey('engine', tier),
+      engine: motor,
+      // Twin-bay shells usually carry a matching second motor.
+      engine2: PARTS[chassis].stats.drives > 1 && chance(0.4 + tier * 0.1) ? motor : null,
       tires: pickPartKey('tires', tier),
       armor: tier <= 1 && chance(0.4) ? null : pickPartKey('armor', tier),
       weapons,
@@ -714,7 +720,7 @@ export class EconomyManager {
   /** Pilots use the same logic as your mechanic: repair, then buy the optimal affordable part. */
   maintainPilot(p) {
     const bug = p.bug;
-    for (const part of [bug.chassis, bug.engine, bug.tires, bug.armor, ...bug.weapons].filter(Boolean)) {
+    for (const part of [bug.chassis, ...bug.drives, bug.tires, bug.armor, ...bug.weapons].filter(Boolean)) {
       const cost = Math.ceil(part.missingHp * (part.value / part.maxHp) * ECONOMY.REPAIR_RATE);
       if (cost <= p.purse) { p.purse -= cost; part.repair(); }
     }
@@ -724,8 +730,10 @@ export class EconomyManager {
     for (const { type } of needs) {
       const key = this.optimalPart(bug, type, p.purse, { owned: [], discount: 1 });
       if (!key) continue;
+      let displaced;
+      try { displaced = bug.equip(new Part(key)); } catch { continue; } // e.g. a motor that doesn't match its twin
       p.purse -= PARTS[key].value;
-      for (const old of bug.equip(new Part(key))) p.purse += Math.round(old.value * old.hpRatio * ECONOMY.SCRAP_RATE);
+      for (const old of displaced) p.purse += Math.round(old.value * old.hpRatio * ECONOMY.SCRAP_RATE);
       break;
     }
     this.refreshPilot(p);
@@ -734,7 +742,7 @@ export class EconomyManager {
   // ───────────── Even matches ─────────────
   /** Star rating (1–5) of a vehicle: the average tier of its parts. */
   vehicleStars(bug) {
-    const parts = [bug.chassis, bug.engine, bug.tires, bug.armor, ...bug.weapons].filter(Boolean);
+    const parts = [bug.chassis, ...bug.drives, bug.tires, bug.armor, ...bug.weapons].filter(Boolean);
     return clampTier(Math.round(parts.reduce((sum, p) => sum + p.tier, 0) / parts.length));
   }
 
@@ -1211,7 +1219,7 @@ export class EconomyManager {
    */
   strongestBuild({ allow = (k) => RARITY[PARTS[k].rarity].shop } = {}) {
     const keysOf = (type) => PART_KEYS_BY_TYPE[type].filter(allow);
-    const make = (b) => BattleBug.create({ ...b, condition: () => 1 });
+    const make = (b) => BattleBug.create({ ...b, engine2: PARTS[b.chassis].stats.drives > 1 ? b.engine : null, condition: () => 1 });
     const weaponsFor = (chassis) => keysOf('weapon')
       .sort((x, y) => PARTS[y].tier - PARTS[x].tier || PARTS[y].value - PARTS[x].value)
       .slice(0, PARTS[chassis].stats.weaponSlots);
@@ -1255,6 +1263,7 @@ export class EconomyManager {
     // Their own ride's name and paint job, rebuilt as the best machine money can buy.
     const bug = BattleBug.create({
       ...spec,
+      engine2: PARTS[spec.chassis].stats.drives > 1 ? spec.engine : null,
       name: pilot.bug.name,
       hue: pilot.bug.hue,
       alien: true,

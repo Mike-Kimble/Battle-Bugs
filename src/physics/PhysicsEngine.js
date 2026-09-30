@@ -96,7 +96,12 @@ export class PhysicsEngine {
     const tires = bug.tires;
 
     const mass = bug.parts.reduce((sum, p) => sum + p.mass, 0);
-    const engineRatio = engine ? engine.hpRatio : 0;
+    // Twin drives add their force; a damaged side pulls the bug off line.
+    const drives = bug.drives || (engine ? [engine] : []);
+    const driveForces = drives.map((d) => d.stats.force * d.hpRatio);
+    const forceSum = driveForces.reduce((a, b) => a + b, 0);
+    const twinBias = drives.length === 2 && forceSum > 0 ? (driveForces[0] - driveForces[1]) / forceSum : 0;
+    const engineRatio = drives.length ? drives.reduce((t, d) => t + d.hpRatio, 0) / drives.length : 0;
     const tireRatio = tires ? tires.hpRatio : 0;
     // Part combinations that help or hurt.
     const m = { force: 1, grip: 1, vMax: 1, cooling: 1, staminaMax: 1, drain: 1, accel: 1 };
@@ -104,7 +109,8 @@ export class PhysicsEngine {
     for (const it of interactions) for (const k in it.mods) m[k] *= it.mods[k];
     const addOns = PhysicsEngine.addOns(bug, m, interactions);
 
-    const fDrive = engine ? engine.stats.force * engineRatio * m.force : 0;
+    // Two motors through one set of running gear: not quite double.
+    const fDrive = forceSum * (drives.length > 1 ? PHYSICS.TWIN_EFFICIENCY : 1) * m.force;
     const fGripBase = tires ? tires.stats.mu * mass * PHYSICS.GRAVITY * tireRatio * m.grip : 0;
     const fGrip = fGripBase * gripMod;
     const fUsable = Math.min(fDrive, fGrip);
@@ -115,7 +121,8 @@ export class PhysicsEngine {
     const accelRev = mass > 0 ? (Math.min(fDriveRev, fGrip) / mass) * m.accel : 0;
 
     const wear = PHYSICS.TIRE_WEAR_FLOOR + (1 - PHYSICS.TIRE_WEAR_FLOOR) * tireRatio;
-    const vMax = engine && tires ? engine.stats.rpm * tires.stats.radius * PHYSICS.RPM_TO_SPEED * wear * m.vMax : 0;
+    const rpm = drives.length ? drives.reduce((t, d) => t + d.stats.rpm, 0) / drives.length : 0;
+    const vMax = engine && tires ? rpm * tires.stats.radius * PHYSICS.RPM_TO_SPEED * wear * m.vMax : 0;
 
     return {
       mass,
@@ -131,7 +138,8 @@ export class PhysicsEngine {
       gripMod,
       radius: chassis.stats.radius * PHYSICS.BUG_SCALE,
       staminaMax: Math.round(chassis.stats.staminaMax * m.staminaMax),
-      cooling: engine ? Math.round((engine.stats.cooling * m.cooling + addOns.cool) * 10) / 10 : 0,
+      cooling: engine ? Math.round((drives.reduce((t, d) => t + d.stats.cooling, 0) * (drives.length > 1 ? PHYSICS.TWIN_EFFICIENCY : 1) * m.cooling + addOns.cool) * 10) / 10 : 0,
+      twinBias,
       drainMult: m.drain,
       interactions,
       turnRate: chassis.stats.turn * (0.55 + 0.45 * tireRatio),
@@ -180,12 +188,20 @@ export class PhysicsEngine {
     const ctl = bug.control;
     // Direction of travel: the nose when driving forward, the tail in reverse.
     const travelAngle = () => bug.angle + (ctl.reverse ? Math.PI : 0);
+    // Uneven twin drives: the stronger side keeps shoving the nose round, so
+    // the bug settles off its line and drives in a curve.
+    const skew = () => (s.twinBias || 0) * PHYSICS.TWIN_SKEW * (ctl.reverse ? -1 : 1);
     const steer = (diff, rate) => {
       const maxTurn = rate * dt;
-      bug.angle = wrapAngle(bug.angle + clamp(diff, -maxTurn, maxTurn));
+      bug.angle = wrapAngle(bug.angle + clamp(diff + skew(), -maxTurn, maxTurn));
     };
 
-    if (canDrive && bug.lunge) {
+    if (bug.spin) {
+      // Twin drives turning opposite ways: a full 360° on the spot.
+      bug.angle = wrapAngle(bug.angle + bug.spin.rate * dt); // no drive: it only brakes like an idle bug
+      bug.spin.time -= dt;
+      if (bug.spin.time <= 0) bug.spin = null;
+    } else if (canDrive && bug.lunge) {
       // Rams/shoves: heading already snapped, full power (tail first for a reverse ram).
       ctl.reverse = !!bug.lunge.reverse;
       throttle = 1;

@@ -13,7 +13,7 @@ export class BattleBug {
   static COOLER_SLOTS = 3; // e.g. jacket + liquid cooler + fan
   static MOD_SLOTS = 1;
 
-  constructor({ id, name, hue = 30, alien = false, pilot = null, chassis, engine = null, tires = null, armor = null, weapons = [], coolers = [], mods = [] }) {
+  constructor({ id, name, hue = 30, alien = false, pilot = null, chassis, engine = null, engine2 = null, tires = null, armor = null, weapons = [], coolers = [], mods = [] }) {
     if (!chassis) throw new Error('BattleBug requires a chassis');
     this.id = id || makeId('bug');
     this.name = name || 'Unnamed Bug';
@@ -21,23 +21,25 @@ export class BattleBug {
     this.alien = alien;
     this.pilot = pilot; // { name, planet } for alien challengers
     this.chassis = chassis;
-    this.engine = engine;
+    // Drive bays: one, or two on the bigger shells (left and right; same motor type).
+    this.drives = [engine, engine2].filter(Boolean).slice(0, this.driveSlots);
     this.tires = tires;
     this.armor = armor;
     this.weapons = weapons.slice(0, chassis.stats.weaponSlots);
-    this.coolers = coolers.filter(Boolean).slice(0, BattleBug.COOLER_SLOTS); // cooling add-ons
-    this.mods = mods.filter(Boolean).slice(0, BattleBug.MOD_SLOTS); // performance enhancements
+    this.coolers = coolers.filter(Boolean).slice(0, BattleBug.COOLER_SLOTS * this.driveSlots); // cooling add-ons
+    this.mods = mods.filter(Boolean).slice(0, BattleBug.MOD_SLOTS * this.driveSlots); // performance enhancements
     this.resetForBattle(new Vector2D(), 0);
   }
 
   /** Build from catalogue keys. `condition` may be a number or a () => number. */
-  static create({ name, hue, alien, pilot, chassis, engine, tires, armor, weapons = [], coolers = [], mods = [], condition = 1 }) {
+  static create({ name, hue, alien, pilot, chassis, engine, engine2, tires, armor, weapons = [], coolers = [], mods = [], condition = 1 }) {
     const cond = typeof condition === 'function' ? condition : () => condition;
     const mk = (key) => (key ? Part.create(key, cond()) : null);
     return new BattleBug({
       name, hue, alien, pilot,
       chassis: mk(chassis),
       engine: mk(engine),
+      engine2: mk(engine2),
       tires: mk(tires),
       armor: mk(armor),
       weapons: weapons.map(mk),
@@ -50,7 +52,7 @@ export class BattleBug {
     const p = (x) => (x ? Part.fromJSON(x) : null);
     return new BattleBug({
       id: o.id, name: o.name, hue: o.hue, alien: o.alien, pilot: o.pilot,
-      chassis: p(o.chassis), engine: p(o.engine), tires: p(o.tires), armor: p(o.armor),
+      chassis: p(o.chassis), engine: p(o.engine), engine2: p(o.engine2), tires: p(o.tires), armor: p(o.armor),
       weapons: (o.weapons || []).map(p),
       coolers: (o.coolers || []).map(p),
       mods: (o.mods || []).map(p),
@@ -62,6 +64,7 @@ export class BattleBug {
       id: this.id, name: this.name, hue: this.hue, alien: this.alien, pilot: this.pilot,
       chassis: this.chassis.toJSON(),
       engine: this.engine?.toJSON() ?? null,
+      engine2: this.drives[1]?.toJSON() ?? null,
       tires: this.tires?.toJSON() ?? null,
       armor: this.armor?.toJSON() ?? null,
       weapons: this.weapons.map((w) => w.toJSON()),
@@ -72,8 +75,15 @@ export class BattleBug {
 
   // ───────────── Composition ─────────────
   get parts() {
-    return [this.chassis, this.engine, this.tires, this.armor, ...this.weapons, ...this.coolers, ...this.mods].filter(Boolean);
+    return [this.chassis, ...this.drives, this.tires, this.armor, ...this.weapons, ...this.coolers, ...this.mods].filter(Boolean);
   }
+  /** The (first) drive motor. */
+  get engine() { return this.drives[0] || null; }
+  set engine(part) { if (part) this.drives[0] = part; else this.drives.shift(); }
+  /** Drive bays on this frame: 1, or 2 on the bigger shells. */
+  get driveSlots() { return this.chassis.stats.drives || 1; }
+  /** Two working drives: it can spin on the spot. */
+  get twinDrive() { return this.drives.length === 2 && this.drives.every((d) => !d.isBroken); }
   get hull() { return this.chassis; }
   /** World/collision radius. The catalogue radius is the sprite design size. */
   get radius() { return this.chassis.stats.radius * PHYSICS.BUG_SCALE; }
@@ -82,11 +92,23 @@ export class BattleBug {
 
   /** Multi-slot part types: the fitted list and how many fit. */
   slotList(type) {
+    if (type === 'engine') return this.driveSlots > 1 ? this.drives : null;
     return type === 'weapon' ? this.weapons : type === 'cooling' ? this.coolers : type === 'enhancement' ? this.mods : null;
   }
 
   slotCapacity(type) {
-    return type === 'weapon' ? this.weaponSlots : type === 'cooling' ? BattleBug.COOLER_SLOTS : type === 'enhancement' ? BattleBug.MOD_SLOTS : 1;
+    if (type === 'engine') return this.driveSlots;
+    return type === 'weapon' ? this.weaponSlots
+      : type === 'cooling' ? BattleBug.COOLER_SLOTS * this.driveSlots
+        : type === 'enhancement' ? BattleBug.MOD_SLOTS * this.driveSlots : 1;
+  }
+
+  /** Twin drives must be the same motor type: can `part` go in drive bay `slot`? */
+  driveFits(part, slot) {
+    if (part.type !== 'engine' || this.driveSlots < 2) return true;
+    const i = slot ?? (this.drives.length < 2 ? this.drives.length : 1);
+    const other = this.drives[1 - i];
+    return !other || other.stats.kind === part.stats.kind;
   }
   get mass() { return this.parts.reduce((s, p) => s + p.mass, 0); }
 
@@ -124,13 +146,25 @@ export class BattleBug {
    */
   equip(part, slot) {
     const displaced = [];
+    if (part.type === 'engine' && this.driveSlots < 2) {
+      if (this.engine) displaced.push(this.engine);
+      this.drives = [part];
+      return displaced;
+    }
+    if (part.type === 'engine' && !this.driveFits(part, slot)) {
+      if (slot !== undefined || this.drives.length > 1) throw new Error(`Twin drives must match — that's not a ${this.drives[0].stats.kind} motor`);
+      // A single drive of another type: swap it out.
+      displaced.push(...this.drives);
+      this.drives = [part];
+      return displaced;
+    }
     switch (part.type) {
-      case 'engine':
       case 'tires':
       case 'armor':
         if (this[part.type]) displaced.push(this[part.type]);
         this[part.type] = part;
         break;
+      case 'engine':
       case 'weapon':
       case 'cooling':
       case 'enhancement': {
@@ -154,10 +188,10 @@ export class BattleBug {
   /** Remove an equipped (non-chassis) part. Returns true if removed. */
   unequip(part) {
     if (part === this.chassis) return false;
-    for (const slot of ['engine', 'tires', 'armor']) {
+    for (const slot of ['tires', 'armor']) {
       if (this[slot] === part) { this[slot] = null; return true; }
     }
-    for (const list of [this.weapons, this.coolers, this.mods]) {
+    for (const list of [this.drives, this.weapons, this.coolers, this.mods]) {
       const i = list.indexOf(part);
       if (i >= 0) { list.splice(i, 1); return true; }
     }
@@ -181,6 +215,7 @@ export class BattleBug {
     this.odometer = 0;
     this.control = { target: null, reverse: false, cruise: null, pushHold: 0 };
     this.lunge = null;
+    this.spin = null;
     this.actionCooldown = 0;
     this.cooldowns = {};
     this.effects = EMPTY_EFFECTS();
@@ -209,6 +244,12 @@ export class BattleBug {
     this.stamina = clamp(this.stamina - amount, 0, this.stats.staminaMax);
   }
 
+  /** Which drive bay is on the side facing world direction `dir`: 0 (left) or 1 (right). */
+  sideFacing(dir) {
+    const h = Vector2D.fromAngle(this.angle);
+    return h.x * dir.y - h.y * dir.x < 0 ? 0 : 1;
+  }
+
   /** Which body zone faces world direction `dir` ('front' | 'side' | 'rear'). */
   zoneFacing(dir) {
     const a = Math.abs(Math.atan2(dir.y, dir.x) - this.angle);
@@ -223,7 +264,7 @@ export class BattleBug {
    * is split between the hull and the part at the struck zone.
    * @returns {{total:number, hits:Array<{part:Part, dealt:number}>, broken:Part[]}}
    */
-  takeDamage(amount, zone = 'side', { bypassArmor = 0 } = {}) {
+  takeDamage(amount, zone = 'side', { bypassArmor = 0, side } = {}) {
     const result = { total: 0, hits: [], broken: [] };
     if (amount <= 0) return result;
     const mult = this.effects.exposed > 0 ? ACTIONS.EXPOSED_DAMAGE_MULT : 1;
@@ -246,19 +287,22 @@ export class BattleBug {
       dmg -= soaked;
     }
 
+    // Twin drives: the one on the side that took the hit.
+    const drive = this.drives[side ?? Math.floor(Math.random() * 2)] || this.engine;
     const zonePart =
-      zone === 'front' ? this.weapons.find((w) => !w.isBroken) || this.engine
-        : zone === 'rear' ? this.engine
+      zone === 'front' ? this.weapons.find((w) => !w.isBroken) || drive
+        : zone === 'rear' ? drive
           : this.tires;
     hit(this.chassis, dmg * 0.6);
     hit(zonePart, dmg * 0.5);
+    if (zone === 'side' && this.drives.length > 1) hit(drive, dmg * 0.25);
     return result;
   }
 
   /** Targeted damage to one slot (strength destroyers hit the drivetrain). */
   damageSlot(slot, amount, { bypassArmor = 0.5 } = {}) {
     const result = { total: 0, hits: [], broken: [] };
-    const part = this[slot];
+    const part = slot === 'engine' ? this.drives[Math.floor(Math.random() * this.drives.length)] : this[slot];
     if (!part) return result;
     let dmg = amount * (this.effects.exposed > 0 ? ACTIONS.EXPOSED_DAMAGE_MULT : 1);
     if (this.armor && !this.armor.isBroken) {

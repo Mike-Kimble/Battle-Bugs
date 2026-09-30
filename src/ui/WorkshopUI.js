@@ -395,13 +395,14 @@ export class WorkshopUI {
     const bug = this.bug;
     const parts = {
       front: bug.weapons,
-      center: [bug.engine],
+      center: bug.drives,
       sides: [bug.tires],
       hull: [bug.chassis, bug.armor],
     }[key].filter(Boolean);
     if (key === 'front') return `${bug.weapons.length}/${bug.weaponSlots} weapons`;
     if (!parts.length) return 'empty';
     const r = parts.reduce((s, p) => s + p.hpRatio, 0) / parts.length;
+    if (key === 'center' && bug.driveSlots > 1) return `${bug.drives.length}/2 drives · ${Math.round(r * 100)}%`;
     return `${Math.round(r * 100)}%`;
   }
 
@@ -623,6 +624,8 @@ export class WorkshopUI {
 
     if (type === 'weapon') {
       section.append(el('p', { class: 'muted small' }, `${bug.weapons.length}/${bug.weaponSlots} hardpoints used. Weapons add mass and cost stamina per activation.`));
+    } else if (type === 'engine' && multi) {
+      section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} drive bays used. Twin drives must be the same motor type — with both working, a swipe spins you 360° on the spot. Keep them evenly repaired or she'll pull to one side.`));
     } else if (multi) {
       section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} ${type === 'cooling' ? 'cooling' : 'enhancement'} slot${cap > 1 ? 's' : ''} used. Not every add-on suits every drive.`));
     }

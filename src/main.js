@@ -214,6 +214,7 @@ class App {
       const tail = bug.pos.sub(dir.scale(bug.radius));
       for (let i = 0; i < (type === 'shove' ? 10 : 5); i++) sp.smoke(tail, 'rgba(160,140,110,0.6)');
       if (type === 'shove') sp.float(bug.pos.add(new Vector2D(0, -bug.radius - 8)), 'POWER SHOVE!', '#ffd24a', 9);
+      if (type === 'spin') sp.float(bug.pos.add(new Vector2D(0, -bug.radius - 8)), 'SPIN!', '#5ad8ff', 9);
     });
     engine.on(EVENTS.ACTION_FAIL, ({ bug, reason }) => {
       if (!isPlayer(bug)) return;

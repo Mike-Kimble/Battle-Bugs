@@ -2,7 +2,7 @@ import { ARENA, MATCH, PHYSICS, ACTIONS, EVENTS, PILOT_SKILL } from '../config/c
 import { PILOT_STYLES } from '../config/partsData.js';
 import { EventEmitter } from '../core/EventEmitter.js';
 import { PhysicsEngine } from '../physics/PhysicsEngine.js';
-import { Vector2D, wrapAngle } from '../physics/Vector2D.js';
+import { Vector2D, wrapAngle, clamp } from '../physics/Vector2D.js';
 
 const REASONS = {
   ringout: 'Ring out',
@@ -77,6 +77,7 @@ export class CombatEngine extends EventEmitter {
     if (this.phase === 'fight') this.ai.update(dt, this);
 
     this.physics.step(this.bugs, dt, { puddles: this.puddles });
+    if (this.live) for (const bug of this.bugs) this.spinHit(bug);
     this.updateFallen(dt);
     this.updatePuddles(dt);
 
@@ -169,8 +170,8 @@ export class CombatEngine extends EventEmitter {
   }
 
   // ───────────── Collisions & damage ─────────────
-  onCollision({ a, b, normal, impact }) {
-    if (!this.live) return;
+  onCollision({ a, b, normal, impact, spin }) {
+    if (!this.live || spin) return; // spin hits deal their own damage (spinHit)
     if (impact > PHYSICS.IMPACT_THRESHOLD) {
       this.impactDamage(a, b, normal, impact);
       this.impactDamage(b, a, normal.negate(), impact);
@@ -188,7 +189,7 @@ export class CombatEngine extends EventEmitter {
     // A back-to-front shell is built to take hits on its tail, too.
     if (zone === 'front' || (zone === 'rear' && victim.chassis?.stats.backwards)) mult *= PHYSICS.FRONT_HIT_REDUCTION;
     const dmg = PHYSICS.IMPACT_DAMAGE_K * (impact - PHYSICS.IMPACT_THRESHOLD) * attacker.stats.mass * mult;
-    const res = victim.takeDamage(dmg, zone);
+    const res = victim.takeDamage(dmg, zone, { side: victim.sideFacing(dir.negate()) });
     victim.lastHitBy = attacker;
     this.report(victim, res, { zone, source: attacker, kind: 'impact' });
   }
@@ -272,6 +273,52 @@ export class CombatEngine extends EventEmitter {
   }
 
   /**
+   * Twin drives: a swipe spins the bug a full 360° on the spot (one drive
+   * forward, one back). Anything it catches gets knocked further back than
+   * a ram would send it. Swipe to the right of travel to spin clockwise.
+   */
+  spinAttack(bug, dir) {
+    if (bug.actionCooldown > 0 || bug.spin) return false;
+    if (!this.canAct(bug, ACTIONS.SPIN_COST)) return false;
+    const heading = Vector2D.fromAngle(bug.angle);
+    const cw = heading.cross(dir.normalize()) >= 0 ? 1 : -1;
+    bug.spin = { time: ACTIONS.SPIN_DURATION, rate: (cw * 2 * Math.PI) / ACTIONS.SPIN_DURATION, hit: false };
+    bug.lunge = null;
+    bug.control.target = null;
+    bug.control.cruise = null;
+    bug.control.backing = false;
+    bug.stamina -= ACTIONS.SPIN_COST;
+    bug.actionCooldown = ACTIONS.SPIN_DURATION;
+    this.emit(EVENTS.ACTION, { bug, type: 'spin', dir: heading });
+    return true;
+  }
+
+  /** A spinning bug catches the opponent once per spin and flings them away. */
+  spinHit(bug) {
+    if (!bug.spin || bug.spin.hit || bug.out) return;
+    const foe = this.other(bug);
+    if (foe.out) return;
+    const delta = foe.pos.sub(bug.pos);
+    const dist = delta.length();
+    if (dist > bug.radius + foe.radius + ACTIONS.SPIN_REACH || dist < 1e-6) return;
+    bug.spin.hit = true;
+    const n = delta.scale(1 / dist);
+    const heft = clamp(Math.sqrt(bug.stats.mass / foe.stats.mass), 0.6, 1.5);
+    const speed = bug.stats.vMax * ACTIONS.SPIN_KNOCK * heft;
+    foe.vel = foe.vel.add(n.scale(Math.max(0, speed - foe.vel.dot(n))));
+    foe.lunge = null;
+    foe.spin = null;
+    const zone = foe.zoneFacing(n.negate());
+    let mult = ACTIONS.SPIN_IMPACT_MULT;
+    if (zone === 'front' || (zone === 'rear' && foe.chassis?.stats.backwards)) mult *= PHYSICS.FRONT_HIT_REDUCTION;
+    const dmg = PHYSICS.IMPACT_DAMAGE_K * Math.max(0, speed - PHYSICS.IMPACT_THRESHOLD) * bug.stats.mass * mult;
+    const res = foe.takeDamage(dmg, zone, { side: foe.sideFacing(n.negate()) });
+    foe.lastHitBy = bug;
+    this.report(foe, res, { zone, source: bug, kind: 'impact' });
+    this.emit(EVENTS.COLLISION, { a: bug, b: foe, normal: n, impact: speed, point: bug.pos.add(n.scale(bug.radius)), spin: true });
+  }
+
+  /**
    * Swipe: a handbrake turn. The bug keeps going the way it's actually
    * moving (forward, or backward if it's being shoved back), carves a sharp
    * 90° arc toward the swipe side, then drives straight at the new angle
@@ -279,6 +326,7 @@ export class CombatEngine extends EventEmitter {
    * straight on; a swipe against it flips forward/reverse.
    */
   dash(bug, dir) {
+    if (bug.twinDrive) return this.spinAttack(bug, dir);
     if (bug.actionCooldown > 0) return false;
     if (!this.canAct(bug, ACTIONS.DASH_COST)) return false;
     const d = dir.normalize();
@@ -414,7 +462,7 @@ export class AIController {
     // 1. Edge danger: head for the middle.
     if (myD > R - me.radius * 1.7) {
       engine.moveTo(me, me.pos.scale(0.25));
-      if (dist < 120 && sFrac > 0.3 && Math.random() < difficulty * 0.5 * style.dodge) {
+      if (dist < 120 && sFrac > 0.3 && !me.twinDrive && Math.random() < difficulty * 0.5 * style.dodge) {
         engine.dash(me, me.pos.negate().normalize());
       }
       return;
@@ -426,7 +474,7 @@ export class AIController {
     if (this.resting && sFrac > low + 0.25) this.resting = false;
     if (this.resting) {
       engine.stop(me);
-      if (foe.lunge && dist < 140 && sFrac > 0.12) engine.dash(me, this.dodgeDir(toFoe));
+      if (foe.lunge && dist < 140 && sFrac > 0.12 && !me.twinDrive) engine.dash(me, this.dodgeDir(toFoe));
       return;
     }
 
@@ -464,8 +512,15 @@ export class AIController {
       else if (sFrac > 0.4 && Math.random() < (0.05 + 0.25 * difficulty) * style.ram) engine.ram(me, false, how);
     }
 
+    // Twin drives: spin into them when they're close enough to catch — better pilots, more often.
+    if (me.twinDrive && dist < me.radius + foe.radius + ACTIONS.SPIN_REACH && sFrac > 0.3 && me.actionCooldown <= 0
+      && Math.random() < 0.05 + 0.25 * difficulty) {
+      engine.dash(me, toFoe.perp());
+      return;
+    }
+
     // 6. Dodge incoming lunges.
-    if (foe.lunge && dist < 160 && sFrac > 0.25 && Math.random() < difficulty * 0.6 * style.dodge) {
+    if (!me.twinDrive && foe.lunge && dist < 160 && sFrac > 0.25 && Math.random() < difficulty * 0.6 * style.dodge) {
       engine.dash(me, this.dodgeDir(toFoe));
     }
   }
