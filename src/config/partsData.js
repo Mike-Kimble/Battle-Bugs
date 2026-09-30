@@ -40,6 +40,12 @@ export function hasDriveTrain(bug, test) {
   return (bug?.drivetrain || []).some((p) => !p.isBroken && !p.spent && test(p.stats) && worksWith(p, bug));
 }
 
+/** Heavy running gear (tracks, or chunky tyres) that chews through a chain drive. */
+export function heavyGear(bug) {
+  const t = bug?.tires;
+  return !!t && t.type === 'tires' && (t.stats.kind === 'track' || t.mass >= 18);
+}
+
 /** A working drive shaft is fitted (needed to turn wheels or tracks). */
 export function hasShaft(bug) {
   return hasDriveTrain(bug, (s) => !!s.shaft);
@@ -243,6 +249,7 @@ export const PARTS = Object.freeze({
   high_speed_shaft: drivetrain('High-Speed Shaft', 3, U, 600, 10, 90, { kind: 'shaft', group: 'shaft', shaft: 'hss', works: SHAFT_DRIVES, note: 'Drive shaft strong enough for turbine revs' }, 'A stronger, balanced drive shaft that can take a turbine\'s revs. Any motor but plasma needs a drive shaft to turn wheels or tracks — and a turbine needs this one: run it on the turbine side of a gearbox for the best, most stable set-up.'),
   overdrive_gearbox: drivetrain('Overdrive Gearbox', 3, U, 540, 14, 100, { kind: 'gearbox', group: 'gearbox', force: 0.94, vMax: 1.18, works: GEAR_DRIVES, note: 'Gears up: much more top speed, a little less push' }, 'Tall gears for the long straights. Much more top speed, a little less shove. Turbines need a High-Speed Shaft for a gearbox to do anything.'),
   standard_shaft: drivetrain('Standard Drive Shaft', 1, C, 15, 12, 60, { kind: 'shaft', group: 'shaft', shaft: 'std', works: SHAFT_DRIVES, note: 'Connects the motor to the wheels. Snaps on a turbine' }, 'The bare minimum: any motor but plasma needs a drive shaft to turn wheels or tracks. Always in stock and next to free. A turbine\'s revs snap it halfway through a match, leaving only the thrust — turbines want a High-Speed Shaft.'),
+  chain_sprockets: drivetrain('Chain & Sprockets', 1, C, 40, 4, 50, { kind: 'shaft', group: 'shaft', shaft: 'chain', works: SHAFT_DRIVES, note: 'Light drive for light wheels — wears fast on heavy ones' }, 'A bike chain instead of a drive shaft: much lighter, and fine for light wheels. Heavy tyres and tracks stretch and chew it up fast, so expect a lot of repairs. Turbine revs snap it.'),
   propeller: drivetrain('Propeller', 2, C, 260, 9, 60, { kind: 'prop', group: 'prop', prop: 0.75, works: NON_THRUST, note: 'Any shaft motor pushes as thrust — runs on castors' }, 'Bolt it to the output shaft and any motor becomes a thrust drive, castors and all.'),
   ducted_fan: drivetrain('Ducted Fan', 3, R, 720, 11, 75, { kind: 'prop', group: 'prop', prop: 0.85, propRpm: true, works: NON_THRUST, note: 'Thrust for any motor — more the higher it revs' }, 'A fan in a tight shroud. Like a propeller, but it turns high revs into far more thrust.'),
   limited_slip_link: drivetrain('Limited-Slip Link', 2, U, 420, 10, 90, { kind: 'lsl', lsl: true, note: 'Twin drives: no pull when one side is hurt; no spin' }, 'Couples twin drives so they share torque. One side damaged? She still drives straight — but the drives can\'t counter-rotate, so no spin attack.'),
@@ -294,11 +301,14 @@ export const INTERACTIONS = Object.freeze([
     when: (b) => b.tires?.type === 'tires' && b.engine?.stats.kind === 'plasma',
     text: 'Plasma can\'t drive wheels or tracks — it\'s only pushing with thrust, at half strength. Put it on castors.' },
   { id: 'turbine_std_shaft', good: false, mods: {},
-    when: (b) => b.engine?.stats.kind === 'turbine' && hasDriveTrain(b, (s) => s.shaft === 'std'),
-    text: 'A Standard Drive Shaft won\'t take turbine revs — it\'ll snap halfway through a match and leave you on thrust alone. Turbines need a High-Speed Shaft.' },
+    when: (b) => b.engine?.stats.kind === 'turbine' && hasDriveTrain(b, (s) => s.shaft === 'std' || s.shaft === 'chain'),
+    text: 'That shaft won\'t take turbine revs — it\'ll snap halfway through a match and leave you on thrust alone. Turbines need a High-Speed Shaft.' },
   { id: 'turbine_geared', good: true, mods: { force: 1.12 },
     when: (b) => b.engine?.stats.kind === 'turbine' && b.tires?.type === 'tires' && hasDriveTrain(b, (s) => s.shaft === 'hss') && hasDriveTrain(b, (s) => s.group === 'gearbox'),
     text: 'Turbine, High-Speed Shaft and gearbox — screaming revs turned into real wheel torque. +12% drive.' },
+  { id: 'chain_heavy', good: false, mods: {},
+    when: (b) => hasDriveTrain(b, (s) => s.shaft === 'chain') && heavyGear(b),
+    text: 'That chain is dragging heavy running gear — it\'ll stretch and wear out fast. Expect to repair it after every fight, or fit a drive shaft.' },
   { id: 'prop_rudder', good: true, mods: {},
     when: (b) => b.tires?.type === 'castor' && hasDriveTrain(b, (s) => !!s.prop) && hasDriveTrain(b, (s) => s.rudder),
     text: 'Prop and rudders on castors — she steers like a fish. And the castors are tucked under, out of harm\'s way.' },

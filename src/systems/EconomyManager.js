@@ -1,6 +1,6 @@
 import { ECONOMY, PILOT_SKILL, winRate } from '../config/constants.js';
 import {
-  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, RIVAL_EXCUSES, CHALLENGER_ROSTER, RARITY, worksWith, THRUST_DRIVES,
+  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, RIVAL_EXCUSES, CHALLENGER_ROSTER, RARITY, worksWith, THRUST_DRIVES, heavyGear,
 } from '../config/partsData.js';
 import { BattleBug } from '../entities/BattleBug.js';
 import { Part, makeId } from '../entities/Part.js';
@@ -1354,7 +1354,9 @@ export class EconomyManager {
       if (!this.affordable(key, budget, opts)) continue;
       if (opts.only && !opts.only(PARTS[key].stats)) continue;
       // A standard shaft would snap on a turbine: never the right call.
-      if (PARTS[key].stats.shaft === 'std' && bug.engine?.stats.kind === 'turbine') continue;
+      if (['std', 'chain'].includes(PARTS[key].stats.shaft) && bug.engine?.stats.kind === 'turbine') continue;
+      // …and a chain on heavy running gear would need repairing after every fight.
+      if (PARTS[key].stats.shaft === 'chain' && heavyGear(bug)) continue;
       const part = new Part(key);
       // Weapons all add the same raw rating, so break ties by quality (tier, then value).
       if (!this.fits(part, bug)) continue;

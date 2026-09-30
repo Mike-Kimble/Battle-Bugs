@@ -72,6 +72,7 @@ export const ACTIONS = Object.freeze({
   SHOVE_IMPACT_MULT: 1.8,
   SHOVE_DURATION: 0.55,
   DASH_COST: 8,               // swipe handbrake turn
+  CHAIN_WEAR: 0.012,          // share of a chain's max HP lost per second of driving heavy tyres or tracks
   VECTOR_KICK: 0.8,           // thrust vectoring: a swipe fires you off at least this share of top speed
   SPIN_COST: 28,              // twin drives: a swipe spins 360° on the spot instead
   SPIN_COOLDOWN: 3,           // seconds before you can spin again

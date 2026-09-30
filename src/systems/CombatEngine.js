@@ -1,5 +1,5 @@
 import { ARENA, MATCH, PHYSICS, ACTIONS, EVENTS, PILOT_SKILL } from '../config/constants.js';
-import { PILOT_STYLES } from '../config/partsData.js';
+import { PILOT_STYLES, heavyGear } from '../config/partsData.js';
 import { EventEmitter } from '../core/EventEmitter.js';
 import { PhysicsEngine } from '../physics/PhysicsEngine.js';
 import { Vector2D, wrapAngle, clamp } from '../physics/Vector2D.js';
@@ -88,7 +88,7 @@ export class CombatEngine extends EventEmitter {
     if (this.phase === 'fight') this.ai.update(dt, this);
 
     this.physics.step(this.bugs, dt, { puddles: this.puddles });
-    if (this.live) for (const bug of this.bugs) { this.spinHit(bug); this.shaftStrain(bug); }
+    if (this.live) for (const bug of this.bugs) { this.spinHit(bug); this.shaftStrain(bug, dt); }
     this.updateFallen(dt);
     this.updatePuddles(dt);
 
@@ -345,12 +345,22 @@ export class CombatEngine extends EventEmitter {
   }
 
   /**
-   * A Standard Drive Shaft can't take turbine revs: it snaps halfway through
+   * A chain wears when it drives heavy tyres or tracks. A Standard Drive Shaft or
+   * chain can't take turbine revs: it snaps halfway through
    * the match, leaving only the turbine's thrust. (Turbines want a High-Speed Shaft.)
    */
-  shaftStrain(bug) {
-    if (this.time < MATCH.DURATION / 2 || bug.out) return;
-    const shaft = bug.drivetrain.find((p) => p.stats.shaft === 'std' && !p.isBroken);
+  shaftStrain(bug, dt) {
+    if (bug.out) return;
+    // A chain driving heavy tyres or tracks wears while you drive.
+    const chain = bug.drivetrain.find((p) => p.stats.shaft === 'chain' && !p.isBroken);
+    if (chain && bug.throttle > 0 && heavyGear(bug)) {
+      const res = { total: 0, hits: [], broken: [] };
+      const r = chain.applyDamage(chain.maxHp * ACTIONS.CHAIN_WEAR * bug.throttle * dt);
+      if (r.dealt > 0) res.hits.push({ part: chain, dealt: r.dealt });
+      if (r.broke) { res.broken.push(chain); this.emit(EVENTS.PART_BROKEN, { bug, part: chain }); }
+    }
+    if (this.time < MATCH.DURATION / 2) return;
+    const shaft = bug.drivetrain.find((p) => (p.stats.shaft === 'std' || p.stats.shaft === 'chain') && !p.isBroken);
     if (!shaft || bug.engine?.stats.kind !== 'turbine') return;
     shaft.hp = Math.min(shaft.hp, shaft.maxHp * 0.3);
     shaft.failed = true;
