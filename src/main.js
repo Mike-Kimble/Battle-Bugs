@@ -45,6 +45,7 @@ class App {
       economy: this.economy,
       sprite: this.sprite,
       onFight: (challenger, opts) => this.startMatch(challenger, opts),
+      onTrain: (mode, dohyo) => this.startTraining(mode, dohyo),
       onNewGame: () => this.newGame(),
     });
     this.state.on(EVENTS.STATE_CHANGE, () => {
@@ -114,6 +115,29 @@ class App {
   }
 
   // ───────────── Battle lifecycle ─────────────
+  /**
+   * Training: spar with an evenly matched opponent or push a dummy around.
+   * Nothing counts — the vehicle is restored exactly as it went in.
+   * @param {'spar'|'dummy'} mode
+   * @param {number} dohyoKind 1–5, or 0 for random
+   */
+  startTraining(mode, dohyoKind = 0) {
+    const player = this.state.activeBug;
+    if (!player?.isBattleReady) {
+      toast(player ? player.battleIssues()[0] : 'No vehicle', 'bad');
+      return;
+    }
+    const foe = mode === 'dummy' ? this.economy.trainingDummy() : this.economy.sparringPartner(player);
+    const snapshot = player.parts.map((p) => ({ p, hp: p.hp, failed: p.failed, usesLeft: p.usesLeft }));
+    this.beginBattle(player, foe, {
+      training: { mode, snapshot },
+      engine: new CombatEngine({
+        player, opponent: foe.bug, difficulty: foe.difficulty, style: foe.style,
+        dohyo: dohyoKind ? new Dohyo(dohyoKind) : Dohyo.random(), ai: mode !== 'dummy',
+      }),
+    });
+  }
+
   startMatch(challenger, { tournament = false, betPct } = {}) {
     const player = tournament ? this.state.getVehicle(this.state.tournament.vehicleId) : this.state.activeBug;
     if (!player?.isBattleReady) {
@@ -141,9 +165,20 @@ class App {
     if (bet) toast(`Your manager bet ${formatMoney(bet.stake)} on you to ${bet.side === 'win' ? 'WIN' : 'LOSE'}`, bet.side === 'win' ? 'good' : 'bad');
     this.state.save();
 
-    this.match = { challenger, tournament, stake, bet, player, moneyBefore, endTimer: null, banner: null };
-    // Every bout is on one of the five dohyo, at random.
-    this.engine = new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty, style: challenger.style, dohyo: new Dohyo(this.economy.venueFor(challenger)) }); // home and away in turn
+    this.beginBattle(player, challenger, {
+      tournament, stake, bet, moneyBefore,
+      // Home and away in turn (the rookie's ring is random).
+      engine: new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty, style: challenger.style, dohyo: new Dohyo(this.economy.venueFor(challenger)) }),
+    });
+  }
+
+  /** Put a fight on screen and run it (a real bout or a training session). */
+  beginBattle(player, challenger, { engine, tournament = false, stake = null, bet = null, moneyBefore = this.state.money, training = null }) {
+    closeModal();
+    this.workshop.stop();
+    this.sprite.clear();
+    this.match = { challenger, tournament, stake, bet, player, moneyBefore, training, endTimer: null, banner: null };
+    this.engine = engine;
     this.wireEngine(this.engine);
 
     $('#workshop-screen').classList.remove('active');
@@ -297,10 +332,14 @@ class App {
   finishMatch() {
     cancelAnimationFrame(this.raf);
     const engine = this.engine;
-    const { challenger, tournament, stake, bet, player } = this.match;
+    const { challenger, tournament, stake, bet, player, training } = this.match;
     const res = engine.result;
     this.engine = null;
     this.input.disable();
+    if (training) {
+      this.endTraining(training, res);
+      return;
+    }
 
     const report = this.economy.settleMatch({
       result: res.result,
@@ -315,6 +354,23 @@ class App {
     report.moneyBefore = this.match.moneyBefore;
     this.state.commit();
     this.showResults(report, engine);
+  }
+
+  /** Training is free: put the vehicle back exactly as it was and go back to the Training tab. */
+  endTraining(training, res) {
+    for (const { p, hp, failed, usesLeft } of training.snapshot) {
+      p.hp = hp;
+      p.failed = failed;
+      p.usesLeft = usesLeft;
+      p.battleFloor = null;
+    }
+    this.match.player.resetForBattle(this.match.player.pos, 0);
+    if (res && res.reasonKey !== 'forfeit') {
+      const word = res.result === 'win' ? 'Won' : res.result === 'loss' ? 'Lost' : 'Drew';
+      toast(`Training: ${word} — ${res.reason}. Your vehicle is untouched.`, res.result === 'win' ? 'good' : 'bad');
+    }
+    this.terminal.setTab('training');
+    this.showWorkshop();
   }
 
   showResults(report, engine) {
@@ -387,8 +443,17 @@ class App {
     bar.replaceChildren(
       el('div', { class: 'weapon-row' }, this.weaponButtons.map((b) => b.btn)),
       el('div', { class: 'battle-help' }, 'On the ring: touch & drag to steer (behind you = reverse) · Off the ring: swipe for a handbrake turn · Tap foe: ram · Double-tap: shove · Hold your bug: weapons'),
-      el('button', { class: 'btn btn-small btn-danger forfeit', onclick: () => this.engine?.forfeit() }, 'Forfeit'),
+      this.match?.training
+        ? el('button', { class: 'btn btn-small btn-danger forfeit', onclick: () => this.exitTraining() }, 'Exit')
+        : el('button', { class: 'btn btn-small btn-danger forfeit', onclick: () => this.engine?.forfeit() }, 'Forfeit'),
     );
+  }
+
+  /** Leave a training session straight away. */
+  exitTraining() {
+    if (!this.engine) return;
+    this.engine.forfeit();
+    this.finishMatch();
   }
 
   updateBattleControls() {

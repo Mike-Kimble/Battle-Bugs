@@ -420,6 +420,26 @@ export class EconomyManager {
     return null;
   }
 
+  // ───────────── Training ─────────────
+  /** A random opponent rated as close as possible to `bug`, flown by a pilot of middling skill. */
+  sparringPartner(bug) {
+    const target = this.rating(bug);
+    const tier = this.vehicleStars(bug);
+    let best = null;
+    for (let i = 0; i < 16; i++) {
+      const b = this.generateBug(clampTier(tier + (i % 3) - 1), { condition: () => rand(0.8, 1) });
+      if (!best || Math.abs(this.rating(b) - target) < Math.abs(this.rating(best) - target)) best = b;
+    }
+    const style = pick(FIGHTING_STYLES);
+    return { name: best.pilot?.name || 'Sparring Partner', planet: best.pilot?.planet, style, difficulty: rand(0.35, 0.75), bug: best };
+  }
+
+  /** A training dummy: a sturdy frame on tyres, no motor and no weapons — it only moves when pushed. */
+  trainingDummy() {
+    const bug = BattleBug.create({ name: 'Training Dummy', hue: 45, alien: false, chassis: 'weevil_wedge', tires: 'knobby_treads', armor: 'rubber_bumpers', weapons: [] });
+    return { name: 'Training Dummy', bug, difficulty: 0 };
+  }
+
   /** The drive shaft a build needs: none on castors or for plasma, a High-Speed Shaft for turbines, else a standard one. */
   shaftFor(engineKey, tiresKey) {
     if (!engineKey || !tiresKey || PARTS[tiresKey].type === 'castor') return [];

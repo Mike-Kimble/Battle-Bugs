@@ -23,7 +23,7 @@ export class CombatEngine extends EventEmitter {
    * @param {{player: BattleBug, opponent: BattleBug, difficulty?: number}} opts
    */
   /** @param {{dohyo?: Dohyo}} opts dohyo: which ring (defaults to the classic) */
-  constructor({ player, opponent, difficulty = 0.5, style = null, dohyo = null }) {
+  constructor({ player, opponent, difficulty = 0.5, style = null, dohyo = null, ai = true }) {
     super();
     this.dohyo = dohyo || new Dohyo(1);
     this.player = player;
@@ -51,7 +51,7 @@ export class CombatEngine extends EventEmitter {
         p.battleFloor = fragile ? null : Math.max(0, p.hp - p.maxHp * MATCH.DAMAGE_CAP);
       }
     }
-    this.ai = new AIController(opponent, player, difficulty, style);
+    this.ai = ai ? new AIController(opponent, player, difficulty, style) : null; // a training dummy has no pilot
 
     this.on(EVENTS.COLLISION, (c) => this.onCollision(c));
   }
@@ -83,7 +83,7 @@ export class CombatEngine extends EventEmitter {
     }
 
     if (this.live) this.time += dt;
-    if (this.phase === 'fight') this.ai.update(dt, this);
+    if (this.phase === 'fight' && this.ai) this.ai.update(dt, this);
 
     if (this.live) this.dohyo.applyForces(this.bugs, dt, this.time); // slopes and turntables
     this.physics.step(this.bugs, dt, { puddles: this.puddles });

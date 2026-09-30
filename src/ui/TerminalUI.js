@@ -9,6 +9,7 @@ const TABS = [
   ['market', 'Marketplace'],
   ['challengers', 'Challenger Board'],
   ['staff', 'Admin'],
+  ['training', 'Training'],
   ['tournament', 'Tournament'],
 ];
 
@@ -47,7 +48,7 @@ function streakText(n = 0) {
  * tournament desk. Also renders the top status bar.
  */
 export class TerminalUI {
-  constructor(root, header, tabbar, { state, economy, sprite, onFight, onNewGame }) {
+  constructor(root, header, tabbar, { state, economy, sprite, onFight, onTrain, onNewGame }) {
     this.root = root;
     this.header = header;
     this.tabbar = tabbar;
@@ -56,6 +57,8 @@ export class TerminalUI {
     this.economy = economy;
     this.sprite = sprite;
     this.onFight = onFight;
+    this.onTrain = onTrain;
+    this.trainingDohyo = 0; // 0 = random
     this.onNewGame = onNewGame;
     this.tab = 'hangar';
   }
@@ -77,6 +80,7 @@ export class TerminalUI {
       hangar: () => this.renderHangar(),
       market: () => this.renderMarket(),
       staff: () => this.renderStaff(),
+      training: () => this.renderTraining(),
       tournament: () => this.renderTournament(),
     }[this.tab]();
 
@@ -674,6 +678,32 @@ export class TerminalUI {
   }
 
   // ───────────── Tournament ─────────────
+  // ───────────── Training ─────────────
+  renderTraining() {
+    const s = this.state;
+    const bug = s.activeBug;
+    const ready = !!bug?.isBattleReady && !this.economy.inField;
+    const pickDohyo = el('div', { class: 'subtabs subtabs-2', role: 'tablist' },
+      [[0, 'Random'], ...Object.entries(DOHYO_KINDS).map(([k, d]) => [Number(k), `${k} ${d.name}`])].map(([k, label]) => el('button', {
+        class: `subtab${this.trainingDohyo === k ? ' active' : ''}`,
+        onclick: () => { this.trainingDohyo = k; this.render(); },
+      }, label)));
+    const card = (title, text, mode, label) => el('article', { class: 'card training' },
+      el('h3', {}, title),
+      el('p', {}, text),
+      el('button', { class: 'btn btn-fight', disabled: !ready, onclick: () => this.onTrain(mode, this.trainingDohyo) }, label));
+    return el('div', {},
+      el('h2', {}, 'Training'),
+      el('p', { class: 'muted' }, 'Practice for free: no stakes, no wages, no record, and your vehicle comes back exactly as it went in. Press Exit to leave whenever you like.'),
+      !bug?.isBattleReady ? el('div', { class: 'notice notice-warn' }, bug ? bug.battleIssues()[0] : 'You need a vehicle.') : null,
+      this.economy.inField ? el('div', { class: 'notice notice-warn' }, "You're in the tournament — no time for training.") : null,
+      el('h3', {}, 'Dohyo'),
+      pickDohyo,
+      el('div', { class: 'card-grid' },
+        card('Spar', 'A random opponent in a vehicle matched to yours, flown by a pilot of middling skill.', 'spar', 'SPAR'),
+        card('Training Dummy', 'A motorless dummy vehicle with no weapons. It just sits there and gets pushed around — perfect for practising rams, shoves and ring-outs.', 'dummy', 'PRACTISE')));
+  }
+
   renderTournament() {
     const s = this.state;
     const eco = this.economy;
