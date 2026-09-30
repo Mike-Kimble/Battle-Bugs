@@ -283,19 +283,26 @@ export class CombatEngine extends EventEmitter {
     bug.control.backing = false;
   }
 
-  /** Standard Ram (power=false) or Power Shove (power=true) toward the opponent. */
-  /** @param {{reverse?: boolean}} opts reverse: a tail-first ram */
-  ram(bug, power = false, { reverse = false } = {}) {
+  /**
+   * Standard Ram (power=false) or Power Shove (power=true) toward the opponent.
+   * No bug spins round to do it: it goes with whichever end is already closer
+   * to facing them — nose first, or tail first in reverse (where a
+   * back-to-front shell hits hardest).
+   */
+  ram(bug, power = false) {
     const target = this.other(bug);
     const cost = power ? ACTIONS.SHOVE_COST : ACTIONS.RAM_COST;
     if (bug.actionCooldown > 0 || target.out) return false;
     if (!this.canAct(bug, cost)) return false;
 
     const dir = target.pos.sub(bug.pos).normalize();
+    const reverse = Math.abs(wrapAngle(dir.angle() - bug.angle)) > Math.PI / 2;
     const speedMult = power ? ACTIONS.SHOVE_SPEED_MULT : ACTIONS.RAM_SPEED_MULT;
     bug.angle = dir.angle() + (reverse ? Math.PI : 0);
+    // Reversing is slower, except for shells geared for it.
+    const revShare = reverse && !bug.chassis?.stats.backwards ? PHYSICS.REVERSE_SPEED : 1;
     const fwd = Math.max(0, bug.vel.dot(dir));
-    bug.vel = dir.scale(Math.max(fwd, bug.stats.vMax * speedMult * 0.85));
+    bug.vel = dir.scale(Math.max(fwd, bug.stats.vMax * speedMult * 0.85 * revShare));
     bug.lunge = {
       time: power ? ACTIONS.SHOVE_DURATION : ACTIONS.RAM_DURATION,
       speedMult,
@@ -550,10 +557,9 @@ export class AIController {
     // 5. Rams & shoves when lined up.
     const facing = me.angle + (this.backs ? Math.PI : 0);
     const aligned = Math.abs(wrapAngle(toFoe.angle() - facing)) < 0.55;
-    const how = { reverse: this.backs };
     if (dist < 180 && aligned && me.actionCooldown <= 0) {
-      if (foeD > R * 0.5 && sFrac > 0.6 && Math.random() < (0.1 + 0.35 * difficulty) * style.shove) engine.ram(me, true, how);
-      else if (sFrac > 0.4 && Math.random() < (0.05 + 0.25 * difficulty) * style.ram) engine.ram(me, false, how);
+      if (foeD > R * 0.5 && sFrac > 0.6 && Math.random() < (0.1 + 0.35 * difficulty) * style.shove) engine.ram(me, true);
+      else if (sFrac > 0.4 && Math.random() < (0.05 + 0.25 * difficulty) * style.ram) engine.ram(me, false);
     }
 
     // Twin drives: spin into them when they're close enough to catch — better pilots, more often.
