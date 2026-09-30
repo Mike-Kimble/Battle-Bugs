@@ -1,3 +1,4 @@
+import { DOHYO_KINDS } from '../systems/Dohyo.js';
 import { ECONOMY, WEAPON_CLASSES } from '../config/constants.js';
 import { formatMoney } from '../systems/EconomyManager.js';
 import { PARTS, RARITY } from '../config/partsData.js';
@@ -156,6 +157,9 @@ export class TerminalUI {
         el('div', { class: 'part-actions' },
           !active.engine ? el('button', { class: 'btn btn-primary', onclick: () => { this.marketCat = 'engine'; this.setTab('market'); } }, 'Buy a motor') : null,
           el('button', { class: 'btn', onclick: () => this.setTab('hangar') }, 'Open the Hangar'))) : null,
+      el('p', { class: 'small muted' }, this.economy.nextIsHome
+        ? '🏠 Next bout is at HOME — your Dohyo 1 (Classic). After that, away at theirs.'
+        : '✈ Next bout is AWAY — on your opponent\'s home dohyo. Then back home.'),
       s.board.tierShift ? el('p', { class: 'small warn-text' }, `▲ The board has scrolled up ${s.board.tierShift} difficulty level${s.board.tierShift > 1 ? 's' : ''} after everyone walked off.`) : null,
       walked.length ? el('p', { class: 'small muted' }, `Walked off (back after your next fight): ${walked.map((c) => this.pilotName(c)).join(', ')}`) : null,
       el('div', { class: 'card-grid' }, s.challengers.map((c) => this.challengerCard(c, { ready }))));
@@ -190,7 +194,8 @@ export class TerminalUI {
           el('h2', { class: 'pilot-name' }, this.pilotTitle(c)),
           el('div', { class: 'bug-subtitle' }, bug.name),
           el('div', { class: 'tier', title: 'Ranking' }, '★'.repeat(c.tier), el('span', { class: 'dim' }, '★'.repeat(5 - c.tier))),
-          c.record ? el('div', { class: 'pilot-record' }, `Record ${c.record.w}W – ${c.record.l}L`) : null),
+          c.record ? el('div', { class: 'pilot-record' }, `Record ${c.record.w}W – ${c.record.l}L`) : null,
+          this.venueLine(c)),
         this.sprite.renderThumbnail(bug, 72)),
       story ? el('p', { class: 'pilot-story' }, story) : null,
       onFight ? null : this.managerHunch(bug),
@@ -204,6 +209,14 @@ export class TerminalUI {
     if (bug.parts.length === 1) return 'bare chassis';
     if (bug.parts.length === 2 && bug.tires) return 'rolling chassis';
     return bug.isBattleReady ? 'complete' : 'semi-complete';
+  }
+
+  /** Home dohyo, and where the next bout against them would be. */
+  venueLine(c) {
+    const home = c.home || 1;
+    const venue = this.economy.venueFor(c);
+    const at = this.economy.nextIsHome ? 'home' : 'away';
+    return el('div', { class: 'small muted venue' }, `Home: Dohyo ${home} ${DOHYO_KINDS[home].name} · next bout ${at}: Dohyo ${venue} ${DOHYO_KINDS[venue].name}`);
   }
 
   /** With a manager, a word in your ear when a bug hides something special. */

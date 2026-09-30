@@ -559,7 +559,40 @@ export class EconomyManager {
       s.pool.filter((p) => !p.rookie && p.id !== s.rivalId).sort((x, y) => this.strength(y) - this.strength(x))
         .slice(0, ECONOMY.ELITE_PILOTS).forEach((p) => { p.elite = true; });
     }
+    if (s.pool.some((p) => !p.home)) this.assignHomes();
     for (const p of s.pool) this.refreshPilot(p);
+  }
+
+  /**
+   * Home dohyo: Dohyo 1 is yours — and your rival's, and two other pilots'.
+   * Everyone else is split evenly across the other four.
+   */
+  assignHomes() {
+    const s = this.state;
+    const others = s.pool.filter((p) => p.id !== s.rivalId).sort(() => Math.random() - 0.5);
+    others.forEach((p, i) => { p.home = i < ECONOMY.HOME_ONE_PILOTS ? 1 : 2 + ((i - ECONOMY.HOME_ONE_PILOTS) % 4); });
+    if (this.rival) this.rival.home = 1;
+  }
+
+  /** Keep the away dohyo (2–5) within one pilot of each other. */
+  balanceHomes() {
+    const pool = this.state.pool.filter((p) => p.home > 1);
+    for (let guard = 0; guard < 8; guard++) {
+      const by = [2, 3, 4, 5].map((k) => pool.filter((p) => p.home === k));
+      const most = by.reduce((a, b) => (b.length > a.length ? b : a));
+      const least = [2, 3, 4, 5][by.findIndex((g) => g.length === Math.min(...by.map((x) => x.length)))];
+      if (most.length - Math.min(...by.map((x) => x.length)) <= 1) return;
+      most[most.length - 1].home = least;
+    }
+  }
+
+  /** Where the next bout is fought: at home (Dohyo 1) and away (their home dohyo) in turn. */
+  get nextIsHome() {
+    return this.boutsPlayed % 2 === 0;
+  }
+
+  venueFor(challenger) {
+    return this.nextIsHome ? 1 : challenger?.home || 1;
   }
 
   get hasRookie() {
@@ -658,6 +691,8 @@ export class EconomyManager {
     if (s.rivalId || !pilot?.record) return false;
     s.rivalId = pilot.id;
     pilot.rookie = false; // no longer anybody's easy first fight
+    pilot.home = 1; // they move in on your home dohyo
+    this.balanceHomes();
     pilot.skill = Math.min(pilot.skill, PILOT_SKILL.RIVAL); // rattled for good — until the tournament
     this.scheduleRival();
     s.pendingDM = { pilotId: pilot.id, lines: RIVAL_DM.map((l) => l.replaceAll('{bug}', lostBugName)) };
@@ -1307,6 +1342,7 @@ export class EconomyManager {
       // Each pilot flies at their own skill — your rival finally learns to drive in the final.
       difficulty: isRival ? Math.max(pilot.skill, PILOT_SKILL.RIVAL_FINAL) : pilot.skill,
       roundName: ECONOMY.TOURNAMENT_ROUND_NAMES[round] || `Round ${round + 1}`,
+      home: pilot.home || 1,
       bug,
     };
     return { ...c, bug: c.bug.toJSON() };

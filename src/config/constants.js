@@ -158,6 +158,7 @@ export const ECONOMY = Object.freeze({
   BOUNTY_PER_TIER: 120,
   BOARD_SIZE: 5,             // challengers on the board, spread across difficulties
   POOL_TIERS: [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4], // the regular pilots (pool of 20: the rookie, these 14 and 5 elites)
+  HOME_ONE_PILOTS: 2,        // pilots besides you and your rival whose home dohyo is Dohyo 1
   ELITE_PILOTS: 5,           // tournament pilots: held off the board until 5★ pilots are your level
   ELITE_AT_STARS: 4,         // …i.e. your best ride reaches this many stars
   PILOT_STIPEND: 40,         // sponsors' pocket money per fight cycle

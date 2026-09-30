@@ -143,7 +143,7 @@ class App {
 
     this.match = { challenger, tournament, stake, bet, player, moneyBefore, endTimer: null, banner: null };
     // Every bout is on one of the five dohyo, at random.
-    this.engine = new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty, style: challenger.style, dohyo: Dohyo.random() });
+    this.engine = new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty, style: challenger.style, dohyo: new Dohyo(this.economy.venueFor(challenger)) }); // home and away in turn
     this.wireEngine(this.engine);
 
     $('#workshop-screen').classList.remove('active');
