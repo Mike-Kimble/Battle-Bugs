@@ -325,7 +325,7 @@ export class PhysicsEngine {
       } else {
         // Being pushed? (moving against the way we're driving — backwards while
         // driving forward, or forwards while reversing.)
-        const along = bug.vel.dot(Vector2D.fromAngle(bug.angle));
+        const along = (env.floorVel ? bug.vel.sub(env.floorVel(bug.pos)) : bug.vel).dot(Vector2D.fromAngle(bug.angle));
         const pushed = ctl.reverse ? along > PHYSICS.PUSHED_SPEED : along < -PHYSICS.PUSHED_SPEED;
         if (pushed && ctl.pushHold <= 0) {
           // The push comes from the direction we're driving. Aim within 45° of it
@@ -362,10 +362,16 @@ export class PhysicsEngine {
       }
     }
 
+    // On a turntable everything is relative to the floor under the bug: that
+    // point moves at ω × r (faster further out). Grip drags the bug towards the
+    // floor's motion, limited like any other friction — so staying put far out
+    // on a fast spin needs more grip than you have, and you slide off.
+    const floor = env.floorVel ? env.floorVel(bug.pos) : null;
     const heading = Vector2D.fromAngle(bug.angle);
     const side = heading.perp();
-    let fwd = bug.vel.dot(heading);
-    let lat = bug.vel.dot(side);
+    const rel = floor ? bug.vel.sub(floor) : bug.vel;
+    let fwd = rel.dot(heading);
+    let lat = rel.dot(side);
 
     const vCap = s.vMax * (bug.lunge ? bug.lunge.speedMult : 1);
     // Back-to-front shells are geared for reverse: no reverse speed penalty.
@@ -385,6 +391,10 @@ export class PhysicsEngine {
     lat = approach(lat, 0, gripDecel * lateralGrip * (s.lateralMult ?? 1) * dt);
 
     bug.vel = heading.scale(fwd).addInPlace(side, lat);
+    if (floor) {
+      bug.vel.addInPlace(floor, 1);
+      bug.angle = wrapAngle(bug.angle + env.spin * dt); // the floor turns you with it
+    }
     bug.pos.addInPlace(bug.vel, dt);
     bug.throttle = throttle;
     bug.odometer += Math.abs(fwd) * dt;

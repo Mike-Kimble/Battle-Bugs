@@ -25,8 +25,6 @@ const HOLE = [70, ARENA.R0 - 40];        // donut hole radius: start → end
 const SQUASH = [0.86, 0.45];             // tilted oval: height ÷ width, start → end
 const TILT = [0.07, 0.5];                // slope (fraction of gravity pulling downhill), start → end
 const SPIN = [0.15, 1.6];                // turntable rad/s, start → end
-const CARRY_TYRES = 0.85;                // how much of the turntable's motion a bug on tyres rides along with
-const CARRY_CASTORS = 0.35;              // castors barely grip the turning floor
 
 export class Dohyo {
   constructor(kind = 1) {
@@ -144,8 +142,9 @@ export class Dohyo {
 
   /**
    * The ring acting on the bugs each step: gravity on the tilted rings
-   * (downhill is easier), and the turntable carrying bugs round and
-   * flinging them outwards.
+   * (downhill is easier), and the turntable's rotation. (Its floor motion —
+   * and the grip it takes to keep up with it — is in the physics, via
+   * floorVelocity.)
    */
   applyForces(bugs, dt, t) {
     if (this.kind === 5) this.angle += this.spinRate(t) * dt;
@@ -153,20 +152,18 @@ export class Dohyo {
       if (bug.out) continue;
       if (this.tilted) {
         bug.vel.addInPlace(this.downhill, PHYSICS.GRAVITY * this.slope(t) * dt);
-      } else if (this.kind === 5) {
-        const w = this.spinRate(t);
-        const carry = bug.tires?.type === 'castor' ? CARRY_CASTORS : CARRY_TYRES;
-        const turn = w * dt * carry;
-        const c = Math.cos(turn);
-        const sn = Math.sin(turn);
-        const { x, y } = bug.pos;
-        bug.pos.x = x * c - y * sn;
-        bug.pos.y = x * sn + y * c;
-        bug.angle += turn;
-        // Centrifugal fling, stronger the further out you are.
-        bug.vel.addInPlace(bug.pos, w * w * carry * dt);
       }
     }
+  }
+
+  /**
+   * The turntable's floor velocity at `pos` (ω × r: faster further out), or
+   * null on a ring that doesn't spin. The physics works relative to it.
+   */
+  floorVelocity(t) {
+    if (this.kind !== 5) return null;
+    const w = this.spinRate(t);
+    return (pos) => new Vector2D(-w * pos.y, w * pos.x);
   }
 
   /** The HUD's line about what the ring is doing. */

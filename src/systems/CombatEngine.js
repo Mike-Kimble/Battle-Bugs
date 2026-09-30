@@ -88,7 +88,7 @@ export class CombatEngine extends EventEmitter {
     if (this.phase === 'fight' && this.ai) this.ai.update(dt, this);
 
     if (this.live) this.dohyo.applyForces(this.bugs, dt, this.time); // slopes and turntables
-    this.physics.step(this.bugs, dt, { puddles: this.puddles });
+    this.physics.step(this.bugs, dt, { puddles: this.puddles, floorVel: this.dohyo.floorVelocity(this.time), spin: this.dohyo.spinRate(this.time) });
     if (this.live) for (const bug of this.bugs) { this.spinHit(bug); this.shaftStrain(bug, dt); }
     this.updateFallen(dt);
     this.updatePuddles(dt);
