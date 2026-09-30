@@ -125,7 +125,11 @@ export const ECONOMY = Object.freeze({
   MECHANIC_WAGE: 35,
   MANAGER_HIRE: 200,
   MANAGER_WAGE: 30,
-  STAFF_GRACE: 3,            // bouts you can leave a missed wage unpaid before that staff member quits
+  STAFF_GRACE: 3,
+  BLACKLIST_BOUTS: 5,        // dismiss staff you owe → nobody will work for you for this many bouts
+  DEBT_RECOVERY: 1.5,        // …and they take parts until they've recovered the debt × this (interest and losses)
+  DEBT_EXTRA: 25,            // …plus a little extra for their trouble
+  DEBT_TAKE_CHANCE: 0.5,     // chance a part goes missing after each bout while they're collecting            // bouts you can leave a missed wage unpaid before that staff member quits
   BOUNTY_BASE: 110,          // base stake a challenger expects (scaled by tier)
   BOUNTY_PER_TIER: 120,
   BOARD_SIZE: 5,             // challengers on the board, spread across difficulties

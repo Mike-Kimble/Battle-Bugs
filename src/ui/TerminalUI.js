@@ -566,7 +566,13 @@ export class TerminalUI {
       el('div', { class: 'small muted' }, `Hire fee ${formatMoney(hire)} · wage ${formatMoney(wage)} per bout`),
       s.staff[role] && s.arrears[role] ? this.renderArrears(role, title) : null,
       s.staff[role]
-        ? el('button', { class: 'btn btn-small', onclick: () => this.act(() => this.economy.dismiss(role), `${title} dismissed`) }, 'Dismiss')
+        ? el('button', {
+          class: 'btn btn-small',
+          onclick: () => (s.arrears[role]
+            ? this.confirm(`Dismiss your ${title.toLowerCase()}?`, `You still owe them ${formatMoney(s.arrears[role].amount)}. Walk away without paying and word gets round: nobody will work for you for ${ECONOMY.BLACKLIST_BOUTS} bouts. And they'll want their money back, one way or another.`,
+              () => this.act(() => this.economy.dismiss(role), `${title} dismissed`))
+            : this.act(() => this.economy.dismiss(role), `${title} dismissed`)),
+        }, 'Dismiss')
         : el('button', { class: 'btn btn-small btn-primary', disabled: s.money < hire, onclick: () => this.act(() => this.economy.hire(role), `${title} hired`) }, `Hire ${formatMoney(hire)}`));
 
     const eco = this.economy;
@@ -577,9 +583,12 @@ export class TerminalUI {
         'Bets on your fights, clears your scrap pile, flags rare deals — and usually tracks down the part your mechanic wants.', '📈') : null,
     ].filter(Boolean);
     return el('div', {},
+      s.blacklist > 0 ? el('div', { class: 'notice notice-warn' }, el('strong', {}, 'Blacklisted. '),
+        `You stiffed your staff and word got round — nobody will work for you for ${s.blacklist} more bout${s.blacklist === 1 ? '' : 's'}.`) : null,
+      s.collectors.length ? el('p', { class: 'small warn-text' }, `Word is your old ${s.collectors[0].role} is still collecting what you owe. Keep an eye on your parts.`) : null,
       cards.length
         ? el('div', { class: 'card-grid' }, cards)
-        : el('p', { class: 'muted' }, "Nobody wants to work for an unknown from the junkyard. Win some fights and people will come looking."),
+        : s.blacklist > 0 ? null : el('p', { class: 'muted' }, "Nobody wants to work for an unknown from the junkyard. Win some fights and people will come looking."),
       s.staff.manager ? this.renderBetting() : null,
       s.fine ? this.renderFine() : null,
       this.renderCodex(),

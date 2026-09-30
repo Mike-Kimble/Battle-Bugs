@@ -319,6 +319,7 @@ export class EconomyManager {
   // ───────────── Staff ─────────────
   /** Staff only come looking for work once you've made a name (or are already on the books). */
   staffAvailable(role) {
+    if (this.state.blacklist > 0 && !this.state.staff[role]) return false;
     const wins = this.state.record.challengerWins;
     const need = role === 'mechanic' ? ECONOMY.MECHANIC_SHOWS_AT_WINS : ECONOMY.MANAGER_SHOWS_AT_WINS;
     return this.state.staff[role] || wins >= need;
@@ -326,6 +327,7 @@ export class EconomyManager {
 
   hire(role) {
     if (this.state.staff[role]) return;
+    if (this.state.blacklist > 0) throw new Error("You're blacklisted — nobody will work for you right now");
     const fee = role === 'mechanic' ? ECONOMY.MECHANIC_HIRE : ECONOMY.MANAGER_HIRE;
     this.state.spend(fee);
     this.state.staff[role] = true;
@@ -335,8 +337,42 @@ export class EconomyManager {
     }
   }
 
+  /**
+   * Let a staff member go. Owe them money and you're blacklisted, and they
+   * start helping themselves to your parts until they've got it back —
+   * with interest, their losses and a bit extra.
+   */
   dismiss(role) {
+    const owed = this.state.arrears[role];
+    if (owed) {
+      this.state.blacklist = ECONOMY.BLACKLIST_BOUTS;
+      this.state.collectors.push({ role, owed: Math.round(owed.amount * ECONOMY.DEBT_RECOVERY + ECONOMY.DEBT_EXTRA), taken: 0 });
+      this.state.addLog(`Dismissed your ${role} without paying the ${formatMoney(owed.amount)} you owed. Blacklisted for ${ECONOMY.BLACKLIST_BOUTS} bouts.`);
+    }
     this.staffLeaves(role);
+  }
+
+  /** After a bout: the blacklist wears off, and ex-staff you stiffed may take a part. */
+  collectDebts(report) {
+    const s = this.state;
+    if (s.blacklist > 0) {
+      s.blacklist -= 1;
+      report.lines.push(s.blacklist ? `Still blacklisted — nobody will work for you for ${s.blacklist} more bout${s.blacklist === 1 ? '' : 's'}.` : 'Your blacklisting has run out — staff will talk to you again.');
+    }
+    const c = s.collectors[0];
+    if (!c || !chance(ECONOMY.DEBT_TAKE_CHANCE)) return;
+    // Anything that isn't a frame: spares first or straight off your vehicles.
+    const fitted = s.vehicles.flatMap((v) => v.parts.filter((p) => p !== v.chassis).map((p) => [p, v]));
+    const pool = [...s.inventory.map((p) => [p, null]), ...fitted];
+    if (!pool.length) return;
+    const [part, bug] = pick(pool);
+    if (bug) bug.unequip(part); else s.removePart(part.uid);
+    c.taken += Math.max(ECONOMY.SCRAP_PRICE, Math.round(part.value * part.hpRatio));
+    report.lines.push(`Your ${part.name} has gone missing${bug ? ` from ${bug.name}` : ' from your spares'}…`);
+    if (c.taken >= c.owed) {
+      s.collectors.shift();
+      report.lines.push(`Word is your old ${c.role} reckons you're square now.`);
+    }
   }
 
   /** A staff member is gone (dismissed, quit or vanished): any back pay goes with them. */
@@ -1560,6 +1596,7 @@ export class EconomyManager {
     this.settleManagerBet(bet, result, report, { tournament });
 
     this.payStaff(report);
+    this.collectDebts(report);
     if (s.staff.mechanic) this.runMechanic(report);
     if (s.staff.manager) this.runManager(report);
 
