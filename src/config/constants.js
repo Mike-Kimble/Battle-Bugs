@@ -45,6 +45,8 @@ export const PHYSICS = Object.freeze({
   SLOPE_SKEW: 0.9,          // rad the nose is pulled towards downhill (at full slope) when moving across one
   SLOPE_SLEW: 3,            // rad/s a free-rolling bug turns to roll downhill (at full slope)
   CASTOR_THRUST: 1.3,       // a thrust drive on castors pushes this much harder than through wheels (before rolling resistance)
+  VECTOR_FACE_RATE: 9,      // rad/s: a thrust-vectoring bug swings round to keep facing its opponent
+  UNMATCHED_PULL: 0.06,     // twin drives: pull (as imbalance) for each part one drive has and the other hasn't
   TWIN_SKEW: 0.7,           // rad off line at full imbalance between twin drives (one side dead)
   PUSHED_SPEED: 25,         // moving this fast against your drive direction = being pushed
   PUSH_BACK_ARC: Math.PI / 4, // while pushed, aim within 45° of the pusher to keep pushing back
@@ -77,7 +79,7 @@ export const ACTIONS = Object.freeze({
   SHOVE_DURATION: 0.55,
   DASH_COST: 8,               // swipe handbrake turn
   CHAIN_WEAR: 0.012,          // share of a chain's max HP lost per second of driving heavy tyres or tracks
-  VECTOR_KICK: 0.8,           // thrust vectoring: a swipe fires you off at least this share of top speed
+  VECTOR_NUDGE: 2,            // thrust vectoring: a swipe nudges you this many body radii (a vehicle's length)
   SPIN_COST: 28,              // twin drives: a swipe spins 360° on the spot instead
   SPIN_COOLDOWN: 3,           // seconds before you can spin again
   SPIN_DURATION: 0.5,

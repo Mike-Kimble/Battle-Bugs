@@ -76,7 +76,7 @@ export function partStatLine(part) {
   if (part.type === 'weapon') return `${WEAPON_CLASSES[part.stats.class].label} · ${line}`;
   if (part.type === 'cooling' || part.type === 'enhancement' || part.type === 'drivetrain') {
     const works = part.stats.jacket
-      ? `Combustion; other drives need ${/^[AEIOU]/.test(JACKET_NAMES[part.stats.jacket]) ? 'an' : 'a'} ${JACKET_NAMES[part.stats.jacket]}`
+      ? `Combustion & torque; other drives need ${/^[AEIOU]/.test(JACKET_NAMES[part.stats.jacket]) ? 'an' : 'a'} ${JACKET_NAMES[part.stats.jacket]}`
       : part.stats.works ? `Drives: ${part.stats.works.map((k) => DRIVE_KINDS[k]).join(', ')}` : 'Any drive';
     const uses = part.usesLeft != null ? ` · ${part.usesLeft ? `${part.usesLeft} battle${part.usesLeft > 1 ? 's' : ''} left` : 'used up'}` : '';
     return `${line} · ${works}${uses}`;
@@ -584,6 +584,29 @@ export class WorkshopUI {
     openModal(`${region.label} · ${bug.name}`, body, { onClose: () => { this.openRegionKey = null; } });
   }
 
+  /** Twin drives out of balance: each odd part, and where its match can come from. */
+  renderMatching(bug, odd, locked) {
+    const eco = this.economy;
+    const box = el('div', { class: 'notice notice-warn match-box' },
+      el('strong', {}, "Drives don't match"), el('div', { class: 'small' }, "Each drive needs the same kit, or she'll pull to one side."));
+    for (const u of odd) {
+      const src = eco.matchSource(u.part.key);
+      const side = u.missingOn ? 'right' : 'left';
+      let action;
+      if (src?.where === 'spares') {
+        action = el('button', { class: 'btn btn-small btn-primary', disabled: locked, onclick: () => this.act(() => eco.fitMatching(bug, u.part.uid), `Fitted the matching ${u.part.name} from your spares`) }, 'Fit spare');
+      } else if (src && !eco.inField) {
+        action = el('button', { class: 'btn btn-small btn-primary', disabled: locked || this.state.money < src.price, onclick: () => this.act(() => eco.fitMatching(bug, u.part.uid), `Bought and fitted the matching ${u.part.name}`) }, `Buy & fit ${formatMoney(src.price)}`);
+      } else if (this.state.staff.manager && !eco.inField) {
+        action = el('button', { class: 'btn btn-small', onclick: () => this.act(() => eco.managerFind(u.part.key), (n) => `Manager: found a ${n} — it's on the Marketplace`) }, 'Ask manager to find one');
+      } else {
+        action = el('span', { class: 'muted small' }, eco.inField ? 'None in your spares.' : 'None about — a manager could find you one.');
+      }
+      box.append(el('div', { class: 'advice-row' }, `${u.part.name} → ${side} drive`, action));
+    }
+    return box;
+  }
+
   /** Compare a component of a fresh capture against the winning vehicle's equivalent. */
   refCompare(part) {
     const ref = this.refBug;
@@ -624,41 +647,71 @@ export class WorkshopUI {
     if (type === 'tires') {
       section.append(el('p', { class: 'muted small' }, "Driven tyres and tracks need a drive shaft. Gliding castors sit under the chassis, out of sight, and need thrust — a turbine or plasma drive, or a propeller or ducted fan. On castors you accelerate hard but slide: to slow down, thrust the other way."));
     }
-    if (!equipped.length) {
-      section.append(el('div', { class: 'empty-slot' }, type === 'weapon' && bug.weaponSlots === 0 ? 'No hardpoints on this frame' : 'Empty slot'));
-    }
-    for (const part of equipped) {
-      section.append(partCard(part, this.economy, {
-        ...this.refCompare(part),
-        actions: [
-          this.repairButton(part),
-          el('button', {
-            class: 'btn btn-small',
-            disabled: locked,
-            onclick: () => this.act(() => this.economy.unequipToInventory(bug, part.uid),
-              (off) => (off.length > 1 ? `${part.name} moved to inventory — its cooling & enhancements came off too` : `${part.name} moved to inventory`)),
-          }, 'Remove'),
-        ].filter(Boolean),
-      }));
+    const fittedCard = (part) => partCard(part, this.economy, {
+      ...this.refCompare(part),
+      actions: [
+        this.repairButton(part),
+        el('button', {
+          class: 'btn btn-small',
+          disabled: locked,
+          onclick: () => this.act(() => this.economy.unequipToInventory(bug, part.uid),
+            (off) => (off.length > 1 ? `${part.name} moved to inventory — its cooling, enhancements and drive train came off too` : `${part.name} moved to inventory`)),
+        }, 'Remove'),
+      ].filter(Boolean),
+    });
+    // Twin drives: each drive has its own cooling, enhancements and drive train.
+    const twinAddOn = BattleBug.isAddOn(type) && bug.drives.length > 1;
+    if (twinAddOn) {
+      const per = BattleBug.perDrive(type);
+      [0, 1].forEach((b) => {
+        const mine = bug.addOnsOn(type, b);
+        section.append(el('h4', { class: 'bay-head' }, `${b ? 'Right' : 'Left'} drive · ${bug.drives[b].name}`, el('span', { class: 'muted small' }, ` ${mine.length}/${per}`)));
+        if (!mine.length) section.append(el('div', { class: 'empty-slot' }, 'Empty'));
+        for (const part of mine) section.append(fittedCard(part));
+      });
+      const odd = bug.unmatched().filter((u) => u.part.type === type);
+      if (odd.length) section.append(this.renderMatching(bug, odd, locked));
+    } else {
+      if (!equipped.length) {
+        section.append(el('div', { class: 'empty-slot' }, type === 'weapon' && bug.weaponSlots === 0 ? 'No hardpoints on this frame' : 'Empty slot'));
+      }
+      for (const part of equipped) section.append(fittedCard(part));
     }
 
     if (type === 'weapon') {
       section.append(el('p', { class: 'muted small' }, `${bug.weapons.length}/${bug.weaponSlots} hardpoints used. Weapons add mass and cost stamina per activation.`));
     } else if (type === 'engine' && multi) {
       section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} drive bays used. Twin drives must be the same motor type — with both working, a swipe spins you 360° on the spot. Keep them evenly repaired or she'll pull to one side.`));
+    } else if (multi && !bug.drives.length) {
+      section.append(el('p', { class: 'muted small' }, `No drive fitted — ${title.toLowerCase()} mounts on the drive. Fit a drive first dummy!`));
+    } else if (twinAddOn) {
+      section.append(el('p', { class: 'muted small' }, `Each drive has its own ${title.toLowerCase()} — nothing is shared. Fit the same to both, or the better-kitted side pulls her off line.${type === 'drivetrain' ? ' One gearbox, one shaft and one prop count per drive.' : ''}`));
     } else if (type === 'drivetrain') {
       section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} drive-train slots used. Only one gearbox, one shaft and one prop count at a time; your mechanic knows which combinations pay off.`));
-    } else if (multi && !bug.drives.length) {
-      section.append(el('p', { class: 'muted small' }, `No drive fitted — ${type === 'cooling' ? 'cooling' : 'enhancements'} mount on the drive, so fit one first.`));
     } else if (multi) {
-      section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} ${type === 'cooling' ? 'cooling' : 'enhancement'} slot${cap > 1 ? 's' : ''} used${bug.drives.length > 1 ? ' (across both drives)' : ''}. Not every add-on suits every drive.`));
+      section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} ${type === 'cooling' ? 'cooling' : 'enhancement'} slot${cap > 1 ? 's' : ''} used. Not every add-on suits every drive.`));
     }
 
     if (inv.length) {
       const list = el('div', { class: 'replace-list' }, el('h4', {}, type === 'weapon' ? 'Spares — mount or sell' : 'Spares — fit or sell'));
       for (const part of inv) {
         const actions = [];
-        if (multi) {
+        if (twinAddOn) {
+          // Pick the drive: fit into a free slot, or swap one out.
+          const per = BattleBug.perDrive(type);
+          [0, 1].forEach((b) => {
+            const side = b ? 'right' : 'left';
+            const mine = bug.addOnsOn(type, b);
+            if (mine.length < per) {
+              actions.push(el('button', { class: 'btn btn-small btn-primary', disabled: locked || part.isScrap, onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid, undefined, b), `Fitted ${part.name} to the ${side} drive`) }, `Fit ${side}`));
+            } else {
+              mine.forEach((w, i) => actions.push(el('button', {
+                class: 'btn btn-small', disabled: locked || part.isScrap,
+                onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid, i, b), `Swapped ${part.name} in on the ${side} drive`),
+              }, `Swap ${side} ${i + 1}`)));
+            }
+          });
+        } else if (multi) {
           if (multi.length < cap) {
             actions.push(el('button', { class: 'btn btn-small btn-primary', disabled: locked || part.isScrap, onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid), `Fitted ${part.name}`) }, type === 'weapon' ? 'Mount' : 'Fit'));
           }

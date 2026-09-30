@@ -40,18 +40,20 @@ export class PhysicsEngine {
   }
 
   /**
-   * Cooling add-ons and enhancements: folds their multipliers into `m` and
-   * returns the extra cooling (stamina/s). Parts that don't suit the drive,
-   * are used up, or are destroyed do nothing. Notes go into `interactions`
+   * Cooling add-ons and enhancements on drive bay `bay`: folds their multipliers
+   * into `m` and returns the extra cooling (stamina/s). Parts that don't suit the
+   * drive, are used up, or are destroyed do nothing. Notes go into `interactions`
    * so the mechanic can talk about them.
    */
-  static addOns(bug, m, interactions) {
+  static addOns(bug, m, interactions, bay = 0) {
     let cool = 0;
     // Twin drives: every add-on works at 70% (its bonus or penalty scaled back).
     const k = (bug.drives?.length || 0) > 1 ? PHYSICS.TWIN_POWER : 1;
     const scaled = (mult) => 1 + (mult - 1) * k;
+    const on = (p) => (p.bay || 0) === bay;
+    const where = PhysicsEngine.bayName(bug, bay);
     const live = (p) => !p.spent && !p.isBroken && worksWith(p, bug);
-    const coolers = (bug.coolers || []).filter(live);
+    const coolers = (bug.coolers || []).filter(on).filter(live);
     const fans = coolers.filter((c) => c.stats.kind === 'fan');
     const boost = fans.reduce((b, f) => Math.max(b, f.stats.boost || 1), 1);
     for (const c of coolers) {
@@ -63,47 +65,55 @@ export class PhysicsEngine {
     const vented = (bug.armor?.stats.heat || 0) < 0 && !bug.armor.isBroken;
     for (const f of fans) if (vented) cool += f.stats.ventBonus || 0;
     const partner = coolers.some((c) => FAN_BOOSTS.includes(c.stats.kind));
-    if (fans.length && partner) interactions.push({ id: 'fan_boost', good: true, mods: {}, text: 'Your fan is blowing on the liquid cooling / heat exchanger — a big boost to cooling.' });
-    else if (fans.length && vented) interactions.push({ id: 'fan_vent', good: true, mods: {}, text: 'Your fan pushes air through the vented armour. Nice.' });
-    else if (fans.length) interactions.push({ id: 'fan_alone', good: false, mods: {}, text: 'A fan on its own does almost nothing — pair it with water or oil cooling, a heat exchanger or vented armour.' });
+    if (fans.length && partner) interactions.push({ id: `fan_boost${bay}`, good: true, mods: {}, text: `Your fan is blowing on the liquid cooling / heat exchanger${where} — a big boost to cooling.` });
+    else if (fans.length && vented) interactions.push({ id: `fan_vent${bay}`, good: true, mods: {}, text: 'Your fan pushes air through the vented armour. Nice.' });
+    else if (fans.length) interactions.push({ id: `fan_alone${bay}`, good: false, mods: {}, text: `A fan on its own${where} does almost nothing — pair it with water or oil cooling, a heat exchanger or vented armour on the same drive.` });
 
-    for (const e of (bug.mods || []).filter(live)) {
+    for (const e of (bug.mods || []).filter(on).filter(live)) {
       const s = e.stats;
       for (const key of ['force', 'accel', 'vMax', 'staminaMax', 'drain']) if (s[key]) m[key] *= scaled(s[key]);
       if (s.cool) cool += s.cool;
     }
-    for (const p of [...(bug.coolers || []), ...(bug.mods || [])]) {
+    for (const p of [...(bug.coolers || []), ...(bug.mods || [])].filter(on)) {
       if (p.spent) interactions.push({ id: `spent_${p.uid}`, good: false, mods: {}, text: `Your ${p.name} is used up — strip it out.` });
       else if (!worksWith(p, bug)) {
         interactions.push({ id: `nofit_${p.uid}`, good: false, mods: {},
           text: p.stats.jacket
-            ? `Your ${p.name} needs ${/^[AEIOU]/.test(JACKET_NAMES[p.stats.jacket]) ? 'an' : 'a'} ${JACKET_NAMES[p.stats.jacket]} on this drive — it's dead weight without one.`
+            ? `Your ${p.name} needs ${/^[AEIOU]/.test(JACKET_NAMES[p.stats.jacket]) ? 'an' : 'a'} ${JACKET_NAMES[p.stats.jacket]} on ${where ? `the ${PhysicsEngine.side(bay)} drive` : 'this drive'} — it's dead weight without one.`
             : `Your ${p.name} doesn't work with this drive — it's dead weight.` });
       }
     }
-    const jackets = (bug.coolers || []).filter((c) => c.stats.jacketFor);
-    for (const j of jackets) {
-      if (!(bug.coolers || []).some((c) => c.stats.jacket === j.stats.jacketFor)) {
-        interactions.push({ id: `jacket_${j.uid}`, good: false, mods: {}, text: `Your ${j.name} isn't hooked up to anything — it needs its liquid cooler.` });
+    for (const j of (bug.coolers || []).filter(on).filter((c) => c.stats.jacketFor)) {
+      if (!(bug.coolers || []).filter(on).some((c) => c.stats.jacket === j.stats.jacketFor)) {
+        interactions.push({ id: `jacket_${j.uid}`, good: false, mods: {}, text: `Your ${j.name}${where} isn't hooked up to anything — it needs its liquid cooler on the same drive.` });
       }
     }
     return { cool: cool * k };
   }
 
+  /** "left" / "right" drive bay. */
+  static side(bay) { return bay ? 'right' : 'left'; }
+
+  /** " on the left drive" on a twin, "" otherwise. */
+  static bayName(bug, bay) {
+    return (bug.drives?.length || 0) > 1 ? ` on the ${PhysicsEngine.side(bay)} drive` : '';
+  }
+
   /**
-   * Drive-train parts: folds their multipliers into `m` (force, accel, vMax,
-   * turn, grip, drain, brake, lateral) and returns the special effects. Only
-   * one part per group works (one gearbox, one shaft, one prop); parts that
-   * don't suit the drive, or are broken, do nothing.
+   * Drive-train parts on drive bay `bay`: folds their multipliers into `m`
+   * (force, accel, vMax, turn, grip, drain, brake, lateral) and returns the
+   * special effects. Only one part per group works on each drive (one gearbox,
+   * one shaft, one prop); parts that don't suit the drive, or are broken, do nothing.
    */
-  static driveTrain(bug, m, interactions, castor) {
+  static driveTrain(bug, m, interactions, castor, bay = 0) {
     const fx = { vector: false, prop: 0, propRpm: false, lsl: false, tcu: false, guard: 1 };
     const groups = new Set();
     const turbine = bug.engine?.stats.kind === 'turbine';
-    const hss = hasDriveTrain(bug, (s) => s.shaft === 'hss');
-    const shaft = hasShaft(bug);
+    const hss = hasDriveTrain(bug, (s) => s.shaft === 'hss', bay);
+    const shaft = hasShaft(bug, bay);
     const tracks = bug.tires?.stats.kind === 'track';
-    for (const p of bug.drivetrain || []) {
+    const where = PhysicsEngine.bayName(bug, bay);
+    for (const p of (bug.drivetrain || []).filter((q) => (q.bay || 0) === bay)) {
       const s = p.stats;
       if (p.isBroken || !worksWith(p, bug)) {
         if (!p.isBroken) interactions.push({ id: `dt_nofit_${p.uid}`, good: false, mods: {}, text: `Your ${p.name} doesn't suit this drive — it's dead weight.` });
@@ -111,12 +121,12 @@ export class PhysicsEngine {
       }
       // Gearboxes, diffs, couplings and the like sit between the drive shaft and the wheels.
       if (SHAFT_PARTS.includes(s.kind) && !castor && !shaft) {
-        interactions.push({ id: `dt_noshaft_${p.uid}`, good: false, mods: {}, text: `Your ${p.name} does nothing without a drive shaft to connect it.` });
+        interactions.push({ id: `dt_noshaft_${p.uid}`, good: false, mods: {}, text: `Your ${p.name}${where} does nothing without a drive shaft to connect it.` });
         continue;
       }
       // A gearbox on a turbine only works behind a High-Speed Shaft.
       if (s.group === 'gearbox' && turbine && !hss) {
-        interactions.push({ id: `dt_nohss_${p.uid}`, good: false, mods: {}, text: `Your ${p.name} can't take turbine revs through a plain shaft — it needs a High-Speed Shaft on the turbine side.` });
+        interactions.push({ id: `dt_nohss_${p.uid}`, good: false, mods: {}, text: `Your ${p.name}${where} can't take turbine revs through a plain shaft — it needs a High-Speed Shaft on the turbine side.` });
         continue;
       }
       if (s.wheelsOnly && tracks) {
@@ -125,7 +135,7 @@ export class PhysicsEngine {
       }
       if (s.group) {
         if (groups.has(s.group)) {
-          interactions.push({ id: `dt_dup_${p.uid}`, good: false, mods: {}, text: `You've got two ${s.group === 'prop' ? 'propellers' : `${s.group}s`} — only one can do anything. The ${p.name} is dead weight.` });
+          interactions.push({ id: `dt_dup_${p.uid}`, good: false, mods: {}, text: `You've got two ${s.group === 'prop' ? 'propellers' : `${s.group}s`}${where || ' on one drive'} — only one can do anything. The ${p.name} is dead weight.` });
           continue;
         }
         groups.add(s.group);
@@ -156,52 +166,97 @@ export class PhysicsEngine {
     const tires = bug.tires;
 
     const mass = bug.parts.reduce((sum, p) => sum + p.mass, 0);
-    // Twin drives add their force; a damaged side pulls the bug off line.
     const drives = bug.drives || (engine ? [engine] : []);
-    const driveForces = drives.map((d) => (d.isBroken ? 0 : d.stats.force * d.hpRatio)); // broken down = no push
-    const forceSum = driveForces.reduce((a, b) => a + b, 0);
-    let twinBias = drives.length === 2 && forceSum > 0 ? (driveForces[0] - driveForces[1]) / forceSum : 0;
     const engineRatio = drives.length ? drives.reduce((t, d) => t + d.hpRatio, 0) / drives.length : 0;
     const tireRatio = tires && !tires.isBroken ? tires.hpRatio : 0;
     // Part combinations that help or hurt.
-    const m = { force: 1, grip: 1, vMax: 1, cooling: 1, staminaMax: 1, drain: 1, accel: 1, turn: 1, brake: 1, lateral: 1 };
+    const MULTS = ['force', 'grip', 'vMax', 'cooling', 'staminaMax', 'drain', 'accel', 'turn', 'brake', 'lateral'];
+    const ones = () => Object.fromEntries(MULTS.map((k) => [k, 1]));
+    const m = ones();
     const interactions = PhysicsEngine.interactions(bug);
     for (const it of interactions) for (const k in it.mods) m[k] *= it.mods[k];
-    const addOns = PhysicsEngine.addOns(bug, m, interactions);
     const castor = tires?.type === 'castor';
-    const dt = PhysicsEngine.driveTrain(bug, m, interactions, castor);
-    if (dt.lsl) twinBias = 0; // a Limited-Slip Link shares torque: no pulling to one side
+    // Each drive has its own cooling, enhancements and drive train. Its drive force
+    // goes through its own kit; everything else the vehicle gets as the average of
+    // its drives (so a part on one side only is half as good — and pulls her off line).
+    const bays = Math.max(1, drives.length);
+    const mb = [];
+    const fxs = [];
+    let addCool = 0;
+    for (let b = 0; b < bays; b++) {
+      const mm = ones();
+      addCool += PhysicsEngine.addOns(bug, mm, interactions, b).cool;
+      fxs.push(PhysicsEngine.driveTrain(bug, mm, interactions, castor, b));
+      mb.push(mm);
+    }
+    for (const k of MULTS) if (k !== 'force') m[k] *= mb.reduce((t, mm) => t * mm[k], 1) ** (1 / bays);
+    const any = (key) => fxs.some((f) => f[key]);
+    const dt = { vector: any('vector'), lsl: any('lsl'), tcu: any('tcu'), reverser: any('reverser') };
+    // A self-locking gearbox (worm, cycloidal, strain wave) holds the wheels, motor or not.
+    dt.lock = (bug.drivetrain || []).some((p) => p.stats.kind === 'lockgear' && !p.isBroken);
 
-    // Two motors through one set of running gear: each gives at most 70% of its power.
-    const fDrive = forceSum * (drives.length > 1 ? PHYSICS.TWIN_POWER : 1) * m.force;
     // Castors aren't driven: a thrust drive pushes the body straight (no traction
     // limit), less the rolling resistance. What holds the line and brakes is
     // `hold` — as slippery as the rolling resistance on most castors.
     const thrustDrive = THRUST_DRIVES.includes(engine?.stats.kind);
-    const thrust = castor && !tires.isBroken && pushesThrust(bug);
-    const rpmAvg = drives.length ? drives.reduce((t, d) => t + d.stats.rpm, 0) / drives.length : 0;
-    // A propeller or ducted fan turns shaft power into thrust (a ducted fan makes more of high revs).
-    const propEff = dt.prop * (dt.propRpm ? 0.7 + 0.5 * (rpmAvg / 6400) : 1);
-    // A prop or fan on a turbine adds to its thrust (a fifth of the prop's own efficiency).
-    const propBoost = thrustDrive ? propEff * PHYSICS.PROP_BOOST : 0;
-    const thrustEff = thrustDrive ? PHYSICS.CASTOR_THRUST + propBoost : propEff;
     const rollForce = castor ? tires.stats.roll * (2 - tireRatio) * mass * PHYSICS.GRAVITY : 0; // damage adds drag
     const gripMu = castor ? (tires.stats.hold ?? tires.stats.roll) : tires?.stats.mu || 0;
     const fGripBase = tires ? gripMu * mass * PHYSICS.GRAVITY * (castor ? 1 : tireRatio) * m.grip : 0;
     const fGrip = fGripBase * gripMod;
-    // Wheels and tracks need a drive shaft. Without one a turbine pushes on thrust alone
-    // (half strength); plasma can never drive wheels; any other motor goes nowhere.
-    const shaftDrive = !castor && !!engine && engine.stats.kind !== 'plasma' && hasShaft(bug);
-    const wheelThrust = !castor && !shaftDrive && thrustDrive;
-    const push = (f) => (castor ? (thrust ? Math.max(0, f * thrustEff - rollForce) : 0)
-      : shaftDrive ? Math.min(f, fGrip)
-        : wheelThrust ? f * (PHYSICS.THRUST_ON_WHEELS + propBoost) : 0);
-    const fUsable = push(fDrive);
+    // Two motors through one set of running gear: each gives at most 70% of its power.
+    const twinK = drives.length > 1 ? PHYSICS.TWIN_POWER : 1;
+    // Per drive: its force, through its own kit, and how it reaches the ground. Wheels
+    // and tracks need a drive shaft on that drive; without one a turbine pushes on thrust
+    // alone (half strength), plasma never drives wheels, any other motor goes nowhere.
+    const per = drives.map((d, i) => {
+      const f = (d.isBroken ? 0 : d.stats.force * d.hpRatio) * mb[i].force * twinK * m.force; // broken down = no push
+      // A propeller or ducted fan turns shaft power into thrust (a ducted fan makes more of high revs).
+      const propEff = fxs[i].prop * (fxs[i].propRpm ? 0.7 + 0.5 * (d.stats.rpm / 6400) : 1);
+      // A prop or fan on a turbine adds to its thrust (a fifth of the prop's own efficiency).
+      const propBoost = thrustDrive ? propEff * PHYSICS.PROP_BOOST : 0;
+      const shaft = !castor && d.stats.kind !== 'plasma' && hasShaft(bug, i);
+      const thrusts = castor && !tires.isBroken && pushesThrust(bug, i);
+      const mode = castor ? (thrusts ? 'thrust' : 'none') : shaft ? 'shaft' : thrustDrive ? 'wheelThrust' : 'none';
+      const eff = mode === 'thrust' ? (thrustDrive ? PHYSICS.CASTOR_THRUST + propBoost : propEff)
+        : mode === 'wheelThrust' ? PHYSICS.THRUST_ON_WHEELS + propBoost : 1;
+      return { f, mode, eff };
+    });
+    const fDrive = per.reduce((t, d) => t + d.f, 0);
+    const push = (scale) => {
+      const sum = (mode) => per.filter((d) => d.mode === mode).reduce((t, d) => t + d.f * scale * d.eff, 0);
+      if (castor) return Math.max(0, sum('thrust') - rollForce);
+      return Math.min(sum('shaft'), fGrip) + sum('wheelThrust');
+    };
+    const shaftDrive = per.some((d) => d.mode === 'shaft');
+    const thrust = per.some((d) => d.mode === 'thrust');
+    const fUsable = push(1);
     const accel = mass > 0 ? (fUsable / mass) * m.accel : 0;
     // Back-to-front shells: the forward penalty is undone and then some in reverse.
     const back = chassis.stats.backwards;
-    const fDriveRev = back ? (fDrive / back.fwd) * back.rev : fDrive;
-    const accelRev = mass > 0 ? (push(fDriveRev) / mass) * m.accel : 0;
+    const accelRev = mass > 0 ? (push(back ? back.rev / back.fwd : 1) / mass) * m.accel : 0;
+    const rpmAvg = drives.length ? drives.reduce((t, d) => t + d.stats.rpm, 0) / drives.length : 0;
+
+    // Twin drives: the side putting more down pulls the nose round — a damaged drive, one
+    // with no shaft, or one fitted with kit the other hasn't (each unmatched part pulls).
+    let twinBias = 0;
+    if (drives.length === 2) {
+      const c = per.map((d) => (d.mode === 'none' ? 0 : d.f * d.eff));
+      twinBias = c[0] + c[1] > 0 ? (c[0] - c[1]) / (c[0] + c[1]) : 0;
+      const odd = bug.unmatched?.() || [];
+      for (const u of odd) twinBias += (u.bay === 0 ? 1 : -1) * PHYSICS.UNMATCHED_PULL;
+      twinBias = clamp(twinBias, -1, 1);
+      if (odd.length) {
+        const u = odd[0];
+        interactions.push({ id: 'twin_unmatched', good: false, mods: {},
+          text: `Your drives aren't matched: the ${PhysicsEngine.side(u.bay)} drive has ${/^[AEIOU]/.test(u.part.name) ? 'an' : 'a'} ${u.part.name} the ${PhysicsEngine.side(u.missingOn)} one hasn't${odd.length > 1 ? ` (and ${odd.length - 1} more odd part${odd.length > 2 ? 's' : ''})` : ''}. She'll pull to one side — fit the same to both.` });
+      }
+      per.forEach((d, i) => {
+        if (d.mode === 'none' && per[1 - i].mode !== 'none' && !drives[i].isBroken && tires && !castor && !thrustDrive) {
+          interactions.push({ id: `twin_noshaft${i}`, good: false, mods: {}, text: `Your ${PhysicsEngine.side(i)} drive has no drive shaft — it isn't turning the wheels at all.` });
+        }
+      });
+    }
+    if (dt.lsl) twinBias = 0; // a Limited-Slip Link shares torque: no pulling to one side
 
     const wear = PHYSICS.TIRE_WEAR_FLOOR + (1 - PHYSICS.TIRE_WEAR_FLOOR) * tireRatio;
     const vMax = engine && tires ? rpmAvg * tires.stats.radius * PHYSICS.RPM_TO_SPEED * wear * m.vMax : 0;
@@ -220,7 +275,7 @@ export class PhysicsEngine {
       gripMod,
       radius: chassis.stats.radius * PHYSICS.BUG_SCALE,
       staminaMax: Math.round(chassis.stats.staminaMax * m.staminaMax),
-      cooling: engine ? Math.round((drives.reduce((t, d) => t + d.stats.cooling, 0) * (drives.length > 1 ? PHYSICS.TWIN_POWER : 1) * m.cooling + addOns.cool) * 10) / 10 : 0,
+      cooling: engine ? Math.round((drives.reduce((t, d) => t + d.stats.cooling, 0) * twinK * m.cooling + addCool) * 10) / 10 : 0,
       twinBias,
       drainMult: m.drain,
       interactions,
@@ -235,8 +290,7 @@ export class PhysicsEngine {
       pinned: castor && !!tires.stats.pinned,
       // Wheels or tracks nothing is holding: no motor, no working shaft, or a thrust
       // drive on wheels — unless a self-locking gearbox (worm, cycloidal, strain wave) holds them.
-      freeRoll: !!tires && !castor && !tires.isBroken && !shaftDrive
-        && !(bug.drivetrain || []).some((p) => p.stats.kind === 'lockgear' && !p.isBroken),
+      freeRoll: !!tires && !castor && !tires.isBroken && !shaftDrive && !dt.lock,
     };
   }
 
@@ -285,6 +339,8 @@ export class PhysicsEngine {
     bug.tickTimers(dt);
 
     let throttle = 0;
+    let vecDir = null; // thrust vectoring: the way it's pushing, whatever way it faces
+    const floor0 = env.floorVel ? env.floorVel(bug.pos) : null;
     let lateralGrip = PHYSICS.LATERAL_GRIP;
     const canDrive = !bug.stalled && s.fDrive > 0;
     const ctl = bug.control;
@@ -324,7 +380,17 @@ export class PhysicsEngine {
     } else if (canDrive && ctl.target) {
       const to = ctl.target.sub(bug.pos);
       const dist = to.length();
-      if (dist < PHYSICS.ARRIVE_RADIUS) {
+      if (s.vector) {
+        // Thrust vectoring: no steering at all — it just goes where you touched
+        // (sideways, backwards, whatever), still facing the opponent, and the
+        // nozzle fires against the slide to pull up on the spot.
+        const arrived = dist < PHYSICS.ARRIVE_RADIUS * 0.5;
+        const moving = (floor0 ? bug.vel.sub(floor0) : bug.vel).length();
+        if (arrived && moving < 8) ctl.target = null;
+        vecDir = arrived ? new Vector2D() : to.scale(1 / dist);
+        // Ease off so it stops on the spot rather than sliding past (v² = 2·a·d).
+        throttle = arrived ? 0.2 : clamp(Math.sqrt(2 * s.accel * dist) / Math.max(1, s.vMax), 0.15, 1);
+      } else if (dist < PHYSICS.ARRIVE_RADIUS) {
         ctl.target = null;
       } else if (ctl.backing) {
         // Backing in on purpose: tail first, and hold it even when shoved.
@@ -390,7 +456,16 @@ export class PhysicsEngine {
     const vCapRev = s.vMax * revShare * (bug.lunge?.reverse ? bug.lunge.speedMult : 1);
     const gripDecel = s.mass > 0 ? s.fGrip / s.mass : 0;
 
-    if (throttle > 0 && !ctl.reverse) {
+    if (vecDir) {
+      // Vectored thrust pushes straight at the target speed and direction.
+      const want = vecDir.scale(vCap * throttle);
+      const diff = want.sub(rel);
+      const n = diff.length();
+      const step = s.accel * dt;
+      const next = n <= step ? want : rel.add(diff.scale(step / n));
+      fwd = next.dot(heading);
+      lat = next.dot(side);
+    } else if (throttle > 0 && !ctl.reverse) {
       if (fwd < vCap) fwd = Math.min(vCap, fwd + s.accel * throttle * dt);
     } else if (throttle > 0) {
       if (fwd > -vCapRev) fwd = Math.max(-vCapRev, fwd - (s.accelRev ?? s.accel) * throttle * dt);
@@ -407,11 +482,17 @@ export class PhysicsEngine {
       bug.angle = wrapAngle(bug.angle + clamp(aim, -1, 1) * env.slope * PHYSICS.SLOPE_SLEW * dt);
     }
     // Free wheels coasting aren't bound by the motor's top speed (a motorless bug has none).
-    if (!(s.freeRoll && throttle === 0)) {
+    if (!(s.freeRoll && throttle === 0) && !vecDir) {
       if (fwd > vCap) fwd = approach(fwd, vCap, PHYSICS.OVERSPEED_DECEL * dt);
       if (fwd < -vCapRev) fwd = approach(fwd, -vCapRev, PHYSICS.OVERSPEED_DECEL * dt);
     }
-    lat = approach(lat, 0, gripDecel * lateralGrip * (s.lateralMult ?? 1) * dt);
+    if (!vecDir) lat = approach(lat, 0, gripDecel * lateralGrip * (s.lateralMult ?? 1) * dt);
+    // With a thrust-vectoring nozzle the body swings round to keep facing the opponent.
+    if (s.vector && ctl.face && !bug.spin && !bug.lunge) {
+      const to = ctl.face.sub(bug.pos);
+      const diff = wrapAngle(to.angle() - bug.angle);
+      bug.angle = wrapAngle(bug.angle + clamp(diff, -PHYSICS.VECTOR_FACE_RATE * dt, PHYSICS.VECTOR_FACE_RATE * dt));
+    }
 
     bug.vel = heading.scale(fwd).addInPlace(side, lat);
     if (floor) {

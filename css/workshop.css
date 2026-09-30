@@ -160,6 +160,10 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 
 .slot-section { margin-bottom: 14px; display: flex; flex-direction: column; gap: 8px; }
 .empty-slot { border: 2px dashed var(--line); padding: 10px; text-align: center; color: var(--muted); border-radius: var(--radius); }
+.bay-head { display: flex; justify-content: space-between; align-items: baseline; margin: 12px 0 6px; font-size: 0.8em; }
+.bay-head .small { font-size: 0.9em; }
+.match-box { margin-top: 10px; }
+.match-box .advice-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; }
 .replace-list { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
 
 .rename { display: flex; gap: 6px; }

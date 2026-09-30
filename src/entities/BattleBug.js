@@ -28,10 +28,71 @@ export class BattleBug {
     this.tires = tires;
     this.armor = armor;
     this.weapons = weapons.slice(0, chassis.stats.weaponSlots);
-    this.coolers = coolers.filter(Boolean).slice(0, BattleBug.COOLER_SLOTS * this.driveSlots); // cooling add-ons
-    this.mods = mods.filter(Boolean).slice(0, BattleBug.MOD_SLOTS * this.driveSlots); // performance enhancements
-    this.drivetrain = drivetrain.filter(Boolean).slice(0, BattleBug.DRIVETRAIN_SLOTS);
+    // Add-ons mount on a drive, and each drive has its own (part.bay says which).
+    this.coolers = this.perBay(coolers, BattleBug.COOLER_SLOTS); // cooling add-ons
+    this.mods = this.perBay(mods, BattleBug.MOD_SLOTS); // performance enhancements
+    this.drivetrain = this.perBay(drivetrain, BattleBug.DRIVETRAIN_SLOTS);
     this.resetForBattle(new Vector2D(), 0);
+  }
+
+  /** Keep at most `per` add-ons on each drive bay (bays past the last drive fold back onto bay 0). */
+  perBay(list, per) {
+    const out = [];
+    const bays = Math.max(1, this.drives.length);
+    for (const p of list.filter(Boolean)) {
+      if ((p.bay || 0) >= bays) delete p.bay;
+      if (out.filter((q) => (q.bay || 0) === (p.bay || 0)).length < per) out.push(p);
+    }
+    return out;
+  }
+
+  /** Per-drive slot counts for each add-on type. */
+  static perDrive(type) {
+    return { cooling: BattleBug.COOLER_SLOTS, enhancement: BattleBug.MOD_SLOTS, drivetrain: BattleBug.DRIVETRAIN_SLOTS }[type] || 0;
+  }
+
+  static isAddOn(type) { return type === 'cooling' || type === 'enhancement' || type === 'drivetrain'; }
+
+  /** The drive bay an add-on is mounted on. */
+  bayOf(part) { return part.bay || 0; }
+
+  /** The add-ons of a type mounted on drive bay `bay`. */
+  addOnsOn(type, bay) {
+    return (this.slotList(type) || []).filter((p) => this.bayOf(p) === bay);
+  }
+
+  /**
+   * Twin drives: what one side has and the other hasn't, by part. Each drive
+   * needs the same kit, or the better-equipped side pulls. (A Limited-Slip
+   * Link joins the two drives, so one does for both.)
+   * @returns {Array<{part, bay:number, missingOn:number}>}
+   */
+  unmatched() {
+    if (this.drives.length < 2) return [];
+    const out = [];
+    for (const list of [this.coolers, this.mods, this.drivetrain]) {
+      const left = list.filter((p) => this.bayOf(p) === 0 && !p.stats.lsl);
+      const right = list.filter((p) => this.bayOf(p) === 1 && !p.stats.lsl);
+      const spare = [...right];
+      for (const p of left) {
+        const i = spare.findIndex((q) => q.key === p.key);
+        if (i >= 0) spare.splice(i, 1);
+        else out.push({ part: p, bay: 0, missingOn: 1 });
+      }
+      for (const p of spare) out.push({ part: p, bay: 1, missingOn: 0 });
+    }
+    return out;
+  }
+
+  /** Fit bay 1 with copies of everything on bay 0 (pro-built twins leave the factory matched). */
+  mirrorBays() {
+    if (this.drives.length < 2) return;
+    for (const { part, missingOn } of this.unmatched()) {
+      if (missingOn !== 1) continue;
+      const copy = Part.create(part.key, part.hpRatio);
+      copy.bay = 1;
+      this.slotList(part.type).push(copy);
+    }
   }
 
   /** Build from catalogue keys. `condition` may be a number or a () => number. */
@@ -54,6 +115,13 @@ export class BattleBug {
 
   static fromJSON(o) {
     const p = (x) => (x ? Part.fromJSON(x) : null);
+    // Saves from before each drive had its own add-ons: the cooling and enhancement
+    // lists were split by position, and one drive train served both drives.
+    if (!o.bays && o.engine2) {
+      const bay = (list, per) => (list || []).map((x, i) => (x && i >= per ? { ...x, bay: 1 } : x));
+      const shafts = (o.drivetrain || []).filter((x) => x && Part.fromJSON(x).stats.shaft).map((x) => ({ key: x.key, bay: 1 }));
+      o = { ...o, coolers: bay(o.coolers, BattleBug.COOLER_SLOTS), mods: bay(o.mods, BattleBug.MOD_SLOTS), drivetrain: [...(o.drivetrain || []), ...shafts] };
+    }
     // Saves from before the drive train existed: wheels now need a drive shaft, so fit the right one.
     if (o.drivetrain === undefined && o.tires && Part.fromJSON(o.tires).type === 'tires') {
       const kind = o.engine ? Part.fromJSON(o.engine).stats.kind : null;
@@ -71,7 +139,7 @@ export class BattleBug {
 
   toJSON() {
     return {
-      id: this.id, name: this.name, hue: this.hue, alien: this.alien, pilot: this.pilot,
+      id: this.id, name: this.name, hue: this.hue, alien: this.alien, pilot: this.pilot, bays: true,
       chassis: this.chassis.toJSON(),
       engine: this.engine?.toJSON() ?? null,
       engine2: this.drives[1]?.toJSON() ?? null,
@@ -110,11 +178,22 @@ export class BattleBug {
 
   slotCapacity(type) {
     if (type === 'engine') return this.driveSlots;
-    if (type === 'drivetrain') return BattleBug.DRIVETRAIN_SLOTS;
-    return type === 'weapon' ? this.weaponSlots
-      // Cooling and enhancements mount on a drive: slots for each one fitted.
-      : type === 'cooling' ? BattleBug.COOLER_SLOTS * this.drives.length
-        : type === 'enhancement' ? BattleBug.MOD_SLOTS * this.drives.length : 1;
+    // Cooling, enhancements and drive train mount on a drive: a set of slots for each one fitted.
+    if (BattleBug.isAddOn(type)) return BattleBug.perDrive(type) * this.drives.length;
+    return type === 'weapon' ? this.weaponSlots : 1;
+  }
+
+  /** The drive bay a new add-on goes on by default: one with room, preferring the side that lacks it. */
+  defaultBay(part) {
+    const n = this.drives.length;
+    if (n < 2) return 0;
+    const per = BattleBug.perDrive(part.type);
+    const room = [0, 1].filter((b) => this.addOnsOn(part.type, b).length < per);
+    const lacking = room.filter((b) => this.addOnsOn(part.type, b).filter((p) => p.key === part.key).length
+      < this.addOnsOn(part.type, 1 - b).filter((p) => p.key === part.key).length);
+    // Liquid cooling wants the side with its jacket.
+    const jacketed = part.stats.jacket ? room.filter((b) => this.addOnsOn('cooling', b).some((c) => c.stats.jacketFor === part.stats.jacket)) : [];
+    return lacking[0] ?? jacketed[0] ?? room[0] ?? 0;
   }
 
   /** The part in a single slot of this type (castors and tyres share the running gear). */
@@ -176,9 +255,10 @@ export class BattleBug {
   /**
    * Equip a part. Returns the parts that were displaced (to go to inventory).
    * @param {Part} part
-   * @param {number} [slot] weapon slot index
+   * @param {number} [slot] slot index (for add-ons: on that drive)
+   * @param {number} [bay] add-ons: which drive to mount on
    */
-  equip(part, slot) {
+  equip(part, slot, bay) {
     const displaced = [];
     if (part.type === 'engine' && this.driveSlots < 2) {
       if (this.engine) displaced.push(this.engine);
@@ -187,9 +267,12 @@ export class BattleBug {
     }
     if (part.type === 'engine' && !this.driveFits(part, slot)) {
       if (slot !== undefined || this.drives.length > 1) throw new Error(`Twin drives must match — that's not a ${this.drives[0].stats.kind} motor`);
-      // A single drive of another type: swap it out.
+      // A single drive of another type: swap it out (anything on a second bay comes off too).
       displaced.push(...this.drives);
       this.drives = [part];
+      for (const list of [this.coolers, this.mods, this.drivetrain]) {
+        for (const p of list.filter((q) => this.bayOf(q) > 0)) { list.splice(list.indexOf(p), 1); delete p.bay; displaced.push(p); }
+      }
       return displaced;
     }
     switch (part.type) {
@@ -202,11 +285,29 @@ export class BattleBug {
         if (this.armor) displaced.push(this.armor);
         this.armor = part;
         break;
-      case 'engine':
       case 'drivetrain':
-      case 'weapon':
       case 'cooling':
       case 'enhancement': {
+        // `slot` is the position on that drive's own list.
+        if (!this.drives.length) throw new Error('Fit a drive first dummy!');
+        const b = Math.min(bay ?? this.defaultBay(part), this.drives.length - 1);
+        const list = this.slotList(part.type);
+        const mine = this.addOnsOn(part.type, b);
+        const per = BattleBug.perDrive(part.type);
+        const idx = slot ?? (mine.length < per ? mine.length : per - 1);
+        const old = mine[idx];
+        if (old) {
+          displaced.push(old);
+          list.splice(list.indexOf(old), 1, part);
+          delete old.bay;
+        } else {
+          list.push(part);
+        }
+        if (b) part.bay = b; else delete part.bay;
+        break;
+      }
+      case 'engine':
+      case 'weapon': {
         const list = this.slotList(part.type);
         const cap = this.slotCapacity(part.type);
         const idx = slot ?? (list.length < cap ? list.length : cap - 1);
@@ -232,10 +333,15 @@ export class BattleBug {
     if (part === this.chassis) return false;
     const d = this.drives.indexOf(part);
     if (d >= 0) {
+      // A drive comes off with its own cooling, enhancements and drive train.
       this.drives.splice(d, 1);
       const off = [part];
-      for (const [list, per] of [[this.coolers, BattleBug.COOLER_SLOTS], [this.mods, BattleBug.MOD_SLOTS]]) {
-        off.push(...list.splice(per * this.drives.length));
+      for (const list of [this.coolers, this.mods, this.drivetrain]) {
+        for (const p of [...list]) {
+          const b = this.bayOf(p);
+          if (b === d) { list.splice(list.indexOf(p), 1); delete p.bay; off.push(p); }
+          else if (b > d) { if (b - 1) p.bay = b - 1; else delete p.bay; }
+        }
       }
       return off;
     }
@@ -244,7 +350,7 @@ export class BattleBug {
     }
     for (const list of [this.weapons, this.coolers, this.mods, this.drivetrain]) {
       const i = list.indexOf(part);
-      if (i >= 0) { list.splice(i, 1); return [part]; }
+      if (i >= 0) { list.splice(i, 1); delete part.bay; return [part]; }
     }
     return false;
   }

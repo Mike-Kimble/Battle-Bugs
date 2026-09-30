@@ -189,18 +189,74 @@ export class EconomyManager {
     return bug.parts.filter((p) => p.missingHp > 0 || p.failed); // every fitted part, drive train included
   }
 
-  equipFromInventory(bug, partUid, slot) {
+  /** Why `part` can't go on `bug` right now, or null if it can. */
+  fitProblem(part, bug, slot) {
+    if (!bug) return 'Nothing on the hoist';
+    if (part.type === 'chassis') return 'A chassis is a whole vehicle frame — it cannot be fitted';
+    if (part.isScrap) return `${part.name} is scrap — sell it for ${formatMoney(ECONOMY.SCRAP_PRICE)}`;
+    // Cooling, enhancements and drive train all mount on a drive.
+    if (BattleBug.isAddOn(part.type) && !bug.drives.length) return 'Fit a drive first dummy!';
+    if (part.type === 'engine' && bug.drives.length === 2 && !bug.driveFits(part, slot ?? 1)) return `Twin drives must be the same motor type — these are ${bug.engine.stats.kind}`;
+    if (part.type === 'weapon' && bug.weaponSlots === 0) return 'This chassis has no hardpoints';
+    if (!this.fits(part, bug)) return "Doesn't look like you can fit that here";
+    return null;
+  }
+
+  /** Could you buy this and bolt it straight on: a free slot, and it suits the vehicle? */
+  canFitNow(part, bug) {
+    return this.hasFreeSlot(bug, part.type) && !this.fitProblem(part, bug) && !this.state.isLocked(bug);
+  }
+
+  /** @param {number} [bay] cooling / enhancements / drive train: which drive to mount it on */
+  equipFromInventory(bug, partUid, slot, bay) {
     const part = this.state.getPart(partUid);
     if (!part) throw new Error('Part not in inventory');
-    if (part.type === 'chassis') throw new Error('A chassis is a whole vehicle frame — it cannot be fitted');
-    if (part.isScrap) throw new Error(`${part.name} is scrap — sell it for ${formatMoney(ECONOMY.SCRAP_PRICE)}`);
-    if ((part.type === 'cooling' || part.type === 'enhancement') && !bug.drives.length) throw new Error('Fit a drive first — cooling and enhancements mount on it');
-    if (part.type === 'engine' && bug.drives.length === 2 && !bug.driveFits(part, slot ?? 1)) throw new Error(`Twin drives must be the same motor type — these are ${bug.engine.stats.kind}`);
-    if (!this.fits(part, bug)) throw new Error("Doesn't look like you can fit that here");
-    if (part.type === 'weapon' && bug.weaponSlots === 0) throw new Error('This chassis has no hardpoints');
+    const problem = this.fitProblem(part, bug, slot);
+    if (problem) throw new Error(problem);
     this.state.removePart(partUid);
-    for (const displaced of bug.equip(part, slot)) this.state.addPart(displaced);
+    for (const displaced of bug.equip(part, slot, bay)) this.state.addPart(displaced);
+    this.tidyName(bug);
     return part;
+  }
+
+  /**
+   * A project frame named by the dealer ("… Rolling Chassis", "… Bare Frame") loses
+   * the tag once it's a complete vehicle — unless you've renamed it.
+   */
+  tidyName(bug) {
+    const m = bug.name.match(/^(.*) (Rolling Chassis|Bare Frame)$/);
+    if (m && bug.engine && bug.tires && !bug.unshafted && !bug.stranded) bug.name = m[1];
+  }
+
+  /**
+   * Twin drives: fit the part that would match one drive to the other — from
+   * your spares, or bought off the Marketplace. Returns where it came from.
+   */
+  fitMatching(bug, uid) {
+    const u = bug.unmatched().find((x) => x.part.uid === uid);
+    if (!u) throw new Error('Those drives already match');
+    const spare = this.state.inventory.find((p) => p.key === u.part.key && !p.isScrap);
+    if (spare) { this.equipFromInventory(bug, spare.uid, undefined, u.missingOn); return 'spares'; }
+    const listing = this.state.market.parts.find((l) => l.part.key === u.part.key);
+    if (!listing) throw new Error(`No ${u.part.name} in your spares or on the Marketplace`);
+    const part = this.buyPartListing(listing.id);
+    this.equipFromInventory(bug, part.uid, undefined, u.missingOn);
+    return 'market';
+  }
+
+  /** Where a matching part could come from: 'spares', a Marketplace price, or null. */
+  matchSource(key) {
+    if (this.state.inventory.some((p) => p.key === key && !p.isScrap)) return { where: 'spares' };
+    const listing = this.state.market.parts.find((l) => l.part.key === key);
+    return listing ? { where: 'market', price: this.partPrice(listing) } : null;
+  }
+
+  /** Your manager goes and finds one (it turns up on the Marketplace). */
+  managerFind(key) {
+    if (!this.state.staff.manager) throw new Error('You need a manager to go looking');
+    this.assertNotInField();
+    if (!this.stockPick(key)) throw new Error("There's already one on the Marketplace");
+    return PARTS[key].name;
   }
 
   /** Take a part off into your spares. Returns every part that came off (a drive brings its add-ons). */
@@ -245,7 +301,8 @@ export class EconomyManager {
   /** Buy a part and fit it straight onto `bug` (for an empty slot). */
   buyAndFit(listingId, bug) {
     const listing = this.state.market.parts.find((l) => l.id === listingId);
-    if (listing && !this.fits(listing.part, bug)) throw new Error("Doesn't look like you can fit that here");
+    const problem = listing && this.fitProblem(listing.part, bug);
+    if (problem) throw new Error(problem);
     const part = this.buyPartListing(listingId);
     return this.equipFromInventory(bug, part.uid);
   }
@@ -266,7 +323,7 @@ export class EconomyManager {
     this.state.spend(listing.price);
     this.state.market.vehicles.splice(i, 1);
     this.state.addVehicle(listing.bug);
-    if (!this.state.getVehicle(this.state.activeVehicleId)) this.state.activeVehicleId = listing.bug.id;
+    this.state.activeVehicleId = listing.bug.id; // straight onto the hoist
     return listing.bug;
   }
 
@@ -482,6 +539,7 @@ export class EconomyManager {
     if (tier >= 2 && chance(0.25 + tier * 0.1)) { const c = this.pickAddOn('cooling', tier, bug); if (c) bug.equip(c); }
     if (tier >= 3 && chance(0.15 + tier * 0.08)) { const m = this.pickAddOn('enhancement', tier, bug); if (m) bug.equip(m); }
     if (tier >= 2 && chance(0.2 + tier * 0.08)) { const d = this.pickAddOn('drivetrain', tier, bug); if (d) bug.equip(d); }
+    bug.mirrorBays(); // a twin leaves the factory with both drives kitted out alike
     return bug;
   }
 
@@ -840,6 +898,9 @@ export class EconomyManager {
       let displaced;
       try { displaced = bug.equip(new Part(key)); } catch { continue; } // e.g. a motor that doesn't match its twin
       p.purse -= PARTS[key].value;
+      // A twin gets one for each drive.
+      const odd = bug.unmatched().filter((u) => u.part.key === key);
+      for (const u of odd) { bug.equip(new Part(key), undefined, u.missingOn); p.purse -= PARTS[key].value; }
       for (const old of displaced) p.purse += Math.round(old.value * old.hpRatio * ECONOMY.SCRAP_RATE);
       break;
     }
@@ -1414,7 +1475,17 @@ export class EconomyManager {
     const p = Part.fromJSON(part.toJSON());
     if (!this.fits(p, clone)) return -Infinity;
     const list = clone.slotList(p.type);
-    if (list) {
+    if (BattleBug.isAddOn(p.type)) {
+      // Add-ons go on a drive: judged as a matched set on a twin (one for each drive).
+      if (!clone.drives.length) return -Infinity;
+      const per = BattleBug.perDrive(p.type);
+      for (let b = 0; b < clone.drives.length; b++) {
+        const q = b ? Part.fromJSON({ ...part.toJSON(), uid: undefined }) : p;
+        const mine = clone.addOnsOn(p.type, b);
+        const worst = mine.length >= per ? mine.reduce((w, x, i) => (x.value * x.hpRatio < mine[w].value * mine[w].hpRatio ? i : w), 0) : undefined;
+        clone.equip(q, worst, b);
+      }
+    } else if (list) {
       const cap = clone.slotCapacity(p.type);
       if (list.length >= cap) {
         if (!cap) return -Infinity;
@@ -1740,6 +1811,11 @@ export class EconomyManager {
     this.generateMarket();
     if (mechPick && s.staff.manager && !this.inField && chance(ECONOMY.MANAGER_FINDS_PICK)) {
       if (this.stockPick(mechPick.key)) report.lines.push(`Manager: tracked down the ${PARTS[mechPick.key].name} your mechanic wanted — it's on the Marketplace.`);
+    }
+    // Twin drives out of step: your manager tracks down the parts to match them up.
+    if (s.staff.manager && !this.inField && s.activeBug) {
+      const keys = [...new Set(s.activeBug.unmatched().map((u) => u.part.key))].filter((k) => !this.matchSource(k));
+      for (const k of keys) if (this.stockPick(k)) report.lines.push(`Manager: found a ${PARTS[k].name} to match your other drive — it's on the Marketplace.`);
     }
     this.ensureReplacementListing();
     if (s.staff.manager) {

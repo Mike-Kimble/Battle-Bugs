@@ -87,6 +87,7 @@ export class CombatEngine extends EventEmitter {
     if (this.live) this.time += dt;
     if (this.phase === 'fight' && this.ai) this.ai.update(dt, this);
 
+    for (const bug of this.bugs) bug.control.face = this.other(bug).pos; // thrust-vectoring bugs keep facing their opponent
     if (this.live) this.dohyo.applyForces(this.bugs, dt, this.time); // slopes and turntables
     this.physics.step(this.bugs, dt, { puddles: this.puddles, floorVel: this.dohyo.floorVelocity(this.time), spin: this.dohyo.spinRate(this.time),
       slope: this.dohyo.slope(this.time), downhill: this.dohyo.tilted ? this.dohyo.downhill : null });
@@ -360,19 +361,18 @@ export class CombatEngine extends EventEmitter {
   shaftStrain(bug, dt) {
     if (bug.out) return;
     // A chain driving heavy tyres or tracks wears while you drive.
-    const chain = bug.drivetrain.find((p) => p.stats.shaft === 'chain' && !p.isBroken);
-    if (chain && !this.training && bug.throttle > 0 && heavyGear(bug)) {
-      const res = { total: 0, hits: [], broken: [] };
+    // (Each drive has its own shaft or chain.)
+    for (const chain of bug.drivetrain.filter((p) => p.stats.shaft === 'chain' && !p.isBroken)) {
+      if (this.training || !(bug.throttle > 0) || !heavyGear(bug)) break;
       const r = chain.applyDamage(chain.maxHp * ACTIONS.CHAIN_WEAR * bug.throttle * dt);
-      if (r.dealt > 0) res.hits.push({ part: chain, dealt: r.dealt });
-      if (r.broke) { res.broken.push(chain); this.emit(EVENTS.PART_BROKEN, { bug, part: chain }); }
+      if (r.broke) this.emit(EVENTS.PART_BROKEN, { bug, part: chain });
     }
-    if (this.time < MATCH.DURATION / 2) return;
-    const shaft = bug.drivetrain.find((p) => (p.stats.shaft === 'std' || p.stats.shaft === 'chain') && !p.isBroken);
-    if (!shaft || bug.engine?.stats.kind !== 'turbine') return;
-    shaft.hp = Math.min(shaft.hp, shaft.maxHp * 0.3);
-    shaft.failed = true;
-    this.emit(EVENTS.PART_BROKEN, { bug, part: shaft, breakdown: true });
+    if (this.time < MATCH.DURATION / 2 || bug.engine?.stats.kind !== 'turbine') return;
+    for (const shaft of bug.drivetrain.filter((p) => (p.stats.shaft === 'std' || p.stats.shaft === 'chain') && !p.isBroken)) {
+      shaft.hp = Math.min(shaft.hp, shaft.maxHp * 0.3);
+      shaft.failed = true;
+      this.emit(EVENTS.PART_BROKEN, { bug, part: shaft, breakdown: true });
+    }
   }
 
   /** A spinning bug catches the opponent once per spin and flings them away. */
@@ -408,18 +408,16 @@ export class CombatEngine extends EventEmitter {
    * straight on; a swipe against it flips forward/reverse.
    */
   dash(bug, dir) {
-    if (bug.twinDrive) return this.spinAttack(bug, dir);
+    if (bug.twinDrive && !bug.stats.vector) return this.spinAttack(bug, dir);
     if (bug.actionCooldown > 0) return false;
     if (!this.canAct(bug, ACTIONS.DASH_COST)) return false;
     const d = dir.normalize();
-    // Thrust vectoring on castors: no steering — the bug just shoots off the way you swiped.
+    // Thrust vectoring: a swipe is just a quick nudge, about a vehicle's length, the way you swiped.
     if (bug.stats.vector) {
-      const speed = Math.max(bug.vel.length(), bug.stats.vMax * ACTIONS.VECTOR_KICK);
-      bug.vel = d.scale(speed);
-      bug.control.target = null;
+      bug.control.target = bug.pos.add(d.scale(bug.radius * ACTIONS.VECTOR_NUDGE));
       bug.control.backing = false;
       bug.control.reverse = false;
-      bug.control.cruise = { angle: wrapAngle(d.angle()) };
+      bug.control.cruise = null;
       bug.stamina -= ACTIONS.DASH_COST;
       bug.actionCooldown = ACTIONS.ACTION_COOLDOWN;
       this.emit(EVENTS.ACTION, { bug, type: 'swerve', dir: d });

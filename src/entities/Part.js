@@ -19,7 +19,7 @@ export class Part {
   /** How far a repair can bring a part back (set by the economy: 90%, or 100% with a mechanic). */
   static repairCap = () => 1;
 
-  constructor(key, { uid, hp, usesLeft, failed } = {}) {
+  constructor(key, { uid, hp, usesLeft, failed, bay } = {}) {
     this.def = getPartDef(key);
     this.key = currentKey(key); // old saves: retired parts come back as their replacements
     this.uid = uid || makeId('pt');
@@ -29,6 +29,8 @@ export class Part {
     this.failed = !!failed;
     // Consumables (cryo blocks, nitro…) last a set number of battles.
     this.usesLeft = this.def.stats.uses ? (usesLeft ?? this.def.stats.uses) : null;
+    // Cooling, enhancements and drive train mount on a drive: which bay (0 or 1) on a twin.
+    if (bay) this.bay = bay;
   }
 
   /** A consumable that's been used up. */
@@ -84,6 +86,7 @@ export class Part {
     const o = { key: this.key, uid: this.uid, hp: Math.round(this.hp * 10) / 10 };
     if (this.usesLeft != null) o.usesLeft = this.usesLeft;
     if (this.failed) o.failed = true;
+    if (this.bay) o.bay = this.bay;
     return o;
   }
 }

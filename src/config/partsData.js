@@ -35,9 +35,9 @@ const SHAFT_DRIVES = [...NON_THRUST, 'turbine'];
 /** Gearboxes suit any shaft drive (on a turbine they only count with a High-Speed Shaft). */
 const GEAR_DRIVES = SHAFT_DRIVES;
 
-/** A working drive-train part of this kind is fitted (and suits the drive). */
-export function hasDriveTrain(bug, test) {
-  return (bug?.drivetrain || []).some((p) => !p.isBroken && !p.spent && test(p.stats) && worksWith(p, bug));
+/** A working drive-train part of this kind is fitted (and suits the drive) — on drive bay `bay`, or on any. */
+export function hasDriveTrain(bug, test, bay = null) {
+  return (bug?.drivetrain || []).some((p) => (bay === null || (p.bay || 0) === bay) && !p.isBroken && !p.spent && test(p.stats) && worksWith(p, bug));
 }
 
 /** Heavy running gear (tracks, or chunky tyres) that chews through a chain drive. */
@@ -46,16 +46,19 @@ export function heavyGear(bug) {
   return !!t && t.type === 'tires' && (t.stats.kind === 'track' || t.mass >= 18);
 }
 
-/** A working drive shaft is fitted (needed to turn wheels or tracks). */
-export function hasShaft(bug) {
-  return hasDriveTrain(bug, (s) => !!s.shaft);
+/** A working drive shaft is fitted (needed to turn wheels or tracks) — on drive bay `bay`, or on any. */
+export function hasShaft(bug, bay = null) {
+  return hasDriveTrain(bug, (s) => !!s.shaft, bay);
 }
 
-/** Can this bug push itself along on castors? Thrust drives can; any other drive needs a propeller or ducted fan. */
-export function pushesThrust(bug) {
+/**
+ * Can this bug push itself along on castors? Thrust drives can; any other drive
+ * needs a propeller or ducted fan (on drive bay `bay`, or on any).
+ */
+export function pushesThrust(bug, bay = null) {
   const kind = bug?.engine?.stats.kind;
   if (!kind) return false;
-  return THRUST_DRIVES.includes(kind) || hasDriveTrain(bug, (s) => !!s.prop);
+  return THRUST_DRIVES.includes(kind) || hasDriveTrain(bug, (s) => !!s.prop, bay);
 }
 // Drive types a part works with (omit `works` for "any").
 const HOT = ['combustion', 'torque'];
@@ -194,22 +197,22 @@ export const PARTS = Object.freeze({
   desk_fan: cooler('Fan', 1, C, 30, 3, { cool: 0.5, kind: 'fan', boost: 1.5, ventBonus: 3 }, 'Pretty useless on its own. Point it at water cooling, an oil cooler, a heat exchanger or vented armour and it earns its keep.'),
   water_mister: cooler('Water Mister', 1, U, 90, 8, { cool: 3, kind: 'mister', works: NOT_ELECTRIC }, 'Sprays the motor like a sweaty athlete. Shorts out electric motors.'),
   heat_exchanger: cooler('Heat Exchanger', 2, C, 220, 12, { cool: 4, kind: 'exchanger' }, 'Swaps hot for cold like a very small, very dull magician.'),
-  oil_cooler: cooler('Oil Cooler', 2, C, 200, 10, { cool: 4.5, kind: 'oil', jacket: 'oil' }, 'Keeps the oil from turning into soup. Plugs straight into combustion motors; anything else needs an Oil Jacket fitted first.'),
-  water_cooling: cooler('Water Cooling Loop', 2, U, 300, 16, { cool: 5, kind: 'water', jacket: 'water' }, 'Pipes, pump, reservoir. Plumbs straight into combustion motors; anything else needs a Water Jacket fitted first.'),
+  oil_cooler: cooler('Oil Cooler', 2, C, 200, 10, { cool: 4.5, kind: 'oil', jacket: 'oil' }, 'Keeps the oil from turning into soup. Plugs straight into combustion and torque motors; anything else needs an Oil Jacket fitted first.'),
+  water_cooling: cooler('Water Cooling Loop', 2, U, 300, 16, { cool: 5, kind: 'water', jacket: 'water' }, 'Pipes, pump, reservoir. Plumbs straight into combustion and torque motors; anything else needs a Water Jacket fitted first.'),
   expansion_nozzle: cooler('Expansion Nozzle', 2, U, 280, 6, { cool: 7, kind: 'nozzle', works: ['turbine'] }, 'Bleeds turbine exhaust through a cold throat. Only works on turbines, and works very well.'),
   twin_fans: cooler('Twin Fans', 2, R, 180, 5, { cool: 0.8, kind: 'fan', boost: 1.7, ventBonus: 4 }, 'Two fans, twice the draught. Still wants something to blow on.'),
   mist_curtain: cooler('Mist Curtain', 3, U, 520, 10, { cool: 6, kind: 'mister', works: NOT_ELECTRIC }, 'A whole wall of spray. Electric motors hate it.'),
-  big_rig_radiator: cooler('Big Rig Radiator', 3, C, 480, 22, { cool: 6.5, kind: 'fins' }, 'Off a hauler. Enormous, heavy, very effective.'),
+  big_rig_radiator: cooler('Big Rig Radiator', 3, C, 480, 22, { cool: 6.5, kind: 'water', jacket: 'water' }, 'Off a hauler: an enormous water-filled radiator. Heavy and very effective. Plumbs straight into combustion and torque motors; anything else needs a Water Jacket fitted first.'),
   peltier_plates: cooler('Peltier Plates', 3, R, 700, 8, { cool: 5, kind: 'peltier', works: ['electric', 'fusion'], staminaMax: 1.05 }, 'Solid-state chillers. Need a proper power supply — electric or fusion only.'),
   vapour_chamber: cooler('Vapour Chamber', 3, R, 650, 7, { cool: 6.5, kind: 'exchanger' }, 'A sealed chamber that boils heat away and condenses it back. Works on anything; a fan makes it sing.'),
   ram_air_scoop: cooler('Ram-Air Scoop', 3, U, 560, 7, { cool: 5.5, kind: 'fins' }, 'Scoops air as you drive. Better than it looks.'),
   plasma_vent: cooler('Plasma Vent', 4, R, 1100, 10, { cool: 9, kind: 'nozzle', works: ['plasma', 'fusion'] }, 'Dumps heat straight out of a plasma or fusion core.'),
-  nitrogen_loop: cooler('Liquid-Nitrogen Loop', 4, E, 1400, 18, { cool: 11, kind: 'water', jacket: 'nitrogen' }, 'Water cooling, but make it minus two hundred degrees. Non-combustion drives need a Cryo Jacket fitted first.'),
+  nitrogen_loop: cooler('Liquid-Nitrogen Loop', 4, E, 1400, 18, { cool: 11, kind: 'water', jacket: 'nitrogen' }, 'Water cooling, but make it minus two hundred degrees. Drives other than combustion and torque need a Cryo Jacket fitted first.'),
   turbo_fan_array: cooler('Turbo Fan Array', 4, R, 900, 9, { cool: 1.2, kind: 'fan', boost: 2, ventBonus: 6 }, 'A wall of screaming fans. Doubles a good cooler; does little alone.'),
   cryo_block: cooler('Cryo Block', 4, E, 1300, 12, { cool: 18, kind: 'cryo', uses: 10 }, 'A slab of impossible cold. Unbeatable cooling — but it melts away after 10 battles.'),
   void_radiator: cooler('Void Radiator', 5, L, 2400, 8, { cool: 14, kind: 'exchanger' }, 'Radiates heat into another dimension. They haven\'t complained yet.'),
-  // Encasement jackets: let liquid cooling run on non-combustion drives. Useless on their own.
-  water_jacket: cooler('Water Jacket', 2, C, 150, 8, { cool: 1, kind: 'jacket', jacketFor: 'water' }, 'A sealed sleeve around the drive so a Water Cooling Loop can hook up to anything, not just combustion motors.'),
+  // Encasement jackets: let liquid cooling run on drives without their own (not combustion or torque). Useless on their own.
+  water_jacket: cooler('Water Jacket', 2, C, 150, 8, { cool: 1, kind: 'jacket', jacketFor: 'water' }, 'A sealed sleeve around the drive so water cooling — a Water Cooling Loop or a Big Rig Radiator — can hook up to any drive, not just combustion and torque motors.'),
   oil_jacket: cooler('Oil Jacket', 2, C, 140, 8, { cool: 1, kind: 'jacket', jacketFor: 'oil' }, 'A sealed sleeve so an Oil Cooler can hook up to any drive.'),
   cryo_jacket: cooler('Cryo Jacket', 4, R, 600, 10, { cool: 1.5, kind: 'jacket', jacketFor: 'nitrogen' }, 'An insulated casing rated for liquid nitrogen. Lets a Liquid-Nitrogen Loop run on any drive.'),
   glacier_heart: cooler('Glacier Heart', 5, L, 2600, 14, { cool: 12, kind: 'cryo', staminaMax: 1.1 }, 'The frozen core of a comet. It never melts.'),
@@ -243,7 +246,7 @@ export const PARTS = Object.freeze({
   //   force/accel/vMax/turn/grip/drain multipliers, brake (braking & holding when idle), driveGuard (impact
   //   damage reaching the drive), tyresOnly (no effect on castors), vector, reverser, rudder, shaft ('hss' | 'std'), wheelsOnly (tyres, not tracks),
   //   prop (thrust efficiency), propRpm (thrust scales with revs), lsl, tcu.
-  thrust_vectoring: drivetrain('Thrust-Vectoring Nozzle', 3, R, 800, 6, 70, { kind: 'vector', vector: true, works: THRUST_DRIVES, note: 'Castors: swipe to shoot off in any direction instantly' }, 'Swivels the exhaust instead of the bug. On castors, a swipe fires you off in any direction without steering — perfect for dodging.'),
+  thrust_vectoring: drivetrain('Thrust-Vectoring Nozzle', 3, R, 800, 6, 70, { kind: 'vector', vector: true, works: THRUST_DRIVES, note: 'Castors: moves wherever you touch without steering, always facing the opponent' }, 'Swivels the exhaust instead of the bug. On castors she goes wherever you touch — sideways, backwards, anywhere — without steering, and always keeps her nose on the opponent. A swipe is a quick nudge, about a vehicle\'s length, the way you swiped.'),
   reverse_thrusters: drivetrain('Reverse Thrusters', 2, U, 350, 8, 70, { kind: 'reverser', brake: 3, turn: 1.3, works: THRUST_DRIVES, note: 'Brakes hard and turns on the spot' }, 'Clamshell buckets that throw the thrust forwards. Stops a thrust bug in its tracks and lets it pivot on the spot.'),
   rudders: drivetrain('Rudders', 1, C, 80, 4, 50, { kind: 'rudder', rudder: true, turn: 1.2, note: 'Sharper steering (razor-sharp with a prop or fan on castors)' }, 'Fins in the airflow. Sharper steering for anything — and with a propeller or ducted fan on castors, the tightest turns in the game.'),
   high_speed_shaft: drivetrain('High-Speed Shaft', 3, U, 600, 10, 90, { kind: 'shaft', group: 'shaft', shaft: 'hss', works: SHAFT_DRIVES, note: 'Drive shaft strong enough for turbine revs' }, 'A stronger, balanced drive shaft that can take a turbine\'s revs. Any motor but plasma needs a drive shaft to turn wheels or tracks — and a turbine needs this one: run it on the turbine side of a gearbox for the best, most stable set-up.'),
@@ -566,14 +569,19 @@ export function worksWith(part, bug) {
   const drive = bug?.engine?.stats.kind;
   // Castors aren't driven: they need thrust (a thrust drive, or a propeller / ducted fan).
   if (part.type === 'castor') return pushesThrust(bug);
-  // Liquid cooling plumbs straight into combustion motors; any other drive needs the matching jacket fitted.
+  // Liquid cooling plumbs straight into combustion and torque motors (they're water- and
+  // oil-cooled already); any other drive needs the matching jacket — on the same drive.
   if (s.jacket) {
-    if (drive === 'combustion') return true;
-    return !!drive && (bug.coolers || []).some((c) => c !== part && c.stats.jacketFor === s.jacket);
+    if (PLUMBED_DRIVES.includes(drive)) return true;
+    const fitted = (bug.coolers || []).includes(part);
+    return !!drive && (bug.coolers || []).some((c) => c !== part && c.stats.jacketFor === s.jacket && (!fitted || (c.bay || 0) === (part.bay || 0)));
   }
   if (!s.works) return true;
   return !!drive && s.works.includes(drive);
 }
+
+/** Drives with their own liquid cooling: radiators and coolers plumb straight in. */
+export const PLUMBED_DRIVES = ['combustion', 'torque'];
 
 /** Which jacket a liquid cooler needs on a non-combustion drive. */
 export const JACKET_NAMES = Object.freeze({ water: 'Water Jacket', oil: 'Oil Jacket', nitrogen: 'Cryo Jacket' });

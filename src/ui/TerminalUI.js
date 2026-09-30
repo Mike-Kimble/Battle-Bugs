@@ -505,13 +505,13 @@ export class TerminalUI {
         this.weaponChips(l.bug),
         el('div', { class: 'card-foot' },
           el('div', { class: 'bounty' }, el('small', {}, 'Price'), el('strong', {}, formatMoney(l.price))),
-          el('button', { class: 'btn btn-primary', disabled: s.money < l.price, onclick: () => this.act(() => this.economy.buyVehicleListing(l.id), `${l.bug.name} added to your hangar`) }, 'Buy')))));
+          el('button', { class: 'btn btn-primary', disabled: s.money < l.price, onclick: () => this.act(() => this.economy.buyVehicleListing(l.id), `${l.bug.name} is on the hoist`) }, 'Buy')))));
     } else {
       forSale = el('div', { class: 'card-grid parts' }, s.market.parts.filter((l) => aisleOf(l.part) === cat).map((l) => partCard(l.part, this.economy, {
         compareTo: counterpart(active, l.part),
         extra: dealBadge(l),
-        actions: [this.economy.hasFreeSlot(active, l.part.type)
-          // Nothing fitted there: buy it and bolt it straight on.
+        actions: [this.economy.canFitNow(l.part, active)
+          // A free slot and it suits the vehicle: buy it and bolt it straight on (otherwise it's just "Buy").
           ? el('button', {
             class: 'btn btn-small btn-primary', disabled: s.money < this.economy.partPrice(l),
             onclick: () => this.act(() => this.economy.buyAndFit(l.id, active), `Bought and fitted ${l.part.name} to ${active.name}`),
