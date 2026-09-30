@@ -41,6 +41,9 @@ export const PHYSICS = Object.freeze({
   PROP_BOOST: 0.2,          // a propeller / ducted fan on a turbine adds this × its efficiency to the thrust
   THRUST_ON_WHEELS: 0.5,    // a turbine or plasma drive on wheels with no working shaft pushes on thrust alone
   REVERSER_BRAKE: 0.8,      // reverse thrusters add this share of your acceleration as braking when you ease off
+  ROLL_RESIST: 18,          // px/s² that free-rolling wheels lose to rolling resistance
+  SLOPE_SKEW: 0.9,          // rad the nose is pulled towards downhill (at full slope) when moving across one
+  SLOPE_SLEW: 3,            // rad/s a free-rolling bug turns to roll downhill (at full slope)
   CASTOR_THRUST: 1.3,       // a thrust drive on castors pushes this much harder than through wheels (before rolling resistance)
   TWIN_SKEW: 0.7,           // rad off line at full imbalance between twin drives (one side dead)
   PUSHED_SPEED: 25,         // moving this fast against your drive direction = being pushed

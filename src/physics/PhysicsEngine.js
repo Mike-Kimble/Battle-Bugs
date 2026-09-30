@@ -233,6 +233,10 @@ export class PhysicsEngine {
       tractionLimited: shaftDrive && fGrip < fDrive,
       castor,
       pinned: castor && !!tires.stats.pinned,
+      // Wheels or tracks nothing is holding: no motor, no working shaft, or a thrust
+      // drive on wheels — unless a self-locking gearbox (worm, cycloidal, strain wave) holds them.
+      freeRoll: !!tires && !castor && !tires.isBroken && !shaftDrive
+        && !(bug.drivetrain || []).some((p) => p.stats.kind === 'lockgear' && !p.isBroken),
     };
   }
 
@@ -288,7 +292,14 @@ export class PhysicsEngine {
     const travelAngle = () => bug.angle + (ctl.reverse ? Math.PI : 0);
     // Uneven twin drives: the stronger side keeps shoving the nose round, so
     // the bug settles off its line and drives in a curve.
-    const skew = () => (s.twinBias || 0) * PHYSICS.TWIN_SKEW * (ctl.reverse ? -1 : 1);
+    // On a slope, gravity swings the nose round towards downhill: moving across it you
+    // have to steer against the pull (a steady skew, like an uneven twin drive).
+    const downhillPull = () => {
+      if (!env.slope) return 0;
+      const h = Vector2D.fromAngle(bug.angle);
+      return h.cross(env.downhill) * env.slope * PHYSICS.SLOPE_SKEW * (ctl.reverse ? -1 : 1);
+    };
+    const skew = () => (s.twinBias || 0) * PHYSICS.TWIN_SKEW * (ctl.reverse ? -1 : 1) + downhillPull();
     const steer = (diff, rate) => {
       const maxTurn = rate * dt;
       bug.angle = wrapAngle(bug.angle + clamp(diff + skew(), -maxTurn, maxTurn));
@@ -383,11 +394,23 @@ export class PhysicsEngine {
       if (fwd < vCap) fwd = Math.min(vCap, fwd + s.accel * throttle * dt);
     } else if (throttle > 0) {
       if (fwd > -vCapRev) fwd = Math.max(-vCapRev, fwd - (s.accelRev ?? s.accel) * throttle * dt);
+    } else if (s.freeRoll) {
+      // Nothing holds the wheels: they just roll (the slope's pull stays in the velocity).
+      fwd = approach(fwd, 0, PHYSICS.ROLL_RESIST * dt);
     } else {
       fwd = approach(fwd, 0, PhysicsEngine.idleBrake(s) * dt);
     }
-    if (fwd > vCap) fwd = approach(fwd, vCap, PHYSICS.OVERSPEED_DECEL * dt);
-    if (fwd < -vCapRev) fwd = approach(fwd, -vCapRev, PHYSICS.OVERSPEED_DECEL * dt);
+    // A free-rolling bug on a slope slews round until it rolls straight downhill (either end first).
+    if (s.freeRoll && env.slope && throttle === 0) {
+      const toDown = wrapAngle(Math.atan2(env.downhill.y, env.downhill.x) - bug.angle);
+      const aim = Math.abs(toDown) > Math.PI / 2 ? wrapAngle(toDown - Math.sign(toDown) * Math.PI) : toDown;
+      bug.angle = wrapAngle(bug.angle + clamp(aim, -1, 1) * env.slope * PHYSICS.SLOPE_SLEW * dt);
+    }
+    // Free wheels coasting aren't bound by the motor's top speed (a motorless bug has none).
+    if (!(s.freeRoll && throttle === 0)) {
+      if (fwd > vCap) fwd = approach(fwd, vCap, PHYSICS.OVERSPEED_DECEL * dt);
+      if (fwd < -vCapRev) fwd = approach(fwd, -vCapRev, PHYSICS.OVERSPEED_DECEL * dt);
+    }
     lat = approach(lat, 0, gripDecel * lateralGrip * (s.lateralMult ?? 1) * dt);
 
     bug.vel = heading.scale(fwd).addInPlace(side, lat);
