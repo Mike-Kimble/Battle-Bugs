@@ -135,7 +135,7 @@ export const PARTS = Object.freeze({
   swivel_castors: castor('Swivel Castors', 2, C, 150, 10, 50, { roll: 0.1, hold: 0.3, radius: 8 }, 'Office-chair castors under a thrust bug. Cheap, squeaky, still slippery.'),
   ball_transfers: castor('Ball Transfer Units', 2, U, 230, 12, 60, { roll: 0.085, hold: 0.25, radius: 8.5 }, 'Steel balls in cups. Rolls any way you point it — and some ways you don\'t.'),
   nylon_glides: castor('Nylon Glides', 3, C, 380, 8, 55, { roll: 0.07, hold: 0.2, radius: 9 }, 'Low-friction pucks. Like driving on a freshly mopped floor.'),
-  bearing_array: castor('Ball-Bearing Array', 3, U, 520, 14, 70, { roll: 0.055, hold: 0.16, radius: 9.5 }, 'Hundreds of tiny bearings. Very little holds you back.'),
+  bearing_array: castor('Graphite Discs', 3, U, 520, 14, 70, { roll: 0.055, hold: 0.16, radius: 9.5, wearPerMatch: 0.38 }, 'Self-lubricating graphite pucks. Very little holds you back — but they grind themselves down and need rebuilding every two matches.'),
   air_skirt: castor('Air-Cushion Skirt', 4, R, 900, 12, 65, { roll: 0.04, hold: 0.1, radius: 10 }, 'Rides on a film of air. Brakes? What brakes?'),
   maglev_pucks: castor('Mag-Lev Pucks', 4, E, 1300, 10, 70, { roll: 0.025, hold: 0.08, radius: 10.5 }, 'Floats a finger-width off the ring. Stops about as well as a comet.'),
   // The Superconductor Array is flux-pinned to the ring: frictionless off the line, yet it

@@ -170,6 +170,10 @@ export class CombatEngine extends EventEmitter {
     if (this.phase === 'over') return;
     this.phase = 'over';
     for (const bug of this.bugs) for (const p of bug.parts) p.battleFloor = null;
+    // Parts that grind themselves down (graphite discs) lose a set share every match.
+    for (const bug of this.bugs) {
+      for (const p of bug.parts) if (p.stats.wearPerMatch) p.hp = Math.max(p.maxHp * 0.01, p.hp - p.maxHp * p.stats.wearPerMatch);
+    }
     let reason = REASONS[reasonKey] || reasonKey;
     const crit = this.critical;
     if (reasonKey === 'destroyed' && crit) {
