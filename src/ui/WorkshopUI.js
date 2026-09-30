@@ -548,7 +548,7 @@ export class WorkshopUI {
     if (this.openRegionKey !== key) this.regionTab = region.types[0];
     this.openRegionKey = key;
     const locked = this.state.isLocked(bug);
-    // Areas with several part types get a tab each (Center: Drive · Cooling · Enhancement; Hull: Chassis · Armour).
+    // Areas with several part types get a tab each (Inside: Drive · Cooling · Enhancement; Shell: Chassis · Armour).
     const type = region.types.includes(this.regionTab) ? this.regionTab : region.types[0];
     const TAB_LABELS = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancement', chassis: 'Chassis', armor: 'Armour' };
     const tabs = region.types.length > 1
