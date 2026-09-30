@@ -575,6 +575,14 @@ export class AIController {
       return;
     }
 
+    // Spinner: good pilots know how far out their grip can hold them, and
+    // fight their way back towards the middle before the floor flings them.
+    const spinSafe = this.spinnerSafeRadius(engine);
+    if (spinSafe !== null && me.pos.length() > spinSafe) {
+      engine.moveTo(me, me.pos.scale(Math.min(0.5, (spinSafe * 0.4) / Math.max(1, me.pos.length()))));
+      return;
+    }
+
     // Low-skill pilots hesitate, idling instead of pressing the attack.
     if (Math.random() < (1 - difficulty) * 0.35) {
       engine.stop(me);
@@ -600,6 +608,11 @@ export class AIController {
       engine.moveTo(me, engine.clampInside(foe.pos.add(outward.scale(45)), me.radius * 1.2), { backing: this.backs, route: true });
     }
 
+    // …and on the Spinner they never chase past it.
+    if (spinSafe !== null && me.control.target && me.control.target.length() > spinSafe) {
+      me.control.target = me.control.target.scale(spinSafe / me.control.target.length());
+    }
+
     // 5. Rams & shoves when lined up.
     const facing = me.angle + (this.backs ? Math.PI : 0);
     const aligned = Math.abs(wrapAngle(toFoe.angle() - facing)) < 0.55;
@@ -619,6 +632,23 @@ export class AIController {
     if (!me.twinDrive && foe.lunge && dist < 160 && sFrac > 0.25 && Math.random() < difficulty * 0.6 * style.dodge) {
       engine.dash(me, this.dodgeDir(toFoe));
     }
+  }
+
+  /**
+   * On the Spinner, the radius a skilled pilot (skill ≥ SPIN_SKILL) won't go
+   * beyond: where the grip needed to ride the floor round (ω²r) would use up
+   * most of their grip. Better pilots cut it finer. Null otherwise.
+   */
+  spinnerSafeRadius(engine) {
+    if (engine.dohyo.kind !== 5 || this.difficulty < PILOT_SKILL.SPIN_SKILL) return null;
+    const w = engine.dohyo.spinRate(engine.time);
+    if (w < 0.05) return null;
+    const grip = this.me.stats.mass > 0 ? this.me.stats.fGrip / this.me.stats.mass : 0;
+    const margin = 0.45 + 0.3 * this.difficulty; // share of their grip they'll spend just holding on
+    const safe = (grip * margin) / (w * w);
+    // Only once the spin is fast enough to matter: until then the ring's edge is the only danger.
+    if (safe > engine.arenaRadius * 0.85) return null;
+    return Math.max(this.me.radius * 2, safe);
   }
 
   /** Sidestep perpendicular to the threat, towards the safe part of the ring. */

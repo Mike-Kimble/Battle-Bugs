@@ -112,7 +112,8 @@ export const PILOT_SKILL = Object.freeze({
   VETERAN: { weight: 0.25, fights: [40, 120], skill: [0.35, 0.95] },
   TIER_CAP: [0.4, 0.15],  // skill ≤ 0.4 + tier × 0.15, so the cheapest bugs aren't flown by aces
   LEARN: 0.004,           // skill gained per fight
-  BACKS_IN: 0.6,          // skill needed to know a back-to-front shell pushes harder in reverse
+  BACKS_IN: 0.6,
+  SPIN_SKILL: 0.55,       // skill needed to fight to stay central on the Spinner          // skill needed to know a back-to-front shell pushes harder in reverse
   RIVAL: 0.15,            // your rival's skill: hopeless, until the tournament
   RIVAL_FINAL: 0.9,       // …where they finally learn to drive
   ELITE: [0.75, 0.95],    // tournament pilots: veterans, every one
