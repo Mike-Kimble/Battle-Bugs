@@ -186,7 +186,7 @@ export class EconomyManager {
   }
 
   repairPriority(bug) {
-    return [bug.chassis, ...bug.drives, bug.tires, bug.armor, ...bug.weapons, ...bug.coolers, ...bug.mods].filter((p) => p && p.missingHp > 0);
+    return bug.parts.filter((p) => p.missingHp > 0 || p.failed); // every fitted part, drive train included
   }
 
   equipFromInventory(bug, partUid, slot) {

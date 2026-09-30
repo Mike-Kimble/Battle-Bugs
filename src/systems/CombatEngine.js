@@ -556,8 +556,12 @@ export class AIController {
     const toFoe = foe.pos.sub(me.pos);
     const dist = toFoe.length();
 
-    // 1. Edge danger: head for the middle.
-    if (myD > R - me.radius * 1.7) {
+    // On a tilted ring a good pilot reads the slope: the downhill edge is the dangerous one.
+    const tilt = this.slopeSense(engine);
+    const nearDownhill = tilt && me.pos.length() > 1 && engine.dohyo.outward(me.pos, engine.time).dot(tilt.down) > 0.4;
+
+    // 1. Edge danger: head for the middle (sooner when the ring falls away beneath you).
+    if (myD > R - me.radius * (nearDownhill ? 1.7 + 4 * tilt.slope : 1.7)) {
       const safe = engine.dohyo.safePoint(me.pos, engine.time);
       engine.moveTo(me, safe, { route: true });
       if (dist < 120 && sFrac > 0.3 && !me.twinDrive && Math.random() < difficulty * 0.5 * style.dodge) {
@@ -617,8 +621,10 @@ export class AIController {
     // 5. Rams & shoves when lined up.
     const facing = me.angle + (this.backs ? Math.PI : 0);
     const aligned = Math.abs(wrapAngle(toFoe.angle() - facing)) < 0.55;
+    // With the hill behind them, a shove is worth more: good pilots go for it far more readily.
+    const downhillShot = tilt && toFoe.dot(tilt.down) > dist * 0.4 ? 1 + 6 * tilt.slope : 1;
     if (dist < 180 && aligned && me.actionCooldown <= 0) {
-      if (foeD > R * 0.5 && sFrac > 0.6 && Math.random() < (0.1 + 0.35 * difficulty) * style.shove) engine.ram(me, true);
+      if (foeD > R * 0.5 / Math.sqrt(downhillShot) && sFrac > 0.6 && Math.random() < (0.1 + 0.35 * difficulty) * style.shove * downhillShot) engine.ram(me, true);
       else if (sFrac > 0.4 && Math.random() < (0.05 + 0.25 * difficulty) * style.ram) engine.ram(me, false);
     }
 
@@ -650,6 +656,16 @@ export class AIController {
     // Only once the spin is fast enough to matter: until then the ring's edge is the only danger.
     if (safe > engine.arenaRadius * 0.85) return null;
     return Math.max(this.me.radius * 2, safe);
+  }
+
+  /**
+   * On a tilted ring, what a skilled pilot (skill ≥ SLOPE_SKILL) knows about it:
+   * which way is down and how steep it is. Null otherwise, or while it's barely tilted.
+   */
+  slopeSense(engine) {
+    if (!engine.dohyo.tilted || this.difficulty < PILOT_SKILL.SLOPE_SKILL) return null;
+    const slope = engine.dohyo.slope(engine.time);
+    return slope < 0.05 ? null : { down: engine.dohyo.downhill, slope };
   }
 
   /** Sidestep perpendicular to the threat, towards the safe part of the ring. */
