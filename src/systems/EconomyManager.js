@@ -575,6 +575,22 @@ export class EconomyManager {
     if (this.rival) this.rival.home = 1;
   }
 
+  /**
+   * Once the rookie is your rival, the homeless pilot is always the weakest one
+   * left: after each bout, if someone else is now weakest, they swap — the new
+   * weakest loses their home and the old one takes it.
+   */
+  repickRoamer() {
+    const s = this.state;
+    if (!s.roamerId) return;
+    const old = s.pool.find((p) => p.id === s.roamerId);
+    const worst = s.pool.filter((p) => p.id !== s.rivalId && !p.elite).sort((x, y) => this.strength(x) - this.strength(y))[0];
+    if (!worst || worst === old) return;
+    if (old) old.home = worst.home || 2;
+    delete worst.home;
+    s.roamerId = worst.id;
+  }
+
   /** Keep the away dohyo (2–5) within one pilot of each other. */
   balanceHomes() {
     const pool = this.state.pool.filter((p) => p.home > 1);
@@ -1121,6 +1137,7 @@ export class EconomyManager {
     // Every pilot in the pool has had their own week: bouts, repairs, upgrades.
     this.progressPool(tournament ? null : challenger);
     this.advanceRival();
+    this.repickRoamer();
     // Your best vehicle (and theirs) may have changed: replace even matches
     // that no longer fit so the board stays winnable.
     s.challengers = s.challengers.filter((c) => {
