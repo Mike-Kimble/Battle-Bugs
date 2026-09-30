@@ -1,4 +1,4 @@
-import { getPartDef } from '../config/partsData.js';
+import { getPartDef, currentKey } from '../config/partsData.js';
 import { clamp } from '../physics/Vector2D.js';
 
 let idCounter = 0;
@@ -21,7 +21,7 @@ export class Part {
 
   constructor(key, { uid, hp, usesLeft, failed } = {}) {
     this.def = getPartDef(key);
-    this.key = key;
+    this.key = currentKey(key); // old saves: retired parts come back as their replacements
     this.uid = uid || makeId('pt');
     this.maxHp = this.def.maxHp;
     this.hp = hp == null ? this.maxHp : clamp(hp, 0, this.maxHp);

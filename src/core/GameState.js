@@ -1,5 +1,5 @@
 import { ECONOMY, EVENTS, SAVE_KEY } from '../config/constants.js';
-import { STARTER_BUG, FIGHTING_STYLES } from '../config/partsData.js';
+import { STARTER_BUG, FIGHTING_STYLES, currentKey } from '../config/partsData.js';
 import { EventEmitter } from './EventEmitter.js';
 import { Storage } from './Storage.js';
 import { BattleBug } from '../entities/BattleBug.js';
@@ -121,7 +121,7 @@ export class GameState extends EventEmitter {
     s.sellQuotes = d.sellQuotes || {};
     s.tournamentNudgeAt = d.tournamentNudgeAt || 0;
     s.pendingDM = d.pendingDM || null;
-    s.discovered = new Set(d.discovered || []);
+    s.discovered = new Set((d.discovered || []).map(currentKey));
     for (const v of s.vehicles) s.discover(v.parts);
     s.discover(s.inventory);
     s.fine = d.fine || null;

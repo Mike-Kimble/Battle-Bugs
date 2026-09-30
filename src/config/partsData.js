@@ -7,7 +7,7 @@
  * matches or bought whole) — the shop only ever teases one you can't afford.
  * `look` is the sprite drawn for the part (a base design, recoloured by `glow`/`tint`).
  * Type-specific `stats`:
- *   chassis: radius, staminaMax, weaponSlots, turn (rad/s), shape, bio?
+ *   chassis: radius, staminaMax, weaponSlots, turn (rad/s), shape, drives?, backwards?
  *   engine:  force (F_base), rpm, cooling (R_cool, stamina/s while idle), kind
  *   tires:   mu (μ), radius (tire radius → top speed), kind
  *   castor:  roll (rolling resistance, μ-like), hold? (braking/sideways grip, defaults to roll),
@@ -29,7 +29,7 @@ export const THRUST_DRIVES = Object.freeze(['turbine', 'plasma']);
 const castor = (name, tier, rarity, value, mass, maxHp, stats, description) => ({ type: 'castor', name, tier, rarity, value, mass, maxHp, stats: { ...stats, kind: 'castor', works: THRUST_DRIVES }, description });
 // Drive types a part works with (omit `works` for "any").
 const HOT = ['combustion', 'torque'];
-const NOT_ELECTRIC = ['combustion', 'torque', 'turbine', 'plasma', 'fusion', 'bio'];
+const NOT_ELECTRIC = ['combustion', 'torque', 'turbine', 'plasma', 'fusion'];
 
 export const PARTS = Object.freeze({
   // ───────────── CHASSIS (frames) ─────────────
@@ -39,19 +39,19 @@ export const PARTS = Object.freeze({
   beetle_shell: chassis('Beetle Shell', 2, C, 380, 95, 180, { radius: 29, staminaMax: 110, weaponSlots: 1, turn: 3.8, shape: 'beetle', backwards: { fwd: 0.85, rev: 1.25 } }, 'Domed elytra plating. Hard to tip, hard to hurt.'),
   roach_lowrider: chassis('Roach Lowrider', 2, C, 420, 60, 100, { radius: 24, staminaMax: 130, weaponSlots: 2, turn: 5.0, shape: 'roach' }, 'Light, twitchy, twin hardpoints.'),
   tick_pod: chassis('Ladybird Pod', 2, U, 400, 85, 170, { radius: 26, staminaMax: 115, weaponSlots: 1, turn: 4.2, shape: 'beetle' }, 'Round, spotty and surprisingly hard to knock over.'),
-  cricket_chassis: chassis('Cricket Chassis', 2, R, 470, 58, 108, { radius: 24, staminaMax: 132, weaponSlots: 2, turn: 5.2, shape: 'roach', bio: true }, 'Grown, not built. Chirps when it corners.'),
+  grasshopper_rig: chassis('Grasshopper Rig', 2, R, 460, 62, 118, { radius: 24, staminaMax: 124, weaponSlots: 2, turn: 5.1, shape: 'roach' }, 'Long legs folded underneath. Springy, quick and a bit flimsy.'),
   mantis_frame: chassis('Mantis Frame', 3, U, 560, 80, 140, { radius: 27, staminaMax: 120, weaponSlots: 2, turn: 4.6, shape: 'mantis' }, 'Segmented striker with raptorial fore-mounts.'),
   stag_brawler: chassis('Stag Brawler', 3, C, 620, 110, 210, { radius: 30, staminaMax: 110, weaponSlots: 2, turn: 3.8, shape: 'scarab', drives: 2 }, 'All shoulders. Built for leaning on people. Room for twin drives.'),
   weevil_wedge: chassis('Weevil Wedge', 3, U, 640, 90, 175, { radius: 28, staminaMax: 120, weaponSlots: 2, turn: 4.2, shape: 'beetle' }, 'A low nose that gets under things it shouldn\'t.'),
-  wasp_dart: chassis('Wasp Dart', 3, R, 760, 70, 132, { radius: 25, staminaMax: 136, weaponSlots: 2, turn: 5.3, shape: 'hornet', bio: true }, 'Living carapace, all nerve and no patience.'),
+  dragonfly_frame: chassis('Dragonfly Frame', 3, R, 740, 68, 140, { radius: 25, staminaMax: 128, weaponSlots: 2, turn: 5.3, shape: 'hornet' }, 'A four-winged airframe on wheels. Darts about; hates being hit.'),
   scarab_bulwark: chassis('Scarab Bulwark', 4, R, 900, 130, 260, { radius: 32, staminaMax: 105, weaponSlots: 2, turn: 3.2, shape: 'scarab', backwards: { fwd: 0.85, rev: 1.25 } }, 'A rolling fortress. Slow to turn, slower to die.'),
   rhino_ram: chassis('Rhino Ram', 4, U, 880, 135, 270, { radius: 33, staminaMax: 104, weaponSlots: 2, turn: 3.3, shape: 'scarab', drives: 2 }, 'Horn first, questions never. Room for twin drives.'),
   locust_racer: chassis('Locust Racer', 4, R, 1000, 65, 150, { radius: 25, staminaMax: 145, weaponSlots: 2, turn: 5.5, shape: 'roach' }, 'Stripped to the rivets for speed. Swarms well.'),
-  hive_carapace: chassis('Hive Carapace', 4, E, 1300, 85, 200, { radius: 28, staminaMax: 142, weaponSlots: 2, turn: 4.8, shape: 'mantis', bio: true }, 'A frame secreted by ten thousand drones. It hums along with a bio-engine.'),
-  xeno_hornet: chassis('Xeno Hornet', 5, R, 1150, 75, 160, { radius: 26, staminaMax: 150, weaponSlots: 2, turn: 5.2, shape: 'hornet', bio: true }, 'Alien bio-alloy frame with a huge power reserve.'),
+  mantis_prime: chassis('Mantis Prime', 4, E, 1300, 90, 215, { radius: 28, staminaMax: 132, weaponSlots: 2, turn: 4.8, shape: 'mantis' }, 'A mantis frame with forearms of forged alloy. Built to grapple.'),
+  hornet_interceptor: chassis('Hornet Interceptor', 5, R, 1150, 78, 175, { radius: 26, staminaMax: 138, weaponSlots: 2, turn: 5.2, shape: 'hornet' }, 'Striped, sleek and very fast, with a stamina reserve for days.'),
   goliath_hull: chassis('Goliath Hull', 5, R, 1400, 150, 330, { radius: 34, staminaMax: 115, weaponSlots: 2, turn: 3.2, shape: 'scarab', drives: 2 }, 'Less a vehicle, more a postcode. Room for twin drives.'),
-  widow_frame: chassis('Assassin Bug Frame', 5, E, 1800, 80, 190, { radius: 27, staminaMax: 156, weaponSlots: 2, turn: 5.2, shape: 'mantis', bio: true }, 'Elegant, black, and it has eaten previous owners.'),
-  empress_chassis: chassis('Empress Wasp', 5, L, 2600, 78, 230, { radius: 27, staminaMax: 172, weaponSlots: 2, turn: 5.4, shape: 'hornet', bio: true }, 'Grown for a hive queen. Nobody tells you how they got it.'),
+  hercules_beetle: chassis('Hercules Beetle', 5, E, 1800, 130, 300, { radius: 32, staminaMax: 125, weaponSlots: 2, turn: 3.8, shape: 'scarab', drives: 2 }, 'A horned heavyweight that lifts a hundred times its own weight. Room for twin drives.'),
+  jewel_scarab: chassis('Jewel Scarab', 5, L, 2600, 95, 260, { radius: 29, staminaMax: 150, weaponSlots: 2, turn: 4.9, shape: 'beetle' }, 'The iridescent shell of a sacred beetle. Tough, balanced and absurdly pretty.'),
   titan_colossus: chassis('Titan Beetle', 5, L, 2500, 160, 380, { radius: 35, staminaMax: 132, weaponSlots: 2, turn: 3.6, shape: 'scarab', drives: 2 }, 'Shell of the biggest beetle ever recorded. Somehow still turns. Room for twin drives.'),
 
   // ───────────── ENGINES (propulsion) ─────────────
@@ -72,9 +72,9 @@ export const PARTS = Object.freeze({
   nebula_cell: engine('Nebula Cell', 4, E, 1500, 38, 115, { force: 56000, rpm: 5400, cooling: 18, kind: 'electric' }, '#9ad8ff', 'A battery charged by a nebula. Doesn\'t like being asked to share.'),
   plasma_twin: engine('Plasma Twin-Drive', 5, R, 1600, 55, 170, { force: 68000, rpm: 4600, cooling: 13, kind: 'plasma' }, '#c77dff', 'Alien twin-plasma drive. Pushes planets.'),
   quasar_turbine: engine('Quasar Turbine', 5, E, 1800, 36, 90, { force: 54000, rpm: 6600, cooling: 15, kind: 'turbine' }, '#fffaa0', 'Spins at the speed of gossip.'),
-  hive_heart: engine('Hive-Heart Bio-Engine', 5, E, 1900, 48, 150, { force: 66000, rpm: 5000, cooling: 21, kind: 'bio' }, '#8aff7a', 'A living heart the size of a beach ball. It purrs in a bio-frame.'),
+  plasma_lance: engine('Plasma Lance', 4, E, 1500, 44, 120, { force: 58000, rpm: 4900, cooling: 14, kind: 'plasma' }, '#a07dff', 'A needle of plasma thrust. Enough to shove a moon — and happy on castors.'),
   singularity_drive: engine('Singularity Drive', 5, L, 2600, 50, 140, { force: 72000, rpm: 5300, cooling: 16, kind: 'fusion' }, '#ffffff', 'A pinhole of collapsed star. Do not look directly at the exhaust.'),
-  queen_engine: engine("The Queen's Engine", 5, L, 2800, 52, 160, { force: 70000, rpm: 5100, cooling: 22, kind: 'bio' }, '#ff7ad8', 'Stolen from the royal hive. It still expects to be obeyed.'),
+  zero_point_core: engine('Zero-Point Core', 5, L, 2800, 42, 160, { force: 70000, rpm: 5600, cooling: 22, kind: 'electric' }, '#aaf0ff', 'Draws power from empty space. Runs colder than the void it feeds on.'),
 
   // ───────────── TIRES (running gear) ─────────────
   bald_rollers: tires('Bald Rollers', 1, C, 40, 12, 50, { mu: 0.8, radius: 7, kind: 'wheel' }, { kind: 'wheels', body: '#4a4552', stripe: '#5d5866', gap: 0 }, 'Tread is a distant memory.'),
@@ -171,7 +171,7 @@ export const PARTS = Object.freeze({
   mist_curtain: cooler('Mist Curtain', 3, U, 520, 10, { cool: 6, kind: 'mister', works: NOT_ELECTRIC }, 'A whole wall of spray. Electric motors hate it.'),
   big_rig_radiator: cooler('Big Rig Radiator', 3, C, 480, 22, { cool: 6.5, kind: 'fins' }, 'Off a hauler. Enormous, heavy, very effective.'),
   peltier_plates: cooler('Peltier Plates', 3, R, 700, 8, { cool: 5, kind: 'peltier', works: ['electric', 'fusion'], staminaMax: 1.05 }, 'Solid-state chillers. Need a proper power supply — electric or fusion only.'),
-  coolant_gland: cooler('Coolant Gland', 3, R, 650, 6, { cool: 7, kind: 'gland', works: ['bio'] }, 'A living organ that sweats for your bio-engine. Useless on metal motors.'),
+  vapour_chamber: cooler('Vapour Chamber', 3, R, 650, 7, { cool: 6.5, kind: 'exchanger' }, 'A sealed chamber that boils heat away and condenses it back. Works on anything; a fan makes it sing.'),
   ram_air_scoop: cooler('Ram-Air Scoop', 3, U, 560, 7, { cool: 5.5, kind: 'fins' }, 'Scoops air as you drive. Better than it looks.'),
   plasma_vent: cooler('Plasma Vent', 4, R, 1100, 10, { cool: 9, kind: 'nozzle', works: ['plasma', 'fusion'] }, 'Dumps heat straight out of a plasma or fusion core.'),
   nitrogen_loop: cooler('Liquid-Nitrogen Loop', 4, E, 1400, 18, { cool: 11, kind: 'water', jacket: 'nitrogen' }, 'Water cooling, but make it minus two hundred degrees. Non-combustion drives need a Cryo Jacket fitted first.'),
@@ -190,22 +190,22 @@ export const PARTS = Object.freeze({
   air_filter: enhance('Air Filter', 1, C, 60, 1, { kind: 'intake', force: 1.05, works: HOT }, 'Lets a piston engine breathe. Modest, reliable.'),
   lucky_dice: enhance('Fuzzy Dice', 1, C, 40, 1, { kind: 'charm', staminaMax: 1.04 }, 'Hang them from the mirror. Pilots swear by them.'),
   chrome_exhaust: enhance('Chrome Exhaust', 1, U, 110, 4, { kind: 'exhaust', force: 1.05, vMax: 1.03, works: ['combustion', 'torque', 'turbine'] }, 'Louder is faster. Slightly.'),
-  sugar_feeder: enhance('Sugar-Syrup Feeder', 1, U, 90, 3, { kind: 'feeder', cool: 1.5, works: ['bio'] }, 'Keeps a bio-engine topped up on sweets.'),
+  spark_plugs: enhance('Iridium Spark Plugs', 1, U, 90, 1, { kind: 'ignition', force: 1.04, accel: 1.05, works: HOT }, 'A cleaner bang in every cylinder. Piston engines only.'),
   turbocharger: enhance('Turbocharger', 2, C, 320, 8, { kind: 'turbo', force: 1.15, drain: 1.08, works: HOT }, 'Exhaust-driven boost for piston engines. Runs a little hotter.'),
   nos_bottle: enhance('NOS Bottle', 2, U, 260, 6, { kind: 'nitro', force: 1.25, accel: 1.25, drain: 1.1, uses: 5, works: ['combustion', 'torque', 'turbine'] }, 'Nitrous for the brave. Huge kick — good for 5 battles.'),
   capacitor_bank: enhance('Capacitor Bank', 2, U, 340, 7, { kind: 'capacitor', accel: 1.2, staminaMax: 1.05, works: ['electric'] }, 'Dumps stored charge on launch. Electric motors only.'),
-  nutrient_generator: enhance('Nutrient Generator', 2, R, 420, 6, { kind: 'feeder', cool: 3, staminaMax: 1.08, works: ['bio'] }, 'Brews food for a bio-engine mid-bout. Great recovery.'),
+  thermal_battery: enhance('Thermal Battery', 2, R, 420, 6, { kind: 'battery', cool: 3, staminaMax: 1.06 }, 'Soaks up motor heat and hands it back as charge. Great recovery on any drive.'),
   light_flywheel: enhance('Lightweight Flywheel', 2, C, 240, 3, { kind: 'flywheel', accel: 1.12 }, 'Less spinning mass, snappier launches. Works with anything.'),
   supercharger: enhance('Supercharger', 3, U, 640, 12, { kind: 'turbo', force: 1.2, drain: 1.1, works: HOT }, 'Belt-driven boost. Big power, hotter running.'),
   afterburner: enhance('Afterburner', 3, R, 780, 8, { kind: 'burner', vMax: 1.15, accel: 1.1, drain: 1.18, works: ['turbine', 'plasma'] }, 'Sets the exhaust on fire on purpose. Turbines and plasma only.'),
   regen_brakes: enhance('Regen Brakes', 3, U, 560, 6, { kind: 'regen', cool: 2, drain: 0.93, works: ['electric', 'fusion'] }, 'Turns braking back into charge. Electric or fusion only.'),
   stamina_governor: enhance('Stamina Governor', 3, C, 500, 4, { kind: 'governor', drain: 0.85, force: 0.95 }, 'Holds the motor back a touch so it lasts much longer.'),
-  adrenal_pump: enhance('Adrenal Pump', 3, R, 720, 5, { kind: 'gland', accel: 1.2, cool: 2, works: ['bio'] }, 'Floods a bio-engine with fight juice.'),
+  launch_control: enhance('Launch Control', 3, R, 720, 4, { kind: 'launch', accel: 1.2, cool: 1 }, 'A little box that gets every start perfect. Works with anything.'),
   twin_turbo: enhance('Twin Turbo', 4, R, 1150, 14, { kind: 'turbo', force: 1.25, drain: 1.1, works: HOT }, 'Two turbos. Twice the whistle.'),
   ion_injector: enhance('Ion Injector', 4, R, 1200, 6, { kind: 'injector', force: 1.15, vMax: 1.08, works: ['turbine', 'electric'] }, 'Charged-particle boost for turbines and electric drives.'),
   fusion_stabiliser: enhance('Fusion Stabiliser', 4, E, 1500, 8, { kind: 'stabiliser', drain: 0.8, staminaMax: 1.1, works: ['fusion', 'plasma'] }, 'Tames a star in a can. Barely breaks a sweat all bout.'),
   plasma_overdrive: enhance('Plasma Overdrive', 5, E, 1900, 10, { kind: 'overdrive', force: 1.3, vMax: 1.08, drain: 1.15, works: ['plasma'] }, 'Pushes a plasma drive past the red line. And keeps pushing.'),
-  hive_mind_link: enhance('Hive-Mind Link', 5, L, 2600, 4, { kind: 'link', accel: 1.25, cool: 4, drain: 0.9, works: ['bio'] }, 'Your bio-engine joins a hive of millions. They all want to win.'),
+  neural_copilot: enhance('Neural Co-Pilot', 5, L, 2600, 4, { kind: 'copilot', accel: 1.2, cool: 4, drain: 0.9 }, 'A tiny AI rides along, feathering the throttle so you never waste a drop. Works with anything.'),
   time_warp_nitro: enhance('Time-Warp Nitro', 5, L, 2800, 6, { kind: 'nitro', force: 1.4, accel: 1.4, uses: 3, works: null }, 'Nitro from next week. Unbelievable — for 3 battles.'),
 
   frost_cannon: weapon('Frost Cannon', 4, E, 1400, 28, 80, { class: 'grip', effect: 'slick', cost: 20, range: 180, arc: 360, cooldown: 4.5, puddleRadius: 75, puddleTime: 8, gripMod: 0.12, exposeTime: 0.9 }, 'slick_sprayer', 'Freezes a patch of ring solid. Skating lessons not provided.'),
@@ -281,12 +281,6 @@ export const INTERACTIONS = Object.freeze([
     when: (b) => (b.armor?.stats.heat || 0) < 0,
     dynamic: (b) => ({ cooling: 1 - b.armor.stats.heat }),
     text: 'Vented armour pulls air over the motor. Better cooling.' },
-  { id: 'bio_pair', good: true, mods: { cooling: 1.25, staminaMax: 1.05 },
-    when: (b) => b.engine?.stats.kind === 'bio' && b.chassis.stats.bio,
-    text: 'A bio-engine in a living frame — they sync up. +25% cooling, +5% stamina.' },
-  { id: 'bio_engine_dead_frame', good: false, mods: { cooling: 0.9 },
-    when: (b) => b.engine?.stats.kind === 'bio' && !b.chassis.stats.bio,
-    text: 'That bio-engine is sulking in a metal frame. −10% cooling.' },
   { id: 'plasma_heavy', good: false, mods: { vMax: 0.92 },
     when: (b) => b.engine?.stats.kind === 'plasma' && (b.tires?.stats.kind === 'track'),
     text: 'Plasma drive through tracks wastes its top end. −8% top speed.' },
@@ -302,8 +296,20 @@ export const PART_KEYS_BY_TYPE = Object.freeze(
   }, {})
 );
 
+/** Parts that have left the catalogue (the old bio line) and what saved copies become. */
+export const RETIRED_PARTS = Object.freeze({
+  cricket_chassis: 'grasshopper_rig', wasp_dart: 'dragonfly_frame', hive_carapace: 'mantis_prime',
+  xeno_hornet: 'hornet_interceptor', widow_frame: 'hercules_beetle', empress_chassis: 'jewel_scarab',
+  hive_heart: 'plasma_lance', queen_engine: 'zero_point_core', coolant_gland: 'vapour_chamber',
+  sugar_feeder: 'spark_plugs', nutrient_generator: 'thermal_battery', adrenal_pump: 'launch_control',
+  hive_mind_link: 'neural_copilot',
+});
+
+/** A catalogue key, following retired parts to their replacements. */
+export const currentKey = (key) => RETIRED_PARTS[key] || key;
+
 export function getPartDef(key) {
-  const def = PARTS[key];
+  const def = PARTS[currentKey(key)];
   if (!def) throw new Error(`Unknown part key: ${key}`);
   return def;
 }
@@ -492,5 +498,5 @@ export const JACKET_NAMES = Object.freeze({ water: 'Water Jacket', oil: 'Oil Jac
 
 /** Readable drive-type names for "works with" notes. */
 export const DRIVE_KINDS = Object.freeze({
-  combustion: 'Combustion', torque: 'Torque', turbine: 'Turbine', electric: 'Electric', fusion: 'Fusion', plasma: 'Plasma', bio: 'Bio',
+  combustion: 'Combustion', torque: 'Torque', turbine: 'Turbine', electric: 'Electric', fusion: 'Fusion', plasma: 'Plasma',
 });
