@@ -64,7 +64,9 @@ export class Part {
   /** @returns {{dealt:number, broke:boolean}} */
   applyDamage(amount) {
     const before = this.hp;
-    this.hp = Math.max(0, this.hp - Math.max(0, amount));
+    // In a fight, most parts can't lose more than a set share in one match (see CombatEngine).
+    this.hp = Math.max(this.battleFloor ?? 0, this.hp - Math.max(0, amount));
+    if (this.hp > before) this.hp = before;
     return { dealt: before - this.hp, broke: before > 0 && this.hp <= 0 };
   }
 

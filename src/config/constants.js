@@ -19,6 +19,8 @@ export const MATCH = Object.freeze({
   RESULT_DELAY: 1.4,    // seconds of slow-mo before the result screen
   FIXED_DT: 1 / 120,
   MAX_FRAME_DT: 0.1,
+  DAMAGE_CAP: 0.425,    // most parts lose at most this share of max HP per match: from full, two fights to reach 15%
+  FRAGILE_TIER: 2,      // …except armour and running gear at or below this tier, which can be wrecked in one
 });
 
 export const PHYSICS = Object.freeze({

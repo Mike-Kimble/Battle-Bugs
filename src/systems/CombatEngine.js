@@ -37,6 +37,15 @@ export class CombatEngine extends EventEmitter {
 
     player.resetForBattle(new Vector2D(-ARENA.R0 * 0.45, 0), 0);
     opponent.resetForBattle(new Vector2D(ARENA.R0 * 0.45, 0), Math.PI);
+    // Durability: only cheap armour and cheap running gear can be wrecked in a
+    // single match. Everything else loses at most MATCH_DAMAGE_CAP of its max HP
+    // per match, so from full it takes at least two fights to drop to 15%.
+    for (const bug of this.bugs) {
+      for (const p of bug.parts) {
+        const fragile = ['armor', 'tires', 'castor'].includes(p.type) && p.tier <= MATCH.FRAGILE_TIER;
+        p.battleFloor = fragile ? null : Math.max(0, p.hp - p.maxHp * MATCH.DAMAGE_CAP);
+      }
+    }
     this.ai = new AIController(opponent, player, difficulty, style);
 
     this.on(EVENTS.COLLISION, (c) => this.onCollision(c));
@@ -158,6 +167,7 @@ export class CombatEngine extends EventEmitter {
   finish(result, reasonKey) {
     if (this.phase === 'over') return;
     this.phase = 'over';
+    for (const bug of this.bugs) for (const p of bug.parts) p.battleFloor = null;
     this.result = { result, reason: REASONS[reasonKey] || reasonKey, reasonKey, time: this.time };
     this.emit(EVENTS.MATCH_END, this.result);
   }
