@@ -102,7 +102,7 @@ export const PARTS = Object.freeze({
 
   // ───────────── TIRES (running gear) ─────────────
   bald_rollers: tires('Bald Rollers', 1, C, 40, 12, 50, { mu: 0.8, radius: 7, kind: 'wheel' }, { kind: 'wheels', body: '#4a4552', stripe: '#5d5866', gap: 0 }, 'Tread is a distant memory.'),
-  junk_casters: tires('Trolley Wheels', 1, C, 45, 10, 45, { mu: 0.76, radius: 7.5, kind: 'wheel' }, { kind: 'wheels', body: '#5a5462', stripe: '#77707e', gap: 0 }, 'Office-chair wheels. They go where they like.'),
+  junk_casters: tires('Bike Tyres', 1, C, 45, 10, 45, { mu: 0.76, radius: 7.5, kind: 'wheel' }, { kind: 'wheels', body: '#5a5462', stripe: '#77707e', gap: 0 }, 'Skinny tyres off a scrapped bicycle. Light and quick, not much grip.'),
   rubber_nubs: tires('Rubber Nubs', 1, U, 70, 14, 55, { mu: 0.88, radius: 6.5, kind: 'knobby' }, { kind: 'wheels', body: '#2a2630', stripe: '#46404e', gap: 4 }, 'Stubby lugs that bite a little.'),
   knobby_treads: tires('Knobby Treads', 2, C, 160, 18, 70, { mu: 1.05, radius: 7, kind: 'knobby' }, { kind: 'wheels', body: '#1d1a22', stripe: '#3a3542', gap: 5 }, 'Chunky lugs that bite the dohyo.'),
   racing_slicks: tires('Racing Slicks', 2, C, 200, 14, 50, { mu: 0.9, radius: 9, kind: 'slick' }, { kind: 'wheels', body: '#141218', stripe: '#c83a3a', gap: 0, big: true }, 'Big diameter, big top speed.'),
