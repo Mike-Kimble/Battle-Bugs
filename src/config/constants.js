@@ -38,6 +38,7 @@ export const PHYSICS = Object.freeze({
   REVERSE_ANGLE: (120 * Math.PI) / 180, // target this far off the travel direction flips forward/reverse
   REVERSE_SPEED: 0.65,      // reverse top speed as a share of v_max
   TWIN_POWER: 0.7,          // twin drives: each motor, its cooling and every add-on work at 70% (2 motors = 1.4× one)
+  THRUST_ON_WHEELS: 0.5,    // a turbine or plasma drive on wheels with no working shaft pushes on thrust alone
   REVERSER_BRAKE: 0.8,      // reverse thrusters add this share of your acceleration as braking when you ease off
   CASTOR_THRUST: 1.3,       // a thrust drive on castors pushes this much harder than through wheels (before rolling resistance)
   TWIN_SKEW: 0.7,           // rad off line at full imbalance between twin drives (one side dead)

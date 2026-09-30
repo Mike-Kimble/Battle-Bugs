@@ -1,6 +1,9 @@
 import { PHYSICS, STAMINA, EVENTS } from '../config/constants.js';
 import { Vector2D, clamp, approach, wrapAngle } from './Vector2D.js';
-import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES, pushesThrust } from '../config/partsData.js';
+import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES, pushesThrust, hasShaft, hasDriveTrain } from '../config/partsData.js';
+
+/** Drive-train parts that live between the drive shaft and the wheels (useless without a shaft). */
+const SHAFT_PARTS = ['gearbox', 'lockgear', 'transfer', 'diff', 'coupling', 'converter'];
 
 /** Coolers a fan can blow on to boost. */
 const FAN_BOOSTS = ['water', 'oil', 'exchanger'];
@@ -96,10 +99,28 @@ export class PhysicsEngine {
   static driveTrain(bug, m, interactions, castor) {
     const fx = { vector: false, prop: 0, propRpm: false, lsl: false, tcu: false, guard: 1 };
     const groups = new Set();
+    const turbine = bug.engine?.stats.kind === 'turbine';
+    const hss = hasDriveTrain(bug, (s) => s.shaft === 'hss');
+    const shaft = hasShaft(bug);
+    const tracks = bug.tires?.stats.kind === 'track';
     for (const p of bug.drivetrain || []) {
       const s = p.stats;
       if (p.isBroken || !worksWith(p, bug)) {
         if (!p.isBroken) interactions.push({ id: `dt_nofit_${p.uid}`, good: false, mods: {}, text: `Your ${p.name} doesn't suit this drive — it's dead weight.` });
+        continue;
+      }
+      // Gearboxes, diffs, couplings and the like sit between the drive shaft and the wheels.
+      if (SHAFT_PARTS.includes(s.kind) && !castor && !shaft) {
+        interactions.push({ id: `dt_noshaft_${p.uid}`, good: false, mods: {}, text: `Your ${p.name} does nothing without a drive shaft to connect it.` });
+        continue;
+      }
+      // A gearbox on a turbine only works behind a High-Speed Shaft.
+      if (s.group === 'gearbox' && turbine && !hss) {
+        interactions.push({ id: `dt_nohss_${p.uid}`, good: false, mods: {}, text: `Your ${p.name} can't take turbine revs through a plain shaft — it needs a High-Speed Shaft on the turbine side.` });
+        continue;
+      }
+      if (s.wheelsOnly && tracks) {
+        interactions.push({ id: `dt_tracks_${p.uid}`, good: false, mods: {}, text: `A ${p.name} does nothing for tracks — they already drive along their whole length.` });
         continue;
       }
       if (s.group) {
@@ -165,7 +186,13 @@ export class PhysicsEngine {
     const gripMu = castor ? (tires.stats.hold ?? tires.stats.roll) : tires?.stats.mu || 0;
     const fGripBase = tires ? gripMu * mass * PHYSICS.GRAVITY * (castor ? 1 : tireRatio) * m.grip : 0;
     const fGrip = fGripBase * gripMod;
-    const push = (f) => (castor ? (thrust ? Math.max(0, f * thrustEff - rollForce) : 0) : Math.min(f, fGrip));
+    // Wheels and tracks need a drive shaft. Without one a turbine pushes on thrust alone
+    // (half strength); plasma can never drive wheels; any other motor goes nowhere.
+    const shaftDrive = !castor && !!engine && engine.stats.kind !== 'plasma' && hasShaft(bug);
+    const wheelThrust = !castor && !shaftDrive && thrustDrive;
+    const push = (f) => (castor ? (thrust ? Math.max(0, f * thrustEff - rollForce) : 0)
+      : shaftDrive ? Math.min(f, fGrip)
+        : wheelThrust ? f * PHYSICS.THRUST_ON_WHEELS : 0);
     const fUsable = push(fDrive);
     const accel = mass > 0 ? (fUsable / mass) * m.accel : 0;
     // Back-to-front shells: the forward penalty is undone and then some in reverse.
@@ -200,7 +227,7 @@ export class PhysicsEngine {
       vector: castor && thrust && dt.vector,
       tcu: dt.tcu,
       reverser: !!dt.reverser,
-      tractionLimited: !castor && fGrip < fDrive,
+      tractionLimited: shaftDrive && fGrip < fDrive,
       castor,
       pinned: castor && !!tires.stats.pinned,
     };

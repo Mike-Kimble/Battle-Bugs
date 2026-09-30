@@ -1,6 +1,6 @@
 import { PHYSICS, ACTIONS } from '../config/constants.js';
 import { Part, makeId } from './Part.js';
-import { pushesThrust, hasDriveTrain } from '../config/partsData.js';
+import { pushesThrust, hasDriveTrain, hasShaft } from '../config/partsData.js';
 import { PhysicsEngine } from '../physics/PhysicsEngine.js';
 import { Vector2D, clamp } from '../physics/Vector2D.js';
 
@@ -54,6 +54,11 @@ export class BattleBug {
 
   static fromJSON(o) {
     const p = (x) => (x ? Part.fromJSON(x) : null);
+    // Saves from before the drive train existed: wheels now need a drive shaft, so fit the right one.
+    if (o.drivetrain === undefined && o.tires && Part.fromJSON(o.tires).type === 'tires') {
+      const kind = o.engine ? Part.fromJSON(o.engine).stats.kind : null;
+      if (kind !== 'plasma') o = { ...o, drivetrain: [{ key: kind === 'turbine' ? 'high_speed_shaft' : 'standard_shaft' }] };
+    }
     return new BattleBug({
       id: o.id, name: o.name, hue: o.hue, alien: o.alien, pilot: o.pilot,
       chassis: p(o.chassis), engine: p(o.engine), engine2: p(o.engine2), tires: p(o.tires), armor: p(o.armor),
@@ -143,8 +148,14 @@ export class BattleBug {
     return this.tires?.type === 'castor' && !!this.engine && !pushesThrust(this);
   }
 
+  /** On wheels or tracks with a shaft motor but no working drive shaft: it can't move. */
+  get unshafted() {
+    const kind = this.engine?.stats.kind;
+    return this.tires?.type === 'tires' && !!kind && kind !== 'turbine' && kind !== 'plasma' && !hasShaft(this);
+  }
+
   get isBattleReady() {
-    return !!this.engine && !!this.tires && !this.stranded && !this.parts.some((p) => p.isScrap)
+    return !!this.engine && !!this.tires && !this.stranded && !this.unshafted && !this.parts.some((p) => p.isScrap)
       && !this.chassis.isBroken && !this.tires.isBroken && !this.drives.some((d) => d.isBroken);
   }
 
@@ -157,6 +168,7 @@ export class BattleBug {
     if (!this.tires) issues.push('No tires fitted');
     if (this.engine && this.engine.hp <= 0) issues.push('Engine broken (no drive force)');
     if (this.tires && this.tires.hp <= 0) issues.push(this.tires.type === 'castor' ? 'Castors wrecked' : 'Tires shredded (no grip)');
+    if (this.unshafted) issues.push('No drive shaft — the motor isn\'t connected to the wheels (they\'re next to free on the Marketplace)');
     if (this.stranded) issues.push("Castors aren't driven — they need a turbine or plasma drive, or a propeller or ducted fan");
     return issues;
   }

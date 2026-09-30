@@ -30,10 +30,19 @@ const castor = (name, tier, rarity, value, mass, maxHp, stats, description) => (
 const drivetrain = (name, tier, rarity, value, mass, maxHp, stats, description) => ({ type: 'drivetrain', name, tier, rarity, value, mass, maxHp, stats, description });
 /** Drives that turn a shaft (everything but turbine and plasma). */
 const NON_THRUST = ['combustion', 'torque', 'electric', 'fusion'];
+/** Drives that can turn a drive shaft (plasma can't drive wheels or tracks at all). */
+const SHAFT_DRIVES = [...NON_THRUST, 'turbine'];
+/** Gearboxes suit any shaft drive (on a turbine they only count with a High-Speed Shaft). */
+const GEAR_DRIVES = SHAFT_DRIVES;
 
 /** A working drive-train part of this kind is fitted (and suits the drive). */
 export function hasDriveTrain(bug, test) {
   return (bug?.drivetrain || []).some((p) => !p.isBroken && !p.spent && test(p.stats) && worksWith(p, bug));
+}
+
+/** A working drive shaft is fitted (needed to turn wheels or tracks). */
+export function hasShaft(bug) {
+  return hasDriveTrain(bug, (s) => !!s.shaft);
 }
 
 /** Can this bug push itself along on castors? Thrust drives can; any other drive needs a propeller or ducted fan. */
@@ -226,28 +235,28 @@ export const PARTS = Object.freeze({
   // ───────────── DRIVE TRAIN (propulsion, 4 slots) ─────────────
   // stats: kind, group? (only one per group works), works?, note (one-line effect), and effects:
   //   force/accel/vMax/turn/grip/drain multipliers, brake (braking & holding when idle), driveGuard (impact
-  //   damage reaching the drive), tyresOnly (no effect on castors), vector, reverser, rudder, shaft, reducer,
+  //   damage reaching the drive), tyresOnly (no effect on castors), vector, reverser, rudder, shaft ('hss' | 'std'), wheelsOnly (tyres, not tracks),
   //   prop (thrust efficiency), propRpm (thrust scales with revs), lsl, tcu.
   thrust_vectoring: drivetrain('Thrust-Vectoring Nozzle', 3, R, 800, 6, 70, { kind: 'vector', vector: true, works: THRUST_DRIVES, note: 'Castors: swipe to shoot off in any direction instantly' }, 'Swivels the exhaust instead of the bug. On castors, a swipe fires you off in any direction without steering — perfect for dodging.'),
   reverse_thrusters: drivetrain('Reverse Thrusters', 2, U, 350, 8, 70, { kind: 'reverser', brake: 3, turn: 1.3, works: THRUST_DRIVES, note: 'Brakes hard and turns on the spot' }, 'Clamshell buckets that throw the thrust forwards. Stops a thrust bug in its tracks and lets it pivot on the spot.'),
   rudders: drivetrain('Rudders', 1, C, 80, 4, 50, { kind: 'rudder', rudder: true, turn: 1.2, note: 'Sharper steering (razor-sharp with a prop or fan on castors)' }, 'Fins in the airflow. Sharper steering for anything — and with a propeller or ducted fan on castors, the tightest turns in the game.'),
-  high_speed_shaft: drivetrain('High-Speed Shaft', 3, U, 600, 10, 90, { kind: 'shaft', group: 'shaft', shaft: 'hss', works: ['turbine'], note: 'Turbines drive wheels & tracks properly' }, 'A balanced shaft that takes turbine revs down to the wheels without shaking itself apart. Best with a Reduction Gearbox. Plasma drives can\'t use it.'),
-  reduction_gearbox: drivetrain('Reduction Gearbox', 2, U, 380, 14, 100, { kind: 'reducer', reducer: true, force: 1.08, vMax: 0.94, works: ['turbine'], note: 'Turbine revs into torque; pair with a shaft' }, 'Steps screaming turbine revs down into usable torque. On its own a small gain; with a drive shaft, the whole point.'),
-  standard_shaft: drivetrain('Standard Drive Shaft', 1, C, 90, 12, 60, { kind: 'shaft', group: 'shaft', shaft: 'std', works: ['turbine'], note: 'Cheap turbine shaft — snaps mid-match without a reducer' }, 'A cheap shaft for driving wheels off a turbine. Without a Reduction Gearbox the revs shake it apart halfway through a match, leaving only the turbine\'s thrust.'),
+  high_speed_shaft: drivetrain('High-Speed Shaft', 3, U, 600, 10, 90, { kind: 'shaft', group: 'shaft', shaft: 'hss', works: SHAFT_DRIVES, note: 'Drive shaft strong enough for turbine revs' }, 'A stronger, balanced drive shaft that can take a turbine\'s revs. Any motor but plasma needs a drive shaft to turn wheels or tracks — and a turbine needs this one: run it on the turbine side of a gearbox for the best, most stable set-up.'),
+  overdrive_gearbox: drivetrain('Overdrive Gearbox', 3, U, 540, 14, 100, { kind: 'gearbox', group: 'gearbox', force: 0.94, vMax: 1.18, works: GEAR_DRIVES, note: 'Gears up: much more top speed, a little less push' }, 'Tall gears for the long straights. Much more top speed, a little less shove. Turbines need a High-Speed Shaft for a gearbox to do anything.'),
+  standard_shaft: drivetrain('Standard Drive Shaft', 1, C, 15, 12, 60, { kind: 'shaft', group: 'shaft', shaft: 'std', works: SHAFT_DRIVES, note: 'Connects the motor to the wheels. Snaps on a turbine' }, 'The bare minimum: any motor but plasma needs a drive shaft to turn wheels or tracks. Always in stock and next to free. A turbine\'s revs snap it halfway through a match, leaving only the thrust — turbines want a High-Speed Shaft.'),
   propeller: drivetrain('Propeller', 2, C, 260, 9, 60, { kind: 'prop', group: 'prop', prop: 0.75, works: NON_THRUST, note: 'Any shaft motor pushes as thrust — runs on castors' }, 'Bolt it to the output shaft and any motor becomes a thrust drive, castors and all.'),
   ducted_fan: drivetrain('Ducted Fan', 3, R, 720, 11, 75, { kind: 'prop', group: 'prop', prop: 0.85, propRpm: true, works: NON_THRUST, note: 'Thrust for any motor — more the higher it revs' }, 'A fan in a tight shroud. Like a propeller, but it turns high revs into far more thrust.'),
   limited_slip_link: drivetrain('Limited-Slip Link', 2, U, 420, 10, 90, { kind: 'lsl', lsl: true, note: 'Twin drives: no pull when one side is hurt; no spin' }, 'Couples twin drives so they share torque. One side damaged? She still drives straight — but the drives can\'t counter-rotate, so no spin attack.'),
-  standard_gearbox: drivetrain('Standard Gearbox', 1, C, 120, 24, 130, { kind: 'gearbox', group: 'gearbox', force: 1.08, vMax: 1.04, works: NON_THRUST, note: 'A little more push and speed. Heavy, robust' }, 'Cogs in a cast-iron box. Heavy and not as clever as a CVT, but cheap and very hard to break.'),
-  cvt: drivetrain('CVT', 2, U, 360, 12, 55, { kind: 'gearbox', group: 'gearbox', force: 1.1, accel: 1.1, vMax: 1.1, works: NON_THRUST, note: 'More low-end torque and top speed. Fragile' }, 'Continuously variable transmission: always the right gear. More low-end torque and more top speed — but the belt doesn\'t like being hit.'),
-  worm_gear: drivetrain('Worm Gear', 2, C, 260, 30, 140, { kind: 'lockgear', group: 'gearbox', force: 1.35, vMax: 0.6, brake: 2.2, tyresOnly: ['brake'], works: NON_THRUST, note: 'Huge torque, low top speed, hard to push when idle' }, 'A worm can turn the wheel, but the wheel can\'t turn the worm: stop driving and you\'re locked in place. Huge torque, dreadful top speed, very heavy.'),
-  cycloidal_drive: drivetrain('Cycloidal Drive', 3, R, 750, 18, 110, { kind: 'lockgear', group: 'gearbox', force: 1.3, vMax: 0.7, brake: 1.9, tyresOnly: ['brake'], works: NON_THRUST, note: 'Big torque, low top speed, hard to push when idle' }, 'Lobed discs rolling inside pins. Nearly as stubborn as a worm gear at a fraction of the weight.'),
-  strain_wave_gear: drivetrain('Strain Wave Gear', 4, R, 1100, 8, 60, { kind: 'lockgear', group: 'gearbox', force: 1.28, vMax: 0.75, brake: 1.7, tyresOnly: ['brake'], works: NON_THRUST, note: 'Big torque, low top speed, hard to push. Light, delicate' }, 'A flexing steel cup inside a ring gear — robot-arm tech. Feather-light and grips when idle, but it doesn\'t take punishment.'),
-  transfer_case: drivetrain('Transfer Case', 2, U, 400, 20, 110, { kind: 'transfer', grip: 1.12, tyresOnly: ['grip'], works: NON_THRUST, note: 'More traction on tyres and tracks' }, 'Sends drive to every wheel. More traction for tyres and tracks.'),
+  standard_gearbox: drivetrain('Reducer', 1, C, 120, 24, 130, { kind: 'gearbox', group: 'gearbox', force: 1.12, vMax: 0.92, works: GEAR_DRIVES, note: 'Trades revs for torque. Heavy, robust' }, 'A plain reduction gearbox: cogs in a cast-iron box. Trades a little top speed for torque. Heavy, cheap and very hard to break.'),
+  cvt: drivetrain('CVT', 3, R, 760, 12, 55, { kind: 'gearbox', group: 'gearbox', force: 1.1, accel: 1.1, vMax: 1.1, works: GEAR_DRIVES, note: 'More low-end torque and top speed. Fragile' }, 'Continuously variable transmission: always the right gear. More low-end torque and more top speed — but the belt doesn\'t like being hit.'),
+  worm_gear: drivetrain('Worm Gear', 3, R, 700, 30, 140, { kind: 'lockgear', group: 'gearbox', force: 1.35, vMax: 0.6, brake: 2.2, tyresOnly: ['brake'], works: GEAR_DRIVES, note: 'Huge torque, low top speed, hard to push when idle' }, 'A worm can turn the wheel, but the wheel can\'t turn the worm: stop driving and you\'re locked in place. Huge torque, dreadful top speed, very heavy.'),
+  cycloidal_drive: drivetrain('Cycloidal Drive', 4, E, 1300, 18, 110, { kind: 'lockgear', group: 'gearbox', force: 1.3, vMax: 0.7, brake: 1.9, tyresOnly: ['brake'], works: GEAR_DRIVES, note: 'Big torque, low top speed, hard to push when idle' }, 'Lobed discs rolling inside pins. Nearly as stubborn as a worm gear at a fraction of the weight.'),
+  strain_wave_gear: drivetrain('Strain Wave Gear', 5, L, 2400, 8, 60, { kind: 'lockgear', group: 'gearbox', force: 1.28, vMax: 0.75, brake: 1.7, tyresOnly: ['brake'], works: GEAR_DRIVES, note: 'Big torque, low top speed, hard to push. Light, delicate' }, 'A flexing steel cup inside a ring gear — robot-arm tech. Feather-light and grips when idle, but it doesn\'t take punishment.'),
+  transfer_case: drivetrain('Transfer Case', 2, U, 400, 20, 110, { kind: 'transfer', grip: 1.12, tyresOnly: ['grip'], wheelsOnly: true, works: SHAFT_DRIVES, note: 'More traction on tyres (does nothing for tracks)' }, 'Sends drive to every wheel. More traction on tyres — tracks already drive along their whole length, so it does nothing for them.'),
   limited_slip_diff: drivetrain('Limited-Slip Differential', 3, U, 560, 10, 90, { kind: 'diff', turn: 1.25, tyresOnly: ['turn'], works: NON_THRUST, note: 'Tighter turning on tyres and tracks' }, 'Lets the outside wheel drive through the corner. A much tighter turning circle on tyres and tracks.'),
   fluid_coupling: drivetrain('Fluid Coupling', 3, U, 520, 14, 100, { kind: 'coupling', driveGuard: 0.55, accel: 0.97, works: NON_THRUST, note: 'Impacts do far less damage to the drive' }, 'The motor drives through a bath of oil, so shocks never reach it. Far less impact damage to the drive, a touch softer off the line.'),
   torque_converter: drivetrain('Torque Converter', 2, C, 240, 16, 100, { kind: 'converter', accel: 1.15, drain: 1.05, works: HOT, note: 'Harder launches for piston engines; runs warm' }, 'Multiplies torque when you stamp on it. Harder launches for combustion and torque motors, a little extra heat.'),
   traction_control: drivetrain('Traction Control Unit', 4, R, 950, 3, 50, { kind: 'tcu', tcu: true, grip: 1.05, tyresOnly: ['grip', 'tcu'], note: 'Tyres: shrugs off half the grip lost to slicks & lifts' }, 'Sensors on every wheel that cut the power the instant one slips. Halves the grip you lose to oil slicks, ice and lifters.'),
-  magnetic_gearbox: drivetrain('Magnetic Gearbox', 5, E, 1900, 14, 150, { kind: 'gearbox', group: 'gearbox', force: 1.15, vMax: 1.1, drain: 0.95, driveGuard: 0.8, works: NON_THRUST, note: 'Contactless gears: more push, speed and endurance' }, 'Gears that never touch — magnets do the meshing. More push and speed, cooler running, and shocks slip instead of breaking teeth.'),
+  magnetic_gearbox: drivetrain('Magnetic Gearbox', 5, E, 1900, 14, 150, { kind: 'gearbox', group: 'gearbox', force: 1.15, vMax: 1.1, drain: 0.95, driveGuard: 0.8, works: GEAR_DRIVES, note: 'Contactless gears: more push, speed and endurance' }, 'Gears that never touch — magnets do the meshing. More push and speed, cooler running, and shocks slip instead of breaking teeth.'),
 
   frost_cannon: weapon('Frost Cannon', 4, E, 1400, 28, 80, { class: 'grip', effect: 'slick', cost: 20, range: 180, arc: 360, cooldown: 4.5, puddleRadius: 75, puddleTime: 8, gripMod: 0.12, exposeTime: 0.9 }, 'slick_sprayer', 'Freezes a patch of ring solid. Skating lessons not provided.'),
 });
@@ -275,25 +284,27 @@ export const INTERACTIONS = Object.freeze([
     when: (b) => b.tires?.type === 'castor' && !!b.engine && !pushesThrust(b),
     text: 'Castors aren\'t driven — that motor can\'t move you on them. Fit a turbine or plasma drive, a propeller or ducted fan, or proper tyres.' },
   // Drive train combinations.
-  { id: 'shaft_wheels', good: true, mods: { force: 1.06 },
-    when: (b) => hasDriveTrain(b, (s) => !!s.shaft) && b.tires?.type === 'tires',
-    text: 'That drive shaft lets the turbine drive the running gear properly. +6% drive, and no bogging down in tracks or pads.' },
-  { id: 'shaft_snapped', good: false, mods: { force: 0.5 },
-    when: (b) => b.engine?.stats.kind === 'turbine' && b.tires?.type === 'tires' && (b.drivetrain || []).some((p) => p.stats.shaft && p.failed)
-      && !hasDriveTrain(b, (s) => !!s.shaft),
-    text: 'The drive shaft has snapped — only the turbine\'s thrust is moving you. Half the drive. (A Reduction Gearbox stops it happening.)' },
-  { id: 'shaft_reducer', good: true, mods: { force: 1.12 },
-    when: (b) => hasDriveTrain(b, (s) => !!s.shaft) && hasDriveTrain(b, (s) => s.reducer) && b.tires?.type === 'tires',
-    text: 'Turbine, shaft and reduction gearbox — revs turned into real wheel torque. +12% drive.' },
+  { id: 'no_shaft', good: false, mods: {},
+    when: (b) => b.tires?.type === 'tires' && NON_THRUST.includes(b.engine?.stats.kind) && !hasShaft(b),
+    text: 'No drive shaft — the motor isn\'t connected to the wheels, so she won\'t move. They\'re next to free on the Marketplace.' },
+  { id: 'turbine_no_shaft', good: false, mods: {},
+    when: (b) => b.tires?.type === 'tires' && b.engine?.stats.kind === 'turbine' && !hasShaft(b),
+    text: 'No working drive shaft — the turbine is only pushing with its thrust, at half strength. A High-Speed Shaft connects it to the wheels.' },
+  { id: 'plasma_wheels', good: false, mods: {},
+    when: (b) => b.tires?.type === 'tires' && b.engine?.stats.kind === 'plasma',
+    text: 'Plasma can\'t drive wheels or tracks — it\'s only pushing with thrust, at half strength. Put it on castors.' },
+  { id: 'turbine_std_shaft', good: false, mods: {},
+    when: (b) => b.engine?.stats.kind === 'turbine' && hasDriveTrain(b, (s) => s.shaft === 'std'),
+    text: 'A Standard Drive Shaft won\'t take turbine revs — it\'ll snap halfway through a match and leave you on thrust alone. Turbines need a High-Speed Shaft.' },
+  { id: 'turbine_geared', good: true, mods: { force: 1.12 },
+    when: (b) => b.engine?.stats.kind === 'turbine' && b.tires?.type === 'tires' && hasDriveTrain(b, (s) => s.shaft === 'hss') && hasDriveTrain(b, (s) => s.group === 'gearbox'),
+    text: 'Turbine, High-Speed Shaft and gearbox — screaming revs turned into real wheel torque. +12% drive.' },
   { id: 'prop_rudder', good: true, mods: {},
     when: (b) => b.tires?.type === 'castor' && hasDriveTrain(b, (s) => !!s.prop) && hasDriveTrain(b, (s) => s.rudder),
     text: 'Prop and rudders on castors — she steers like a fish. And the castors are tucked under, out of harm\'s way.' },
   { id: 'lsl_single', good: false, mods: {},
     when: (b) => hasDriveTrain(b, (s) => s.lsl) && (b.drives?.length || 0) < 2,
     text: 'That Limited-Slip Link is doing nothing — it needs twin drives.' },
-  { id: 'thrust_wheels', good: false, mods: {},
-    when: (b) => THRUST_DRIVES.includes(b.engine?.stats.kind) && !!b.tires && b.tires.type !== 'castor' && !hasDriveTrain(b, (s) => !!s.shaft),
-    text: 'A thrust drive pushing through wheels — on castors it would accelerate harder (but slide more).' },
   // Twin drive bays.
   { id: 'twin_empty', good: false, mods: {},
     when: (b) => (b.chassis?.stats.drives || 1) > 1 && b.drives?.length === 1,
@@ -311,10 +322,10 @@ export const INTERACTIONS = Object.freeze([
     dynamic: (b) => ({ force: b.chassis.stats.backwards.fwd }),
     text: "Drive force is down 15%, I just don't get it, this is all backwards." },
   { id: 'turbine_tracks', good: false, mods: { force: 0.75 },
-    when: (b) => b.engine?.stats.kind === 'turbine' && b.tires?.stats.kind === 'track' && !hasDriveTrain(b, (s) => !!s.shaft),
-    text: 'That turbine bogs down in heavy tracks — it needs revs, tracks give it none. −25% drive. (A drive shaft would fix it.)' },
+    when: (b) => b.engine?.stats.kind === 'turbine' && b.tires?.stats.kind === 'track' && !hasDriveTrain(b, (s) => s.shaft === 'hss'),
+    text: 'That turbine bogs down in heavy tracks without a High-Speed Shaft. −25% drive.' },
   { id: 'turbine_pads', good: false, mods: { force: 0.85 },
-    when: (b) => b.engine?.stats.kind === 'turbine' && b.tires?.stats.kind === 'pads' && !hasDriveTrain(b, (s) => !!s.shaft),
+    when: (b) => b.engine?.stats.kind === 'turbine' && b.tires?.stats.kind === 'pads' && !hasDriveTrain(b, (s) => s.shaft === 'hss'),
     text: 'Grip pads drag on a turbine. −15% drive.' },
   { id: 'turbine_slicks', good: true, mods: { vMax: 1.08 },
     when: (b) => b.engine?.stats.kind === 'turbine' && b.tires?.stats.kind === 'slick',
@@ -360,7 +371,7 @@ export const RETIRED_PARTS = Object.freeze({
   xeno_hornet: 'hornet_interceptor', widow_frame: 'hercules_beetle', empress_chassis: 'jewel_scarab',
   hive_heart: 'plasma_lance', queen_engine: 'zero_point_core', coolant_gland: 'vapour_chamber',
   sugar_feeder: 'spark_plugs', nutrient_generator: 'thermal_battery', adrenal_pump: 'launch_control',
-  hive_mind_link: 'neural_copilot',
+  hive_mind_link: 'neural_copilot', reduction_gearbox: 'standard_gearbox',
 });
 
 /** A catalogue key, following retired parts to their replacements. */
@@ -386,6 +397,7 @@ export const STARTER_BUG = Object.freeze({
   tires: 'bald_rollers',
   armor: 'scrap_plating',
   weapons: [],
+  drivetrain: ['standard_shaft'], // wheels need a drive shaft
 });
 
 // ───────────── Flavour tables for procedural opponents ─────────────

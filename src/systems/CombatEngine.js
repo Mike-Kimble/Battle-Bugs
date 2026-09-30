@@ -345,14 +345,13 @@ export class CombatEngine extends EventEmitter {
   }
 
   /**
-   * A Standard Drive Shaft on a turbine with no Reduction Gearbox can't take
-   * the revs: it snaps halfway through the match, leaving only the thrust.
+   * A Standard Drive Shaft can't take turbine revs: it snaps halfway through
+   * the match, leaving only the turbine's thrust. (Turbines want a High-Speed Shaft.)
    */
   shaftStrain(bug) {
     if (this.time < MATCH.DURATION / 2 || bug.out) return;
     const shaft = bug.drivetrain.find((p) => p.stats.shaft === 'std' && !p.isBroken);
     if (!shaft || bug.engine?.stats.kind !== 'turbine') return;
-    if (bug.drivetrain.some((p) => p.stats.reducer && !p.isBroken)) return;
     shaft.hp = Math.min(shaft.hp, shaft.maxHp * 0.3);
     shaft.failed = true;
     this.emit(EVENTS.PART_BROKEN, { bug, part: shaft, breakdown: true });

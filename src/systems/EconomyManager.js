@@ -420,6 +420,14 @@ export class EconomyManager {
     return null;
   }
 
+  /** The drive shaft a build needs: none on castors or for plasma, a High-Speed Shaft for turbines, else a standard one. */
+  shaftFor(engineKey, tiresKey) {
+    if (!engineKey || !tiresKey || PARTS[tiresKey].type === 'castor') return [];
+    const kind = PARTS[engineKey].stats.kind;
+    if (kind === 'plasma') return [];
+    return [kind === 'turbine' ? 'high_speed_shaft' : 'standard_shaft'];
+  }
+
   generateBug(tier, { condition = () => rand(0.7, 1), alien = true, fullSlots = false } = {}) {
     const chassis = pickPartKey('chassis', tier);
     const slots = PARTS[chassis].stats.weaponSlots;
@@ -432,6 +440,9 @@ export class EconomyManager {
     const weapons = Array.from({ length: weaponCount }, () => pickPartKey('weapon', tier + 1));
     const pilot = alien ? { name: alienName(), planet: pick(PLANETS) } : null;
     const motor = pickPartKey('engine', tier);
+    // Thrust builds often glide on castors (plasma almost always: it can't drive wheels).
+    const kind = PARTS[motor].stats.kind;
+    const gear = THRUST_DRIVES.includes(kind) && chance(kind === 'plasma' ? 0.85 : 0.3) ? pickPartKey('castor', tier) : pickPartKey('tires', tier);
     const bug = BattleBug.create({
       name: `${pick(BUG_ADJECTIVES)} ${pick(BUG_NOUNS)}`,
       hue: randInt(0, 359),
@@ -441,10 +452,10 @@ export class EconomyManager {
       engine: motor,
       // Twin-bay shells usually carry a matching second motor.
       engine2: PARTS[chassis].stats.drives > 1 && chance(0.4 + tier * 0.1) ? motor : null,
-      // Some thrust-drive builds glide on castors instead of tyres.
-      tires: THRUST_DRIVES.includes(PARTS[motor].stats.kind) && chance(0.3) ? pickPartKey('castor', tier) : pickPartKey('tires', tier),
+      tires: gear,
       armor: tier <= 1 && chance(0.4) ? null : pickPartKey('armor', tier),
       weapons,
+      drivetrain: this.shaftFor(motor, gear),
       condition,
     });
     // Better-equipped pilots run cooling and enhancements that suit their drive.
@@ -519,7 +530,7 @@ export class EconomyManager {
   makeRookie(entry) {
     const bug = BattleBug.create({
       name: `Rookie ${pick(BUG_NOUNS)}`, hue: randInt(0, 359), alien: true,
-      chassis: 'scrapper_frame', engine: 'rust_motor', tires: 'bald_rollers', armor: null, weapons: [],
+      chassis: 'scrapper_frame', engine: 'rust_motor', tires: 'bald_rollers', armor: null, weapons: [], drivetrain: ['standard_shaft'],
       condition: () => rand(0.5, 0.65),
     });
     const p = this.makePilot(1, entry, { bug, rookie: true });
@@ -735,8 +746,8 @@ export class EconomyManager {
     const pref = PILOT_STYLES[p.style]?.shops;
     const needs = this.diagnose(bug);
     needs.sort((x, y) => (x.urgent === y.urgent ? (y.type === pref) - (x.type === pref) : y.urgent - x.urgent));
-    for (const { type } of needs) {
-      const key = this.optimalPart(bug, type, p.purse, { owned: [], discount: 1 });
+    for (const { type, only } of needs) {
+      const key = this.optimalPart(bug, type, p.purse, { owned: [], discount: 1, only });
       if (!key) continue;
       let displaced;
       try { displaced = bug.equip(new Part(key)); } catch { continue; } // e.g. a motor that doesn't match its twin
@@ -852,6 +863,9 @@ export class EconomyManager {
       const part = Part.create(key, condition);
       parts.push({ id: makeId('mk'), part, price: roundTo(part.value * part.hpRatio * this.priceSwing('buy'), 5) });
     }
+    // Drive shafts are always in stock, and cost next to nothing.
+    const shaft = Part.create('standard_shaft', 1);
+    parts.push({ id: makeId('mk'), part: shaft, price: Math.max(5, roundTo(shaft.value * this.priceSwing('buy'), 5)) });
     // Now and then a dealer puts something special in the window — always just out of reach.
     const tease = this.teaserListing();
     if (tease) parts.push(tease);
@@ -1228,7 +1242,7 @@ export class EconomyManager {
    */
   strongestBuild({ allow = (k) => RARITY[PARTS[k].rarity].shop } = {}) {
     const keysOf = (type) => PART_KEYS_BY_TYPE[type].filter(allow);
-    const make = (b) => BattleBug.create({ ...b, engine2: PARTS[b.chassis].stats.drives > 1 ? b.engine : null, condition: () => 1 });
+    const make = (b) => BattleBug.create({ ...b, engine2: PARTS[b.chassis].stats.drives > 1 ? b.engine : null, drivetrain: this.shaftFor(b.engine, b.tires), condition: () => 1 });
     const weaponsFor = (chassis) => keysOf('weapon')
       .sort((x, y) => PARTS[y].tier - PARTS[x].tier || PARTS[y].value - PARTS[x].value)
       .slice(0, PARTS[chassis].stats.weaponSlots);
@@ -1273,6 +1287,7 @@ export class EconomyManager {
     const bug = BattleBug.create({
       ...spec,
       engine2: PARTS[spec.chassis].stats.drives > 1 ? spec.engine : null,
+      drivetrain: this.shaftFor(spec.engine, spec.tires),
       name: pilot.bug.name,
       hue: pilot.bug.hue,
       alien: true,
@@ -1337,6 +1352,9 @@ export class EconomyManager {
     const keys = new Set([...shopKeys(type), ...owned.filter((p) => p.type === type).map((p) => p.key)]);
     for (const key of keys) {
       if (!this.affordable(key, budget, opts)) continue;
+      if (opts.only && !opts.only(PARTS[key].stats)) continue;
+      // A standard shaft would snap on a turbine: never the right call.
+      if (PARTS[key].stats.shaft === 'std' && bug.engine?.stats.kind === 'turbine') continue;
       const part = new Part(key);
       // Weapons all add the same raw rating, so break ties by quality (tier, then value).
       if (!this.fits(part, bug)) continue;
@@ -1356,8 +1374,10 @@ export class EconomyManager {
   diagnose(bug) {
     const s = bug.getStats();
     const needs = [];
-    const add = (type, reason, urgent = true) => needs.push({ type, reason, urgent });
+    const add = (type, reason, urgent = true, only) => needs.push({ type, reason, urgent, only });
     if (!bug.engine) add('engine', "there's no motor in her");
+    if (bug.unshafted) add('drivetrain', "there's no drive shaft — the motor isn't connected to the wheels", true, (st) => !!st.shaft);
+    else if (bug.tires?.type === 'tires' && bug.engine?.stats.kind === 'turbine' && !bug.drivetrain.some((p) => p.stats.shaft === 'hss' && !p.isBroken)) add('drivetrain', 'a turbine needs a High-Speed Shaft to drive the wheels properly', true, (st) => st.shaft === 'hss');
     if (bug.stranded) add('tires', "castors aren't driven — this motor needs proper tyres");
     else if (s.castor) add('castor', 'less rolling resistance means harder acceleration', false);
     else if (s.fDrive > s.fGrip * 1.05) add('tires', 'traction-limited — the motor out-muscles your tires');
@@ -1395,12 +1415,12 @@ export class EconomyManager {
       return out;
     }
 
-    const needs = this.diagnose(bug).map((n) => [n.type, n.reason]);
+    const needs = this.diagnose(bug).map((n) => [n.type, n.reason, n.only]);
 
     // Stay within budget: the best part you could actually pay for (or already own).
     const budget = this.state.money;
-    for (const [type, reason] of needs) {
-      const key = this.optimalPart(bug, type, budget);
+    for (const [type, reason, only] of needs) {
+      const key = this.optimalPart(bug, type, budget, { only });
       if (key) {
         out.pick = { key, type, reason };
         break;
