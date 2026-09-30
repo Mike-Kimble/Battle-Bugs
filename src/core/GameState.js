@@ -45,6 +45,7 @@ export class GameState extends EventEmitter {
     this.arrears = {};
     this.blacklist = 0; // bouts left that nobody will work for you (you stiffed your staff)
     this.collectors = []; // [{ role, owed, taken }] ex-staff helping themselves to your parts // { mechanic|manager: { amount, bouts } } — a missed wage, to pay in the Admin tab
+    this.roamerId = null; // the homeless pilot (the rookie, unless they became your rival)
     this.elitesOut = false; // the tournament pilots have joined the board (after the first 5★ regular)
     this.rivalNextAt = 0; // bout count at which the rival next turns up on the board
     this.compareRef = null; // { id, refId }: captured vehicle vs the vehicle that won it (session only)
@@ -128,6 +129,7 @@ export class GameState extends EventEmitter {
     s.rivalId = d.rivalId || null;
     s.rivalNextAt = d.rivalNextAt || 0;
     s.elitesOut = !!d.elitesOut;
+    s.roamerId = d.roamerId || null;
     s.arrears = d.arrears || {};
     s.blacklist = d.blacklist || 0;
     s.collectors = d.collectors || [];
@@ -171,6 +173,7 @@ export class GameState extends EventEmitter {
       rivalId: this.rivalId,
       rivalNextAt: this.rivalNextAt,
       elitesOut: this.elitesOut,
+      roamerId: this.roamerId,
       arrears: this.arrears,
       blacklist: this.blacklist,
       collectors: this.collectors,

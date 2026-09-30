@@ -594,7 +594,9 @@ export class EconomyManager {
 
   /** The rookie has no home dohyo — until they become your rival. */
   isRoamer(p) {
-    return p?.name === CHALLENGER_ROSTER[0].name && p.id !== this.state.rivalId;
+    if (!p) return false;
+    const id = this.state.roamerId;
+    return id ? p.id === id : p.name === CHALLENGER_ROSTER[0].name && p.id !== this.state.rivalId;
   }
 
   /** The dohyo for a bout: the rookie's is random; everyone else plays home and away. */
@@ -697,8 +699,15 @@ export class EconomyManager {
   setRival(pilot, lostBugName) {
     const s = this.state;
     if (s.rivalId || !pilot?.record) return false;
+    const wasRoamer = this.isRoamer(pilot);
     s.rivalId = pilot.id;
     pilot.rookie = false; // no longer anybody's easy first fight
+    // If the rookie becomes your rival they settle on Dohyo 1, and the next-worst pilot
+    // takes over as the homeless one — so the easy fights stay on varied rings.
+    if (wasRoamer) {
+      const worst = s.pool.filter((p) => p !== pilot && !p.elite).sort((x, y) => this.strength(x) - this.strength(y))[0];
+      if (worst) { s.roamerId = worst.id; delete worst.home; }
+    }
     pilot.home = 1; // they move in on your home dohyo
     this.balanceHomes();
     pilot.skill = Math.min(pilot.skill, PILOT_SKILL.RIVAL); // rattled for good — until the tournament
