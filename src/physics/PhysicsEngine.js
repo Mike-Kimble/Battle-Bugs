@@ -44,6 +44,9 @@ export class PhysicsEngine {
    */
   static addOns(bug, m, interactions) {
     let cool = 0;
+    // Twin drives: every add-on works at 70% (its bonus or penalty scaled back).
+    const k = (bug.drives?.length || 0) > 1 ? PHYSICS.TWIN_POWER : 1;
+    const scaled = (mult) => 1 + (mult - 1) * k;
     const live = (p) => !p.spent && !p.isBroken && worksWith(p, bug);
     const coolers = (bug.coolers || []).filter(live);
     const fans = coolers.filter((c) => c.stats.kind === 'fan');
@@ -52,7 +55,7 @@ export class PhysicsEngine {
       cool += c.stats.cool;
       // A fan blowing on water cooling or a heat exchanger makes it far better.
       if (boost > 1 && FAN_BOOSTS.includes(c.stats.kind)) cool += c.stats.cool * (boost - 1);
-      if (c.stats.staminaMax) m.staminaMax *= c.stats.staminaMax;
+      if (c.stats.staminaMax) m.staminaMax *= scaled(c.stats.staminaMax);
     }
     const vented = (bug.armor?.stats.heat || 0) < 0 && !bug.armor.isBroken;
     for (const f of fans) if (vented) cool += f.stats.ventBonus || 0;
@@ -63,7 +66,7 @@ export class PhysicsEngine {
 
     for (const e of (bug.mods || []).filter(live)) {
       const s = e.stats;
-      for (const k of ['force', 'accel', 'vMax', 'staminaMax', 'drain']) if (s[k]) m[k] *= s[k];
+      for (const key of ['force', 'accel', 'vMax', 'staminaMax', 'drain']) if (s[key]) m[key] *= scaled(s[key]);
       if (s.cool) cool += s.cool;
     }
     for (const p of [...(bug.coolers || []), ...(bug.mods || [])]) {
@@ -81,7 +84,7 @@ export class PhysicsEngine {
         interactions.push({ id: `jacket_${j.uid}`, good: false, mods: {}, text: `Your ${j.name} isn't hooked up to anything — it needs its liquid cooler.` });
       }
     }
-    return { cool };
+    return { cool: cool * k };
   }
 
   /**
@@ -138,7 +141,7 @@ export class PhysicsEngine {
       gripMod,
       radius: chassis.stats.radius * PHYSICS.BUG_SCALE,
       staminaMax: Math.round(chassis.stats.staminaMax * m.staminaMax),
-      cooling: engine ? Math.round((drives.reduce((t, d) => t + d.stats.cooling, 0) * (drives.length > 1 ? PHYSICS.TWIN_COOLING : 1) * m.cooling + addOns.cool) * 10) / 10 : 0,
+      cooling: engine ? Math.round((drives.reduce((t, d) => t + d.stats.cooling, 0) * (drives.length > 1 ? PHYSICS.TWIN_POWER : 1) * m.cooling + addOns.cool) * 10) / 10 : 0,
       twinBias,
       drainMult: m.drain,
       interactions,
