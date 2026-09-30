@@ -51,7 +51,7 @@ export const PARTS = Object.freeze({
   hornet_interceptor: chassis('Hornet Interceptor', 5, R, 1150, 78, 175, { radius: 26, staminaMax: 138, weaponSlots: 2, turn: 5.2, shape: 'hornet' }, 'Striped, sleek and very fast, with a stamina reserve for days.'),
   goliath_hull: chassis('Goliath Hull', 5, R, 1400, 150, 330, { radius: 34, staminaMax: 115, weaponSlots: 2, turn: 3.2, shape: 'scarab', drives: 2 }, 'Less a vehicle, more a postcode. Room for twin drives.'),
   hercules_beetle: chassis('Hercules Beetle', 5, E, 1800, 130, 300, { radius: 32, staminaMax: 125, weaponSlots: 2, turn: 3.8, shape: 'scarab', drives: 2 }, 'A horned heavyweight that lifts a hundred times its own weight. Room for twin drives.'),
-  jewel_scarab: chassis('Jewel Scarab', 5, L, 2600, 95, 260, { radius: 29, staminaMax: 150, weaponSlots: 2, turn: 4.9, shape: 'beetle' }, 'The iridescent shell of a sacred beetle. Tough, balanced and absurdly pretty.'),
+  jewel_scarab: chassis('Jewel Scarab', 5, L, 2600, 95, 260, { radius: 29, staminaMax: 150, weaponSlots: 2, turn: 4.9, shape: 'beetle', backwards: { fwd: 0.85, rev: 1.25 } }, 'The iridescent shell of a sacred beetle. Tough, balanced and absurdly pretty.'),
   titan_colossus: chassis('Titan Beetle', 5, L, 2500, 160, 380, { radius: 35, staminaMax: 132, weaponSlots: 2, turn: 3.6, shape: 'scarab', drives: 2 }, 'Shell of the biggest beetle ever recorded. Somehow still turns. Room for twin drives.'),
 
   // ───────────── ENGINES (propulsion) ─────────────
