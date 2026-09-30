@@ -336,7 +336,22 @@ export class EconomyManager {
   }
 
   dismiss(role) {
+    this.staffLeaves(role);
+  }
+
+  /** A staff member is gone (dismissed, quit or vanished): any back pay goes with them. */
+  staffLeaves(role) {
     this.state.staff[role] = false;
+    delete this.state.arrears[role];
+  }
+
+  /** Pay a staff member what you owe them (from the Admin tab). */
+  payArrears(role) {
+    const owed = this.state.arrears[role];
+    if (!owed) return 0;
+    this.state.spend(owed.amount);
+    delete this.state.arrears[role];
+    return owed.amount;
   }
 
   isRareDeal(listing) {
@@ -1059,7 +1074,7 @@ export class EconomyManager {
       return;
     }
     if (bet.fate === 'stolen') {
-      s.staff.manager = false;
+      this.staffLeaves('manager');
       s.winBetStreak = 0;
       report.lines.push(`Your manager has mysteriously gone missing — along with the ${formatMoney(bet.stake)} they were meant to bet. You'll have to hire a new one.`);
       return;
@@ -1082,7 +1097,7 @@ export class EconomyManager {
     if (s.fixStreak >= ECONOMY.FIXING_STREAK && chance(ECONOMY.FIXING_ESCAPE)) {
       report.lines.push(`The stewards are sniffing around (${s.fixStreak} lose-bets paid out running)… your manager got away with it this time.`);
     } else if (s.fixStreak >= ECONOMY.FIXING_STREAK) {
-      s.staff.manager = false;
+      this.staffLeaves('manager');
       s.fixStreak = 0;
       s.fine = { amount: ECONOMY.FIXING_FINE, battlesLeft: ECONOMY.FINE_BATTLES };
       report.arrest = true;
@@ -1576,16 +1591,32 @@ export class EconomyManager {
     return report;
   }
 
+  /**
+   * Wages after every bout. A missed wage is owed until you pay it in the
+   * Admin tab. Go STAFF_GRACE bouts in a row after that without paying and
+   * they quit — four bouts' grace in all, counting the one you missed.
+   * Wages missed in the meantime are added to what you owe.
+   */
   payStaff(report) {
     const s = this.state;
     for (const [role, wage] of [['mechanic', ECONOMY.MECHANIC_WAGE], ['manager', ECONOMY.MANAGER_WAGE]]) {
       if (!s.staff[role]) continue;
+      const owed = s.arrears[role];
+      if (owed && ++owed.bouts >= ECONOMY.STAFF_GRACE) {
+        this.staffLeaves(role);
+        report.lines.push(`Your ${role} quit — you never paid the ${formatMoney(owed.amount)} you owed.`);
+        continue;
+      }
       if (s.canAfford(wage)) {
         s.spend(wage);
         report.lines.push(`Paid ${role} wage: ${formatMoney(wage)}`);
+      } else if (owed) {
+        owed.amount += wage;
+        const left = ECONOMY.STAFF_GRACE - owed.bouts;
+        report.lines.push(`Missed your ${role}'s wage again — you now owe ${formatMoney(owed.amount)}. Pay it in the Admin tab within ${left} bout${left === 1 ? '' : 's'} or they'll quit.`);
       } else {
-        s.staff[role] = false;
-        report.lines.push(`Your ${role} quit — couldn't make payroll.`);
+        s.arrears[role] = { amount: wage, bouts: 0 };
+        report.lines.push(`Missed your ${role}'s wage (${formatMoney(wage)}). Pay it in the Admin tab within ${ECONOMY.STAFF_GRACE} bouts or they'll quit.`);
       }
     }
   }

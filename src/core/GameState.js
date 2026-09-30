@@ -42,6 +42,7 @@ export class GameState extends EventEmitter {
     this.discovered = new Set(); // every part key you've ever owned — the Codex, kept across seasons
     this.fine = null; // { amount, battlesLeft }
     this.rivalId = null; // the first alien you beat in a title match: they follow you to the Grand Final
+    this.arrears = {}; // { mechanic|manager: { amount, bouts } } — a missed wage, to pay in the Admin tab
     this.elitesOut = false; // the tournament pilots have joined the board (after the first 5★ regular)
     this.rivalNextAt = 0; // bout count at which the rival next turns up on the board
     this.compareRef = null; // { id, refId }: captured vehicle vs the vehicle that won it (session only)
@@ -125,6 +126,7 @@ export class GameState extends EventEmitter {
     s.rivalId = d.rivalId || null;
     s.rivalNextAt = d.rivalNextAt || 0;
     s.elitesOut = !!d.elitesOut;
+    s.arrears = d.arrears || {};
     s.log = d.log || [];
     return s;
   }
@@ -165,6 +167,7 @@ export class GameState extends EventEmitter {
       rivalId: this.rivalId,
       rivalNextAt: this.rivalNextAt,
       elitesOut: this.elitesOut,
+      arrears: this.arrears,
       log: this.log.slice(-60),
     };
   }

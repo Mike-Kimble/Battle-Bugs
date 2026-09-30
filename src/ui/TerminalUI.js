@@ -78,7 +78,7 @@ export class TerminalUI {
     const newCount = this.state.newVehicleIds.size;
     this.tabbar.replaceChildren(el('div', { class: 'tabs', role: 'tablist' },
       TABS.map(([key, label]) => el('button', {
-        class: `tab${this.tab === key ? ' active' : ''}${key === 'tournament' && this.economy.tournamentUnlocked ? ' glow' : ''}`,
+        class: `tab${this.tab === key ? ' active' : ''}${(key === 'tournament' && this.economy.tournamentUnlocked) || (key === 'staff' && Object.keys(this.state.arrears).length) ? ' glow' : ''}`,
         role: 'tab',
         'aria-selected': this.tab === key ? 'true' : 'false',
         onclick: () => this.setTab(key),
@@ -544,6 +544,19 @@ export class TerminalUI {
   }
 
   // ───────────── Staff ─────────────
+  /** A missed wage: what's owed, how long you've got, and a button to pay it. */
+  renderArrears(role, title) {
+    const owed = this.state.arrears[role];
+    const left = ECONOMY.STAFF_GRACE - owed.bouts;
+    return el('div', { class: 'notice notice-warn arrears' },
+      el('div', {}, el('strong', {}, `Owed ${formatMoney(owed.amount)}`),
+        ` — pay within ${left} bout${left === 1 ? '' : 's'} or your ${role} quits.`),
+      el('button', {
+        class: 'btn btn-small btn-primary', disabled: this.state.money < owed.amount,
+        onclick: () => this.act(() => this.economy.payArrears(role), (v) => `Paid your ${title.toLowerCase()} ${formatMoney(v)}`),
+      }, `Pay ${formatMoney(owed.amount)}`));
+  }
+
   renderStaff() {
     const s = this.state;
     const staffCard = (role, title, hire, wage, desc, icon) => el('article', { class: `card staff${s.staff[role] ? ' active' : ''}` },
@@ -551,6 +564,7 @@ export class TerminalUI {
       el('h3', {}, title),
       el('p', {}, desc),
       el('div', { class: 'small muted' }, `Hire fee ${formatMoney(hire)} · wage ${formatMoney(wage)} per bout`),
+      s.staff[role] && s.arrears[role] ? this.renderArrears(role, title) : null,
       s.staff[role]
         ? el('button', { class: 'btn btn-small', onclick: () => this.act(() => this.economy.dismiss(role), `${title} dismissed`) }, 'Dismiss')
         : el('button', { class: 'btn btn-small btn-primary', disabled: s.money < hire, onclick: () => this.act(() => this.economy.hire(role), `${title} hired`) }, `Hire ${formatMoney(hire)}`));

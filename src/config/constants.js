@@ -125,6 +125,7 @@ export const ECONOMY = Object.freeze({
   MECHANIC_WAGE: 35,
   MANAGER_HIRE: 200,
   MANAGER_WAGE: 30,
+  STAFF_GRACE: 3,            // bouts you can leave a missed wage unpaid before that staff member quits
   BOUNTY_BASE: 110,          // base stake a challenger expects (scaled by tier)
   BOUNTY_PER_TIER: 120,
   BOARD_SIZE: 5,             // challengers on the board, spread across difficulties
