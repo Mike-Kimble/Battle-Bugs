@@ -266,7 +266,7 @@ export class WorkshopUI {
     const repairAll = this.economy.repairAllCost(bug);
     const issues = bug.battleIssues();
 
-    const canDispose = !locked && !this.economy.inField && this.state.vehicles.length > 1;
+    const canDispose = !locked && !this.economy.inField;
     this.root.replaceChildren(el('div', { class: 'hoist-layout' },
       el('div', { class: 'hoist-main' }, ...[
         this.renderCarousel(bug, locked),
@@ -288,13 +288,13 @@ export class WorkshopUI {
           }, repairAll ? `Repair all ${formatMoney(repairAll)}` : 'Fully repaired'),
           el('button', { class: 'btn btn-small', onclick: () => { this.renaming = true; this.render(); } }, 'Rename'),
           el('button', {
-            class: 'btn btn-small', disabled: locked || this.economy.inField || bug.parts.length <= 1,
+            class: 'btn btn-small', disabled: bug.parts.length <= 1,
             onclick: () => this.confirm(`Strip ${bug.name}?`, 'Every fitted part comes off and goes to your spares. The bare chassis stays on the hoist.',
               () => this.act(() => this.economy.stripVehicle(bug.id), (r) => `Stripped ${r.parts.length} part${r.parts.length === 1 ? '' : 's'} — the bare chassis is on the hoist`)),
           }, 'Strip'),
           el('button', {
             class: 'btn btn-small btn-danger', disabled: !canDispose,
-            onclick: () => this.confirm(`Sell ${bug.name}?`, `You'll receive ${formatMoney(this.economy.vehicleSellPrice(bug))}.`,
+            onclick: () => this.confirm(`Sell ${bug.name}?`, this.economy.sellWarning(bug),
               () => this.act(() => this.economy.sellVehicle(bug.id), (v) => `Sold for ${formatMoney(v)}`)),
           }, `Sell ${formatMoney(this.economy.vehicleSellPrice(bug))}`)),
       ].filter(Boolean)),
@@ -332,7 +332,7 @@ export class WorkshopUI {
       el('div', { class: 'hoist-name-text' },
         name,
         this.state.newVehicleIds.has(bug.id) ? el('span', { class: 'badge badge-gold' }, 'NEW') : null,
-        locked ? el('span', { class: 'badge badge-lock', title: 'Tournament rules' }, '🔒 LOCKED') : null,
+        locked ? el('span', { class: 'badge badge-lock', title: 'Tournament entrant: spares only, no switching vehicles' }, '🔒 ENTERED') : null,
         el('div', { class: 'muted small' }, bug.chassis.name, many ? ` · ${i + 1} of ${vs.length}` : '')),
       many ? el('button', { class: 'btn btn-icon carousel-btn', 'aria-label': 'Next vehicle', disabled: lockedIn, onclick: () => this.cycle(1) }, '▶') : null);
   }
@@ -564,9 +564,9 @@ export class WorkshopUI {
       }))
       : null;
     const body = el('div', { class: 'region-modal' },
-      el('p', { class: 'muted' }, region.blurb, locked ? ' — tournament lock: repairs only.' : ''),
+      el('p', { class: 'muted' }, region.blurb, this.economy.inField ? " — you're in the field: spares from your inventory only." : ''),
       tabs,
-      this.renderSlot(bug, type, locked));
+      this.renderSlot(bug, type, false));
     openModal(`${region.label} · ${bug.name}`, body, { onClose: () => { this.openRegionKey = null; } });
   }
 

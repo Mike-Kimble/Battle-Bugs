@@ -190,7 +190,6 @@ export class EconomyManager {
   }
 
   equipFromInventory(bug, partUid, slot) {
-    this.assertUnlocked(bug);
     const part = this.state.getPart(partUid);
     if (!part) throw new Error('Part not in inventory');
     if (part.type === 'chassis') throw new Error('A chassis is a whole vehicle frame — it cannot be fitted');
@@ -203,16 +202,12 @@ export class EconomyManager {
   }
 
   unequipToInventory(bug, partUid) {
-    this.assertUnlocked(bug);
     const part = bug.findPart(partUid);
     if (!part || !bug.unequip(part)) throw new Error('Cannot remove that part');
     this.state.addPart(part);
     return part;
   }
 
-  assertUnlocked(bug) {
-    if (this.state.isLocked(bug)) throw new Error('Tournament rules: upgrades & part swaps are locked (repairs allowed)');
-  }
 
   // ───────────── Trading ─────────────
   /** In the tournament you're in the field: no buying or selling, only repairs with what you brought. */
@@ -243,7 +238,6 @@ export class EconomyManager {
 
   /** Buy a part and fit it straight onto `bug` (for an empty slot). */
   buyAndFit(listingId, bug) {
-    this.assertUnlocked(bug);
     const listing = this.state.market.parts.find((l) => l.id === listingId);
     if (listing && !this.fits(listing.part, bug)) throw new Error("Doesn't look like you can fit that here");
     const part = this.buyPartListing(listingId);
@@ -282,7 +276,6 @@ export class EconomyManager {
 
   assertDisposable(bug) {
     if (this.state.isLocked(bug)) throw new Error('That vehicle is entered in the tournament');
-    if (this.state.vehicles.length <= 1) throw new Error('You cannot part with your last vehicle');
   }
 
   sellVehicle(id) {
@@ -293,15 +286,28 @@ export class EconomyManager {
     const price = this.vehicleSellPrice(bug);
     this.state.removeVehicle(id);
     this.state.earn(price);
+    this.ensureReplacementListing(); // sold your last one? something affordable turns up
     return price;
+  }
+
+  /** The confirmation text for selling a vehicle. */
+  sellWarning(bug) {
+    const price = this.vehicleSellPrice(bug);
+    if (this.sellEndsGame(bug)) return `You'll receive ${formatMoney(price)}. It's your last vehicle and you won't be able to afford another (${formatMoney(ECONOMY.MIN_VEHICLE_PRICE)}) — game over.`;
+    if (this.state.vehicles.length === 1) return `You'll receive ${formatMoney(price)}. It's your last vehicle — you'll need to buy another before you can fight.`;
+    return `You'll receive ${formatMoney(price)}.`;
+  }
+
+  /** Selling `bug` would leave you with no vehicle and too little to buy another: game over. */
+  sellEndsGame(bug) {
+    return this.state.vehicles.length === 1 && this.state.vehicles[0] === bug
+      && this.liquidWorth + this.vehicleSellPrice(bug) < ECONOMY.MIN_VEHICLE_PRICE;
   }
 
   /** Strip a vehicle down to its frame: every fitted part goes to your spares; the bare chassis stays on the hoist. */
   stripVehicle(id) {
-    this.assertNotInField();
     const bug = this.state.getVehicle(id);
     if (!bug) throw new Error('No such vehicle');
-    this.assertUnlocked(bug);
     const parts = bug.parts.filter((p) => p !== bug.chassis);
     for (const p of parts) {
       bug.unequip(p);
@@ -1461,7 +1467,7 @@ export class EconomyManager {
       } else if (result === 'loss') {
         s.tournament.eliminated = true;
         this.withdrawTournament();
-        report.lines.push('Eliminated from the tournament. Upgrades unlocked — regroup and re-enter.');
+        report.lines.push('Eliminated from the tournament. The Marketplace is open again — regroup and re-enter.');
       } else {
         report.lines.push('Draw — tournament rules: the round will be re-fought.');
       }

@@ -194,6 +194,13 @@ export class TerminalUI {
     );
   }
 
+  /** Bare chassis, rolling chassis, semi-complete or complete. */
+  vehicleKind(bug) {
+    if (bug.parts.length === 1) return 'bare chassis';
+    if (bug.parts.length === 2 && bug.tires) return 'rolling chassis';
+    return bug.isBattleReady ? 'complete' : 'semi-complete';
+  }
+
   /** With a manager, a word in your ear when a bug hides something special. */
   managerHunch(bug) {
     if (!this.state.staff.manager) return null;
@@ -435,7 +442,7 @@ export class TerminalUI {
       return s.market.parts.filter((l) => l.part.type === key).length;
     };
     const spares = cat === 'chassis'
-      ? s.vehicles.filter((v) => v.id !== s.activeVehicleId && !s.isLocked(v))
+      ? s.vehicles.filter((v) => !s.isLocked(v))
       : s.inventory.filter((p) => p.type === cat);
 
     const on = (key) => key === cat || (key === 'engine' && isPropulsion(cat));
@@ -499,12 +506,12 @@ export class TerminalUI {
           this.sprite.renderThumbnail(bug, 64),
           el('div', { class: 'card-info' },
             el('h3', {}, bug.name),
-            el('div', { class: 'small muted' }, bug.chassis.name),
+            el('div', { class: 'small muted' }, `${bug.chassis.name} · ${this.vehicleKind(bug)}${bug.id === s.activeVehicleId ? ' · on the hoist' : ''}`),
             hpBar(bug.condition, { label: `Condition ${Math.round(bug.condition * 100)}%` }))),
         el('div', { class: 'part-actions' },
           el('button', {
-            class: 'btn btn-small btn-danger', disabled: s.vehicles.length <= 1,
-            onclick: () => this.confirm(`Sell ${bug.name}?`, `You'll receive ${formatMoney(this.economy.vehicleSellPrice(bug))}.`,
+            class: 'btn btn-small btn-danger',
+            onclick: () => this.confirm(`Sell ${bug.name}?`, this.economy.sellWarning(bug),
               () => this.act(() => this.economy.sellVehicle(bug.id), (v) => `Sold for ${formatMoney(v)}`)),
           }, `Sell ${formatMoney(this.economy.vehicleSellPrice(bug))}`))))
       : spares.map((p) => this.sellPartCard(p));
@@ -531,7 +538,7 @@ export class TerminalUI {
         el('h3', {}, `Sell your vehicles (${spares.length})`),
         spares.length
           ? el('div', { class: 'card-grid' }, sellCards)
-          : el('p', { class: 'muted small' }, 'Only your hoist vehicle is in the hangar. Win or buy more to sell.'),
+          : el('p', { class: 'muted small' }, 'Your hangar is empty.'),
       ] : []),
     );
   }
@@ -632,7 +639,7 @@ export class TerminalUI {
       el('h3', {}, 'The Inter-Planetary Tournament'),
       el('p', {}, `${ECONOMY.TOURNAMENT_ROUNDS} rounds against the galaxy's finest. Win the final for the ${formatMoney(ECONOMY.TOURNAMENT_PRIZE)} grand prize — and the game. `,
         'No purses and no captured vehicles along the way.'),
-      el('p', { class: 'small muted' }, "Once you enter you're in the field: your vehicle is locked (no upgrades or part swaps), the Marketplace is closed and your manager can't bet. Field repairs only — with the cash you bring. Can't afford them? Tough luck."));
+      el('p', { class: 'small muted' }, "Once you enter you're in the field: you can't switch vehicles, the Marketplace is closed (no buying or selling) and your manager can't bet. You can swap in spare parts from your inventory and pay for repairs with the cash you bring. Can't afford them? Tough luck."));
 
 
     if (!eco.tournamentUnlocked) {
@@ -656,7 +663,7 @@ export class TerminalUI {
         el('p', { class: canPay ? '' : 'bad' }, `Entry fee: ${formatMoney(fee)}${canPay ? '' : ` — you have ${formatMoney(s.money)}`}`),
         el('button', {
           class: 'btn btn-fight', disabled: !bug?.isBattleReady || !canPay,
-          onclick: () => this.confirm('Enter the tournament?', `Pay the ${formatMoney(fee)} entry fee. ${bug.name} will be locked in: no upgrades or part swaps until you win or are eliminated.`,
+          onclick: () => this.confirm('Enter the tournament?', `Pay the ${formatMoney(fee)} entry fee. ${bug.name} will be locked in: no Marketplace and no switching vehicles until you win or are eliminated — only the spares in your inventory.`,
             () => this.act(() => eco.enterTournament(), 'Entered! Good luck, pilot.')),
         }, `ENTER · ${formatMoney(fee)}`)].filter(Boolean));
       return wrap;
