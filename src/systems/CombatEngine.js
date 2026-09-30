@@ -34,6 +34,8 @@ export class CombatEngine extends EventEmitter {
     this.eliminations = [];
     this.firstElimAt = null;
     this.result = null;
+    this.critRolled = new Set(); // vital parts already rolled for a call-off this match
+    this.critical = null;        // { bug, part } that got the fight called off
 
     player.resetForBattle(new Vector2D(-ARENA.R0 * 0.45, 0), 0);
     opponent.resetForBattle(new Vector2D(ARENA.R0 * 0.45, 0), Math.PI);
@@ -168,7 +170,12 @@ export class CombatEngine extends EventEmitter {
     if (this.phase === 'over') return;
     this.phase = 'over';
     for (const bug of this.bugs) for (const p of bug.parts) p.battleFloor = null;
-    this.result = { result, reason: REASONS[reasonKey] || reasonKey, reasonKey, time: this.time };
+    let reason = REASONS[reasonKey] || reasonKey;
+    const crit = this.critical;
+    if (reasonKey === 'destroyed' && crit) {
+      reason = `Called off — catastrophic damage: ${crit.bug.name}'s ${crit.part.name} at ${Math.round(crit.part.hpRatio * 100)}%`;
+    }
+    this.result = { result, reason, reasonKey, time: this.time };
     this.emit(EVENTS.MATCH_END, this.result);
   }
 
@@ -220,6 +227,26 @@ export class CombatEngine extends EventEmitter {
       this.emit(EVENTS.DAMAGE, { bug, amount: res.total, hits: res.hits, ...meta });
     }
     for (const part of res.broken) this.emit(EVENTS.PART_BROKEN, { bug, part });
+    this.checkCritical(bug, res);
+  }
+
+  /**
+   * The frame, a drive or the running gear dropping to 15%: half the time the
+   * stewards call the fight off for catastrophic damage. The part survives at
+   * that level (a mechanic can still repair it). One roll per part per match.
+   */
+  checkCritical(bug, res) {
+    if (!this.live || bug.out) return;
+    for (const { part } of res.hits) {
+      const vital = part === bug.chassis || part === bug.tires || bug.drives.includes(part);
+      if (!vital || part.hpRatio > MATCH.CRITICAL || this.critRolled.has(part.uid)) continue;
+      this.critRolled.add(part.uid);
+      if (Math.random() < MATCH.CALL_OFF_CHANCE) {
+        this.critical = { bug, part };
+        this.eliminate(bug, 'destroyed');
+        return;
+      }
+    }
   }
 
   // ───────────── Commands (player input & AI) ─────────────

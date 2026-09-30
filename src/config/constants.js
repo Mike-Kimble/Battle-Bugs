@@ -21,6 +21,8 @@ export const MATCH = Object.freeze({
   MAX_FRAME_DT: 0.1,
   DAMAGE_CAP: 0.425,    // most parts lose at most this share of max HP per match: from full, two fights to reach 15%
   FRAGILE_TIER: 2,      // …except armour and running gear at or below this tier, which can be wrecked in one
+  CRITICAL: 0.15,       // frame, drive or running gear at/below this share of max HP has stopped working…
+  CALL_OFF_CHANCE: 0.5, // …and there's this chance the fight is called off for catastrophic damage
 });
 
 export const PHYSICS = Object.freeze({
