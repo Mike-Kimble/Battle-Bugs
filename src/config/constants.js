@@ -65,7 +65,8 @@ export const ACTIONS = Object.freeze({
   SHOVE_IMPACT_MULT: 1.8,
   SHOVE_DURATION: 0.55,
   DASH_COST: 8,               // swipe handbrake turn
-  SPIN_COST: 14,              // twin drives: a swipe spins 360° on the spot instead
+  SPIN_COST: 28,              // twin drives: a swipe spins 360° on the spot instead
+  SPIN_COOLDOWN: 3,           // seconds before you can spin again
   SPIN_DURATION: 0.5,
   SPIN_REACH: 10,             // px beyond touching that the spin still catches the opponent
   SPIN_KNOCK: 1.6,            // knock-back speed as a share of the spinner's v_max: sends them ~1.3× as far as a ram

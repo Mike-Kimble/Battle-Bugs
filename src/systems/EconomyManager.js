@@ -186,7 +186,7 @@ export class EconomyManager {
   }
 
   repairPriority(bug) {
-    return [bug.chassis, ...bug.drives, bug.tires, bug.armor, ...bug.weapons].filter((p) => p && p.missingHp > 0);
+    return [bug.chassis, ...bug.drives, bug.tires, bug.armor, ...bug.weapons, ...bug.coolers, ...bug.mods].filter((p) => p && p.missingHp > 0);
   }
 
   equipFromInventory(bug, partUid, slot) {
@@ -726,7 +726,7 @@ export class EconomyManager {
   /** Pilots use the same logic as your mechanic: repair, then buy the optimal affordable part. */
   maintainPilot(p) {
     const bug = p.bug;
-    for (const part of [bug.chassis, ...bug.drives, bug.tires, bug.armor, ...bug.weapons].filter(Boolean)) {
+    for (const part of bug.parts) {
       const cost = Math.ceil(part.missingHp * (part.value / part.maxHp) * ECONOMY.REPAIR_RATE);
       if (cost <= p.purse) { p.purse -= cost; part.repair(); }
     }

@@ -279,6 +279,7 @@ export class CombatEngine extends EventEmitter {
    */
   spinAttack(bug, dir) {
     if (bug.actionCooldown > 0 || bug.spin) return false;
+    if ((bug.cooldowns.spin || 0) > 0) return this.fail(bug, 'SPIN RECHARGING');
     if (!this.canAct(bug, ACTIONS.SPIN_COST)) return false;
     const heading = Vector2D.fromAngle(bug.angle);
     const cw = heading.cross(dir.normalize()) >= 0 ? 1 : -1;
@@ -289,6 +290,7 @@ export class CombatEngine extends EventEmitter {
     bug.control.backing = false;
     bug.stamina -= ACTIONS.SPIN_COST;
     bug.actionCooldown = ACTIONS.SPIN_DURATION;
+    bug.cooldowns.spin = ACTIONS.SPIN_COOLDOWN;
     this.emit(EVENTS.ACTION, { bug, type: 'spin', dir: heading });
     return true;
   }
@@ -513,7 +515,7 @@ export class AIController {
     }
 
     // Twin drives: spin into them when they're close enough to catch — better pilots, more often.
-    if (me.twinDrive && dist < me.radius + foe.radius + ACTIONS.SPIN_REACH && sFrac > 0.3 && me.actionCooldown <= 0
+    if (me.twinDrive && dist < me.radius + foe.radius + ACTIONS.SPIN_REACH && sFrac > 0.4 && me.actionCooldown <= 0 && !(me.cooldowns.spin > 0)
       && Math.random() < 0.05 + 0.25 * difficulty) {
       engine.dash(me, toFoe.perp());
       return;
