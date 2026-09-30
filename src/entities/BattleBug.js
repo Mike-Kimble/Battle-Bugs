@@ -1,5 +1,6 @@
 import { PHYSICS, ACTIONS } from '../config/constants.js';
 import { Part, makeId } from './Part.js';
+import { THRUST_DRIVES } from '../config/partsData.js';
 import { PhysicsEngine } from '../physics/PhysicsEngine.js';
 import { Vector2D, clamp } from '../physics/Vector2D.js';
 
@@ -104,6 +105,11 @@ export class BattleBug {
         : type === 'enhancement' ? BattleBug.MOD_SLOTS * this.drives.length : 1;
   }
 
+  /** The part in a single slot of this type (castors and tyres share the running gear). */
+  slotPart(type) {
+    return type === 'castor' || type === 'tires' ? this.tires : type === 'engine' ? this.engine : this[type] ?? null;
+  }
+
   /** Twin drives must be the same motor type: can `part` go in drive bay `slot`? */
   driveFits(part, slot) {
     if (part.type !== 'engine' || this.driveSlots < 2) return true;
@@ -125,8 +131,13 @@ export class BattleBug {
     return max ? hp / max : 0;
   }
 
+  /** Running on castors with a drive that can't push them. */
+  get stranded() {
+    return this.tires?.type === 'castor' && !!this.engine && !THRUST_DRIVES.includes(this.engine.stats.kind);
+  }
+
   get isBattleReady() {
-    return !!this.engine && !!this.tires && !this.parts.some((p) => p.isScrap);
+    return !!this.engine && !!this.tires && !this.stranded && !this.parts.some((p) => p.isScrap);
   }
 
   battleIssues() {
@@ -136,7 +147,8 @@ export class BattleBug {
     if (!this.engine) issues.push('No engine fitted');
     if (!this.tires) issues.push('No tires fitted');
     if (this.engine?.isBroken) issues.push('Engine broken (no drive force)');
-    if (this.tires?.isBroken) issues.push('Tires shredded (no grip)');
+    if (this.tires?.isBroken) issues.push(this.tires.type === 'castor' ? 'Castors wrecked' : 'Tires shredded (no grip)');
+    if (this.stranded) issues.push("Castors aren't driven — they need a turbine or plasma drive");
     return issues;
   }
 
@@ -161,9 +173,13 @@ export class BattleBug {
     }
     switch (part.type) {
       case 'tires':
+      case 'castor': // castors share the running-gear slot
+        if (this.tires) displaced.push(this.tires);
+        this.tires = part;
+        break;
       case 'armor':
-        if (this[part.type]) displaced.push(this[part.type]);
-        this[part.type] = part;
+        if (this.armor) displaced.push(this.armor);
+        this.armor = part;
         break;
       case 'engine':
       case 'weapon':

@@ -1,6 +1,6 @@
 import { PHYSICS, STAMINA, EVENTS } from '../config/constants.js';
 import { Vector2D, clamp, approach, wrapAngle } from './Vector2D.js';
-import { INTERACTIONS, worksWith, JACKET_NAMES } from '../config/partsData.js';
+import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES } from '../config/partsData.js';
 
 /** Coolers a fan can blow on to boost. */
 const FAN_BOOSTS = ['water', 'oil', 'exchanger'];
@@ -114,14 +114,22 @@ export class PhysicsEngine {
 
     // Two motors through one set of running gear: each gives at most 70% of its power.
     const fDrive = forceSum * (drives.length > 1 ? PHYSICS.TWIN_POWER : 1) * m.force;
-    const fGripBase = tires ? tires.stats.mu * mass * PHYSICS.GRAVITY * tireRatio * m.grip : 0;
+    // Castors aren't driven: a thrust drive pushes the body straight (no traction
+    // limit), less the rolling resistance. What holds the line and brakes is
+    // `hold` — as slippery as the rolling resistance on most castors.
+    const castor = tires?.type === 'castor';
+    const thrust = castor && THRUST_DRIVES.includes(engine?.stats.kind);
+    const rollForce = castor ? tires.stats.roll * (2 - tireRatio) * mass * PHYSICS.GRAVITY : 0; // damage adds drag
+    const gripMu = castor ? (tires.stats.hold ?? tires.stats.roll) : tires?.stats.mu || 0;
+    const fGripBase = tires ? gripMu * mass * PHYSICS.GRAVITY * (castor ? 1 : tireRatio) * m.grip : 0;
     const fGrip = fGripBase * gripMod;
-    const fUsable = Math.min(fDrive, fGrip);
+    const push = (f) => (castor ? (thrust ? Math.max(0, f * PHYSICS.CASTOR_THRUST - rollForce) : 0) : Math.min(f, fGrip));
+    const fUsable = push(fDrive);
     const accel = mass > 0 ? (fUsable / mass) * m.accel : 0;
     // Back-to-front shells: the forward penalty is undone and then some in reverse.
     const back = chassis.stats.backwards;
     const fDriveRev = back ? (fDrive / back.fwd) * back.rev : fDrive;
-    const accelRev = mass > 0 ? (Math.min(fDriveRev, fGrip) / mass) * m.accel : 0;
+    const accelRev = mass > 0 ? (push(fDriveRev) / mass) * m.accel : 0;
 
     const wear = PHYSICS.TIRE_WEAR_FLOOR + (1 - PHYSICS.TIRE_WEAR_FLOOR) * tireRatio;
     const rpm = drives.length ? drives.reduce((t, d) => t + d.stats.rpm, 0) / drives.length : 0;
@@ -146,7 +154,9 @@ export class PhysicsEngine {
       drainMult: m.drain,
       interactions,
       turnRate: chassis.stats.turn * (0.55 + 0.45 * tireRatio),
-      tractionLimited: fGrip < fDrive,
+      tractionLimited: !castor && fGrip < fDrive,
+      castor,
+      pinned: castor && !!tires.stats.pinned,
     };
   }
 
@@ -258,6 +268,12 @@ export class PhysicsEngine {
           throttle = align > 0.2 ? align : 0;
         }
         throttle *= clamp(dist / PHYSICS.SLOW_RADIUS, 0.3, 1);
+        // Flux-pinned castors brake onto the spot: coast off the power once the
+        // stopping distance reaches the target.
+        if (s.pinned && s.mass > 0) {
+          const brake = (s.fGrip / s.mass) * PHYSICS.IDLE_BRAKE * 0.8;
+          if (bug.vel.length() > Math.sqrt(2 * brake * dist)) throttle = 0;
+        }
       }
     }
 

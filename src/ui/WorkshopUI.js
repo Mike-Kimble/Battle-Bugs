@@ -168,7 +168,9 @@ export function counterpart(bug, part) {
       || bug.weapons.find((w) => w.stats.class === part.stats.class)
       || bug.weapons[0] || null;
   }
-  return ['chassis', 'engine', 'tires', 'armor'].includes(part.type) ? bug[part.type] : null;
+  // Castors and tyres share the slot but only compare like with like.
+  if (part.type === 'tires' || part.type === 'castor') return bug.tires?.type === part.type ? bug.tires : null;
+  return ['chassis', 'engine', 'armor'].includes(part.type) ? bug.slotPart(part.type) : null;
 }
 
 export function partCard(part, economy, { actions = [], extra = null, compareTo, compareLegend } = {}) {
@@ -546,16 +548,18 @@ export class WorkshopUI {
       this.openRegionKey = null;
       return;
     }
-    if (this.openRegionKey !== key) this.regionTab = region.types[0];
+    // Open on what's fitted (castors, if the running gear is castors).
+    if (this.openRegionKey !== key) this.regionTab = region.types.includes(bug.tires?.type) ? bug.tires.type : region.types[0];
     this.openRegionKey = key;
     const locked = this.state.isLocked(bug);
     // Areas with several part types get a tab each (Inside: Drive · Cooling · Enhancement; Shell: Chassis · Armour).
     const type = region.types.includes(this.regionTab) ? this.regionTab : region.types[0];
-    const TAB_LABELS = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancement', chassis: 'Chassis', armor: 'Armour' };
+    const TAB_LABELS = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancement', chassis: 'Chassis', armor: 'Armour', tires: 'Tyres', castor: 'Castors' };
     const tabs = region.types.length > 1
       ? el('div', { class: 'subtabs region-tabs', role: 'tablist' }, region.types.map((t) => {
         const list = bug.slotList(t);
-        const count = list ? `${list.length}/${bug.slotCapacity(t)}` : (t === 'chassis' || bug[t] ? '✓' : '—');
+        const fitted = t === 'tires' || t === 'castor' ? bug.tires?.type === t : bug.slotPart(t);
+        const count = list ? `${list.length}/${bug.slotCapacity(t)}` : (t === 'chassis' || fitted ? '✓' : '—');
         return el('button', {
           class: `subtab${t === type ? ' active' : ''}`,
           role: 'tab',
@@ -592,7 +596,7 @@ export class WorkshopUI {
 
   renderSlot(bug, type, locked) {
     const inv = this.state.inventory.filter((p) => p.type === type);
-    const title = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancement', tires: 'Tires', armor: 'Armour', weapon: 'Weapons', chassis: 'Chassis' }[type];
+    const title = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancement', tires: 'Tyres', castor: 'Castors', armor: 'Armour', weapon: 'Weapons', chassis: 'Chassis' }[type];
     const section = el('section', { class: 'slot-section' }, el('h3', {}, title));
     const multi = bug.slotList(type); // weapons, cooling and enhancements have several slots
     const cap = bug.slotCapacity(type);
@@ -606,8 +610,16 @@ export class WorkshopUI {
       return section;
     }
 
-    const equipped = multi || [bug[type]].filter(Boolean);
-    if (!equipped.length) section.append(el('div', { class: 'empty-slot' }, type === 'weapon' && bug.weaponSlots === 0 ? 'No hardpoints on this frame' : 'Empty slot'));
+    // Tyres and castors share the running gear: each tab shows only its own kind.
+    const shared = type === 'tires' || type === 'castor';
+    const equipped = multi || [shared ? (bug.tires?.type === type ? bug.tires : null) : bug.slotPart(type)].filter(Boolean);
+    if (type === 'castor') {
+      section.append(el('p', { class: 'muted small' }, "Castors sit under the chassis, out of sight. They aren't driven — only a turbine or plasma drive can push you on them. Thrust drives accelerate hardest on castors, but you glide: to slow down, thrust the other way."));
+    }
+    if (!equipped.length) {
+      const other = shared && bug.tires ? ` — running on ${bug.tires.type === 'castor' ? 'castors' : 'tyres'} (${bug.tires.name}); fitting one swaps it out` : '';
+      section.append(el('div', { class: 'empty-slot' }, type === 'weapon' && bug.weaponSlots === 0 ? 'No hardpoints on this frame' : `Empty slot${other}`));
+    }
     for (const part of equipped) {
       section.append(partCard(part, this.economy, {
         ...this.refCompare(part),
@@ -662,7 +674,7 @@ export class WorkshopUI {
     }
     // Straight to the right aisle of the Marketplace (closed while you're in the tournament).
     if (this.onShop && !this.economy.inField) {
-      const label = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancements', tires: 'Running Gear', armor: 'Armour', weapon: 'Weapons' }[type];
+      const label = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancements', tires: 'Tyres', castor: 'Castors', armor: 'Armour', weapon: 'Weapons' }[type];
       section.append(el('button', {
         class: 'btn btn-small shop-link',
         onclick: () => { closeModal(); this.onShop(type); },

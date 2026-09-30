@@ -14,13 +14,13 @@ const TABS = [
 const MARKET_CATEGORIES = [
   ['engine', 'Propulsion', 'Motors & power cores. Power, revs (top speed) and cooling.'],
   ['weapon', 'Weapons', 'Hardpoint-mounted weapons. Every activation costs stamina.'],
-  ['tires', 'Running Gear', 'Tires & treads. Grip and speed.'],
+  ['tires', 'Running Gear', 'Tyres, treads & castors.'],
   ['chassis', 'Chassis', 'Whole vehicles — each frame comes with its fitted parts.'],
   ['armor', 'Armour', 'Plating that soaks impact damage before it reaches the hull.'],
   ['sell', 'Sell', 'Every spare component in your inventory, ready to sell.'],
 ];
 
-const PART_GROUPS = [['engine', 'Drive'], ['cooling', 'Cooling'], ['enhancement', 'Enhancements'], ['weapon', 'Weapons'], ['tires', 'Running Gear'], ['armor', 'Armour']];
+const PART_GROUPS = [['engine', 'Drive'], ['cooling', 'Cooling'], ['enhancement', 'Enhancements'], ['weapon', 'Weapons'], ['tires', 'Tyres'], ['castor', 'Castors'], ['armor', 'Armour']];
 
 /** Propulsion splits into three aisles. */
 const PROPULSION_SUBS = [
@@ -28,7 +28,14 @@ const PROPULSION_SUBS = [
   ['cooling', 'Cooling', 'Heat exchangers, misters, radiators, fans, jackets… Three cooling slots. Not everything suits every drive.'],
   ['enhancement', 'Enhancement', 'Turbos, nitro, afterburners, feeders… One enhancement slot. Not everything suits every drive.'],
 ];
-const isPropulsion = (cat) => PROPULSION_SUBS.some(([k]) => k === cat);
+/** Running Gear splits into tyres and castors. */
+const RUNNING_SUBS = [
+  ['tires', 'Tyres', 'Tyres & treads — driven wheels. Grip and speed.'],
+  ['castor', 'Castors', "Undriven castors that sit out of sight under the chassis. Turbine & plasma drives only: they accelerate hardest on castors, but you glide — thrust the other way to slow down."],
+];
+/** Categories with their own aisles, keyed by the top-level tab. */
+const SUB_AISLES = { engine: PROPULSION_SUBS, tires: RUNNING_SUBS };
+const aisleGroup = (cat) => Object.keys(SUB_AISLES).find((g) => SUB_AISLES[g].some(([k]) => k === cat)) || null;
 
 function streakText(n = 0) {
   if (n > 0) return `W${n}`;
@@ -424,7 +431,8 @@ export class TerminalUI {
     const manager = s.staff.manager;
     const active = s.activeBug;
     const cat = this.marketCat;
-    const [, catLabel, catBlurb] = PROPULSION_SUBS.find(([k]) => k === cat) || MARKET_CATEGORIES.find(([k]) => k === cat);
+    const group = aisleGroup(cat);
+    const [, catLabel, catBlurb] = (group ? SUB_AISLES[group] : MARKET_CATEGORIES).find(([k]) => k === cat);
     const pickKey = s.staff.mechanic && s.activeBug ? this.economy.mechanicAdvice(s.activeBug).pick?.key : null;
     const dealBadge = (l) => {
       const badges = [
@@ -445,16 +453,16 @@ export class TerminalUI {
       ? s.vehicles.filter((v) => !s.isLocked(v))
       : s.inventory.filter((p) => p.type === cat);
 
-    const on = (key) => key === cat || (key === 'engine' && isPropulsion(cat));
+    const on = (key) => key === cat || key === group;
     const topnav = el('div', { class: 'subtabs', role: 'tablist' }, MARKET_CATEGORIES.map(([key, label]) => el('button', {
       class: `subtab${on(key) ? ' active' : ''}`,
       role: 'tab',
       'aria-selected': on(key) ? 'true' : 'false',
-      onclick: () => { if (!(key === 'engine' && isPropulsion(cat))) this.marketCat = key; this.keepScroll = false; this.render(); },
-    }, label, el('span', { class: 'subtab-count' }, key === 'engine' ? PROPULSION_SUBS.reduce((n, [k]) => n + countFor(k), 0) : countFor(key)))));
-    // Propulsion's own aisles: Drive · Cooling · Enhancement.
-    const subnav = isPropulsion(cat)
-      ? el('div', {}, topnav, el('div', { class: 'subtabs subtabs-2', role: 'tablist' }, PROPULSION_SUBS.map(([key, label]) => el('button', {
+      onclick: () => { if (key !== group) this.marketCat = key; this.keepScroll = false; this.render(); },
+    }, label, el('span', { class: 'subtab-count' }, SUB_AISLES[key] ? SUB_AISLES[key].reduce((n, [k]) => n + countFor(k), 0) : countFor(key)))));
+    // Aisles within a category: Propulsion (Drive · Cooling · Enhancement), Running Gear (Tyres · Castors).
+    const subnav = group
+      ? el('div', {}, topnav, el('div', { class: 'subtabs subtabs-2', role: 'tablist' }, SUB_AISLES[group].map(([key, label]) => el('button', {
         class: `subtab${key === cat ? ' active' : ''}`,
         role: 'tab',
         'aria-selected': key === cat ? 'true' : 'false',

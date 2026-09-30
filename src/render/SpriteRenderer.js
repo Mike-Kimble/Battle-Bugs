@@ -141,6 +141,7 @@ export class SpriteRenderer {
 
   drawTires(ctx, bug, r, time) {
     const tires = bug.tires;
+    if (tires?.type === 'castor') return; // tucked under the chassis — you can't see them
     ctx.fillStyle = OUTLINE;
     if (!tires) {
       // Bare axles

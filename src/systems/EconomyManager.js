@@ -1,6 +1,6 @@
 import { ECONOMY, PILOT_SKILL, winRate } from '../config/constants.js';
 import {
-  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, RIVAL_EXCUSES, CHALLENGER_ROSTER, RARITY, worksWith,
+  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, RIVAL_EXCUSES, CHALLENGER_ROSTER, RARITY, worksWith, THRUST_DRIVES,
 } from '../config/partsData.js';
 import { BattleBug } from '../entities/BattleBug.js';
 import { Part, makeId } from '../entities/Part.js';
@@ -255,7 +255,7 @@ export class EconomyManager {
     if (!bug) return false;
     const list = bug.slotList(type);
     if (list) return list.length < bug.slotCapacity(type);
-    return ['engine', 'tires', 'armor'].includes(type) && !bug[type];
+    return ['engine', 'tires', 'castor', 'armor'].includes(type) && !bug.slotPart(type);
   }
 
   buyVehicleListing(listingId) {
@@ -441,7 +441,8 @@ export class EconomyManager {
       engine: motor,
       // Twin-bay shells usually carry a matching second motor.
       engine2: PARTS[chassis].stats.drives > 1 && chance(0.4 + tier * 0.1) ? motor : null,
-      tires: pickPartKey('tires', tier),
+      // Some thrust-drive builds glide on castors instead of tyres.
+      tires: THRUST_DRIVES.includes(PARTS[motor].stats.kind) && chance(0.3) ? pickPartKey('castor', tier) : pickPartKey('tires', tier),
       armor: tier <= 1 && chance(0.4) ? null : pickPartKey('armor', tier),
       weapons,
       condition,
@@ -844,6 +845,7 @@ export class EconomyManager {
     for (const type of types) {
       const t = chance(0.12) ? 5 : tierCap;
       const pool = shopKeys(type).filter((k) => PARTS[k].tier <= t);
+      if (!pool.length) continue;
       const key = weightedPick(pool);
       const condition = chance(0.45) ? 1 : rand(0.55, 0.95);
       const part = Part.create(key, condition);
@@ -1341,7 +1343,7 @@ export class EconomyManager {
       if (!best || gain > best.gain) best = { key, gain };
     }
     if (!best) return null;
-    const current = bug.slotList(type) ? null : bug[type];
+    const current = bug.slotList(type) ? null : bug.slotPart(type);
     if (current?.key === best.key) return null; // already fitted
     return best.gain > 0.5 ? best.key : null;
   }
@@ -1355,8 +1357,11 @@ export class EconomyManager {
     const needs = [];
     const add = (type, reason, urgent = true) => needs.push({ type, reason, urgent });
     if (!bug.engine) add('engine', "there's no motor in her");
-    if (s.fDrive > s.fGrip * 1.05) add('tires', 'traction-limited — the motor out-muscles your tires');
+    if (bug.stranded) add('tires', "castors aren't driven — this motor needs proper tyres");
+    else if (s.castor) add('castor', 'less rolling resistance means harder acceleration', false);
+    else if (s.fDrive > s.fGrip * 1.05) add('tires', 'traction-limited — the motor out-muscles your tires');
     else if (s.fGrip > s.fDrive * 1.25) add('engine', 'power-limited — your tires can take more than the motor gives');
+    if (!s.castor && THRUST_DRIVES.includes(bug.engine?.stats.kind)) add('castor', 'a thrust drive accelerates hardest on castors', false);
     if (!bug.armor) add('armor', "you've got no armour — every hit goes straight to the hull");
     if (bug.weapons.length < bug.weaponSlots) add('weapon', `you've got ${bug.weaponSlots - bug.weapons.length} empty hardpoint${bug.weaponSlots - bug.weapons.length > 1 ? 's' : ''}`);
     if (s.cooling < 12) add('cooling', "your motor runs hot — you'll stall in long pushes");

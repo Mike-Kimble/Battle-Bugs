@@ -10,6 +10,9 @@
  *   chassis: radius, staminaMax, weaponSlots, turn (rad/s), shape, bio?
  *   engine:  force (F_base), rpm, cooling (R_cool, stamina/s while idle), kind
  *   tires:   mu (μ), radius (tire radius → top speed), kind
+ *   castor:  roll (rolling resistance, μ-like), hold? (braking/sideways grip, defaults to roll),
+ *            radius (→ top speed). Castors share the running-gear slot, aren't driven,
+ *            and only move bugs with a thrust drive.
  *   armor:   absorb (fraction of impact soaked by plating at full HP), heat (traps engine heat; <0 vents it)
  *   weapon:  class, effect, cost (stamina), range, arc (deg), cooldown, + effect params
  */
@@ -21,6 +24,9 @@ const armor = (name, tier, rarity, value, mass, maxHp, stats, look, description)
 const weapon = (name, tier, rarity, value, mass, maxHp, stats, look, description) => ({ type: 'weapon', name, tier, rarity, value, mass, maxHp, stats, look, description });
 const cooler = (name, tier, rarity, value, mass, stats, description) => ({ type: 'cooling', name, tier, rarity, value, mass, maxHp: 40 + tier * 15, stats, description });
 const enhance = (name, tier, rarity, value, mass, stats, description) => ({ type: 'enhancement', name, tier, rarity, value, mass, maxHp: 40 + tier * 15, stats, description });
+/** Drives that push with thrust rather than turning wheels — the only ones that can use castors. */
+export const THRUST_DRIVES = Object.freeze(['turbine', 'plasma']);
+const castor = (name, tier, rarity, value, mass, maxHp, stats, description) => ({ type: 'castor', name, tier, rarity, value, mass, maxHp, stats: { ...stats, kind: 'castor', works: THRUST_DRIVES }, description });
 // Drive types a part works with (omit `works` for "any").
 const HOT = ['combustion', 'torque'];
 const NOT_ELECTRIC = ['combustion', 'torque', 'turbine', 'plasma', 'fusion', 'bio'];
@@ -72,7 +78,7 @@ export const PARTS = Object.freeze({
 
   // ───────────── TIRES (running gear) ─────────────
   bald_rollers: tires('Bald Rollers', 1, C, 40, 12, 50, { mu: 0.8, radius: 7, kind: 'wheel' }, { kind: 'wheels', body: '#4a4552', stripe: '#5d5866', gap: 0 }, 'Tread is a distant memory.'),
-  junk_casters: tires('Junk Casters', 1, C, 45, 10, 45, { mu: 0.76, radius: 7.5, kind: 'wheel' }, { kind: 'wheels', body: '#5a5462', stripe: '#77707e', gap: 0 }, 'Office-chair wheels. They go where they like.'),
+  junk_casters: tires('Trolley Wheels', 1, C, 45, 10, 45, { mu: 0.76, radius: 7.5, kind: 'wheel' }, { kind: 'wheels', body: '#5a5462', stripe: '#77707e', gap: 0 }, 'Office-chair wheels. They go where they like.'),
   rubber_nubs: tires('Rubber Nubs', 1, U, 70, 14, 55, { mu: 0.88, radius: 6.5, kind: 'knobby' }, { kind: 'wheels', body: '#2a2630', stripe: '#46404e', gap: 4 }, 'Stubby lugs that bite a little.'),
   knobby_treads: tires('Knobby Treads', 2, C, 160, 18, 70, { mu: 1.05, radius: 7, kind: 'knobby' }, { kind: 'wheels', body: '#1d1a22', stripe: '#3a3542', gap: 5 }, 'Chunky lugs that bite the dohyo.'),
   racing_slicks: tires('Racing Slicks', 2, C, 200, 14, 50, { mu: 0.9, radius: 9, kind: 'slick' }, { kind: 'wheels', body: '#141218', stripe: '#c83a3a', gap: 0, big: true }, 'Big diameter, big top speed.'),
@@ -91,6 +97,20 @@ export const PARTS = Object.freeze({
   comet_slicks: tires('Comet Slicks', 5, E, 1600, 14, 70, { mu: 1.25, radius: 10, kind: 'slick' }, { kind: 'wheels', body: '#101018', stripe: '#7afcff', gap: 0, big: true }, 'Leave a little tail of sparks. Very fast.'),
   void_grip: tires('Void-Grip Pads', 5, L, 2400, 16, 100, { mu: 1.8, radius: 9, kind: 'pads' }, { kind: 'track', body: '#10081a', stripe: '#c77dff', gap: 7 }, 'They grip the ring by bending space slightly. Probably fine.'),
   phase_wheels: tires('Phase Wheels', 5, L, 2300, 15, 100, { mu: 1.5, radius: 9.5, kind: 'wheel' }, { kind: 'wheels', body: '#141024', stripe: '#ffffff', gap: 0, big: true }, 'Half here, half somewhere else. The half here grips beautifully.'),
+
+  // ───────────── CASTORS (undriven running gear, hidden under the chassis) ─────────────
+  // Thrust drives only. Lower rolling resistance = quicker off the line, but you
+  // glide: the bug keeps going until you thrust the other way.
+  // `roll` is drag against the thrust; `hold` is what keeps the line and brakes (tyres run ~1–1.8).
+  swivel_castors: castor('Swivel Castors', 2, C, 150, 10, 50, { roll: 0.1, hold: 0.3, radius: 8 }, 'Office-chair castors under a thrust bug. Cheap, squeaky, still slippery.'),
+  ball_transfers: castor('Ball Transfer Units', 2, U, 230, 12, 60, { roll: 0.085, hold: 0.25, radius: 8.5 }, 'Steel balls in cups. Rolls any way you point it — and some ways you don\'t.'),
+  nylon_glides: castor('Nylon Glides', 3, C, 380, 8, 55, { roll: 0.07, hold: 0.2, radius: 9 }, 'Low-friction pucks. Like driving on a freshly mopped floor.'),
+  bearing_array: castor('Ball-Bearing Array', 3, U, 520, 14, 70, { roll: 0.055, hold: 0.16, radius: 9.5 }, 'Hundreds of tiny bearings. Very little holds you back.'),
+  air_skirt: castor('Air-Cushion Skirt', 4, R, 900, 12, 65, { roll: 0.04, hold: 0.1, radius: 10 }, 'Rides on a film of air. Brakes? What brakes?'),
+  maglev_pucks: castor('Mag-Lev Pucks', 4, E, 1300, 10, 70, { roll: 0.025, hold: 0.08, radius: 10.5 }, 'Floats a finger-width off the ring. Stops about as well as a comet.'),
+  // The Superconductor Array is flux-pinned to the ring: frictionless off the line, yet it
+  // holds its line and brakes onto the spot you point at (`pinned`).
+  superconductor_array: castor('Superconductor Array', 5, L, 2600, 9, 90, { roll: 0.005, hold: 1.1, pinned: true, radius: 11 }, 'Chilled to near absolute zero and flux-pinned to the ring. Almost no drag, so it leaps off the line — yet it holds its line and stops right where you point it.'),
 
   // ───────────── ARMOUR ─────────────
   tin_foil_wrap: armor('Tin-Foil Wrap', 1, C, 50, 8, 40, { absorb: 0.22, heat: 0 }, 'scrap_plating', 'Blocks mind-rays. Blocks very little else.'),
@@ -206,6 +226,16 @@ export const RARITY = Object.freeze({
  * Only a mechanic will point these out — without one you just see the numbers.
  */
 export const INTERACTIONS = Object.freeze([
+  // Castors: undriven, so only thrust drives can use them.
+  { id: 'castor_thrust', good: true, mods: {},
+    when: (b) => b.tires?.type === 'castor' && THRUST_DRIVES.includes(b.engine?.stats.kind),
+    text: 'Thrust on castors — nothing holding you back but rolling resistance. You\'ll glide like you\'re on ice: to slow down, thrust the other way.' },
+  { id: 'castor_nodrive', good: false, mods: {},
+    when: (b) => b.tires?.type === 'castor' && !!b.engine && !THRUST_DRIVES.includes(b.engine.stats.kind),
+    text: 'Castors aren\'t driven — that motor can\'t move you on them. Fit a turbine or plasma drive, or proper tyres.' },
+  { id: 'thrust_wheels', good: false, mods: {},
+    when: (b) => THRUST_DRIVES.includes(b.engine?.stats.kind) && !!b.tires && b.tires.type !== 'castor',
+    text: 'A thrust drive pushing through wheels — on castors it would accelerate harder (but slide more).' },
   // Twin drive bays.
   { id: 'twin_empty', good: false, mods: {},
     when: (b) => (b.chassis?.stats.drives || 1) > 1 && b.drives?.length === 1,
