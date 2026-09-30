@@ -92,56 +92,109 @@ export class ArenaRenderer {
   }
 
   /**
-   * @param {number} radius current R(t)
-   * @param {number} time elapsed fight time
-   * @param {boolean} shrinking
+   * Draw the current dohyo: the classic shrinking circle, the donut with its
+   * growing hole, the tilted oval (thinner and steeper over time, with the
+   * downhill side marked), or the turntable (its floor turning).
+   * @param {import('../systems/Dohyo.js').Dohyo} dohyo
    */
-  drawRing(ctx, radius, time, shrinking) {
-    if (radius <= 0.5) return;
+  drawRing(ctx, dohyo, time) {
+    const R = dohyo.radius(time);
+    if (R <= 0.5) return;
     const R0 = ARENA.R0;
+    const changing = dohyo.changing(time);
+    const flashOn = changing && Math.floor(time * ARENA.FLASH_HZ * 2) % 2 === 0;
+    const sq = dohyo.squash(time);
+    const hole = dohyo.hole(time);
 
-    // Shadow drop beneath the platform
+    // Shape helpers: the outer edge is an ellipse (a circle unless tilted).
+    const outer = (r, dx = 0, dy = 0) => { ctx.ellipse(dx, dy, r, r * sq, 0, 0, Math.PI * 2); };
+
+    // Shadow and side wall. On a tilted ring the wall shows on the low side.
+    const low = dohyo.tilted ? (dohyo.kind === 3 ? 1 : -1) : 1;
+    const wall = dohyo.tilted ? 8 + dohyo.slope(time) * 40 : 8;
     ctx.fillStyle = '#000000';
     ctx.globalAlpha = 0.5;
     ctx.beginPath();
-    ctx.arc(8, 14, radius + 6, 0, Math.PI * 2);
+    outer(R + 6, 8, 14 * low);
     ctx.fill();
     ctx.globalAlpha = 1;
-
-    // Platform side wall
     ctx.fillStyle = '#16111f';
     ctx.beginPath();
-    ctx.arc(0, 8, radius + 2, 0, Math.PI * 2);
+    outer(R + 2, 0, wall * low);
     ctx.fill();
 
+    // Floor (clipped to the ring, minus the donut hole; the turntable's floor turns).
     ctx.save();
     ctx.beginPath();
-    ctx.arc(0, 0, radius, 0, Math.PI * 2);
-    ctx.clip();
+    outer(R);
+    if (hole > 0) ctx.arc(0, 0, hole, 0, Math.PI * 2, true);
+    ctx.clip('evenodd');
+    ctx.save();
+    if (dohyo.kind === 5) ctx.rotate(dohyo.angle);
+    if (dohyo.tilted) ctx.scale(1, sq);
     ctx.drawImage(this.floor, -R0, -R0, R0 * 2, R0 * 2);
     ctx.restore();
+    if (dohyo.tilted) {
+      // Shade uphill lighter, downhill darker, with chevrons pointing down the slope.
+      const g = ctx.createLinearGradient(0, -R * sq * low, 0, R * sq * low);
+      g.addColorStop(0, 'rgba(255,255,255,0.06)');
+      g.addColorStop(1, `rgba(0,0,0,${0.15 + dohyo.slope(time) * 0.5})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(-R, -R, R * 2, R * 2);
+      ctx.strokeStyle = 'rgba(255, 210, 120, 0.25)';
+      ctx.lineWidth = 6;
+      for (const x of [-R * 0.55, 0, R * 0.55]) {
+        for (const y of [-R * sq * 0.45, R * sq * 0.1]) {
+          ctx.beginPath();
+          ctx.moveTo(x - 18, y - 10 * low);
+          ctx.lineTo(x, y + 8 * low);
+          ctx.lineTo(x + 18, y - 10 * low);
+          ctx.stroke();
+        }
+      }
+    }
+    if (dohyo.kind === 5) {
+      // Spokes that visibly sweep round.
+      ctx.strokeStyle = 'rgba(205, 187, 138, 0.18)';
+      ctx.lineWidth = 8;
+      for (let i = 0; i < 4; i++) {
+        const a = dohyo.angle + (i * Math.PI) / 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * 40, Math.sin(a) * 40);
+        ctx.lineTo(Math.cos(a) * (R - 20), Math.sin(a) * (R - 20));
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
 
-    // Tawara (rope ring) at the edge
-    const flashOn = shrinking && Math.floor(time * ARENA.FLASH_HZ * 2) % 2 === 0;
-    ctx.lineWidth = 10;
-    ctx.strokeStyle = flashOn ? '#ff3b3b' : shrinking ? '#7a2230' : '#cdbb8a';
-    ctx.beginPath();
-    ctx.arc(0, 0, radius - 5, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = flashOn ? '#ffd0d0' : '#8a7a58';
-    ctx.setLineDash([6, 8]);
-    ctx.beginPath();
-    ctx.arc(0, 0, radius - 5, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    // Tawara (rope ring) at the edge — and round the donut hole.
+    const rope = (draw) => {
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = flashOn ? '#ff3b3b' : changing ? '#7a2230' : '#cdbb8a';
+      ctx.beginPath(); draw(); ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = flashOn ? '#ffd0d0' : '#8a7a58';
+      ctx.setLineDash([6, 8]);
+      ctx.beginPath(); draw(); ctx.stroke();
+      ctx.setLineDash([]);
+    };
+    rope(() => outer(R - 5));
+    if (hole > 0) {
+      // The hole drops away into the void.
+      ctx.fillStyle = '#07060d';
+      ctx.beginPath();
+      ctx.arc(0, 0, hole, 0, Math.PI * 2);
+      ctx.fill();
+      rope(() => ctx.arc(0, 0, hole + 5, 0, Math.PI * 2));
+    }
 
-    if (shrinking) {
-      // Red hazard glow just inside the edge
+    if (changing) {
+      // Red hazard glow just inside whichever edge is closing in.
       ctx.strokeStyle = `rgba(255, 60, 60, ${flashOn ? 0.35 : 0.12})`;
       ctx.lineWidth = 26;
       ctx.beginPath();
-      ctx.arc(0, 0, Math.max(0, radius - 22), 0, Math.PI * 2);
+      if (dohyo.kind === 2) ctx.arc(0, 0, hole + 22, 0, Math.PI * 2);
+      else outer(Math.max(0, R - 22));
       ctx.stroke();
     }
   }

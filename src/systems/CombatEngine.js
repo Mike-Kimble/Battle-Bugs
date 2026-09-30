@@ -1,6 +1,7 @@
 import { ARENA, MATCH, PHYSICS, ACTIONS, EVENTS, PILOT_SKILL } from '../config/constants.js';
 import { PILOT_STYLES, heavyGear } from '../config/partsData.js';
 import { EventEmitter } from '../core/EventEmitter.js';
+import { Dohyo } from './Dohyo.js';
 import { PhysicsEngine } from '../physics/PhysicsEngine.js';
 import { Vector2D, wrapAngle, clamp } from '../physics/Vector2D.js';
 
@@ -21,8 +22,10 @@ export class CombatEngine extends EventEmitter {
   /**
    * @param {{player: BattleBug, opponent: BattleBug, difficulty?: number}} opts
    */
-  constructor({ player, opponent, difficulty = 0.5, style = null }) {
+  /** @param {{dohyo?: Dohyo}} opts dohyo: which ring (defaults to the classic) */
+  constructor({ player, opponent, difficulty = 0.5, style = null, dohyo = null }) {
     super();
+    this.dohyo = dohyo || new Dohyo(1);
     this.player = player;
     this.opponent = opponent;
     this.bugs = [player, opponent];
@@ -53,24 +56,19 @@ export class CombatEngine extends EventEmitter {
     this.on(EVENTS.COLLISION, (c) => this.onCollision(c));
   }
 
-  /** R(t): static for 30 s, then linear collapse to 0 at 2:00. */
-  static radiusAt(t) {
-    if (t <= ARENA.STATIC_UNTIL) return ARENA.R0;
-    if (t >= ARENA.COLLAPSE_AT) return 0;
-    return ARENA.R0 * (1 - (t - ARENA.STATIC_UNTIL) / (ARENA.COLLAPSE_AT - ARENA.STATIC_UNTIL));
-  }
 
-  get arenaRadius() { return CombatEngine.radiusAt(this.time); }
-  get shrinking() { return this.time > ARENA.STATIC_UNTIL && this.time < ARENA.COLLAPSE_AT; }
+  get arenaRadius() { return this.dohyo.radius(this.time); }
+  /** The ring is getting harder (shrinking, hole growing, tilting, spinning up). */
+  get shrinking() { return this.dohyo.changing(this.time); }
+  onRing(pos) { return this.dohyo.onRing(pos, this.time); }
+  edgeDistance(pos) { return this.dohyo.edgeDistance(pos, this.time); }
   get live() { return this.phase === 'fight' || this.phase === 'resolving'; }
 
   other(bug) { return bug === this.player ? this.opponent : this.player; }
 
   /** Pull a point back inside the current ring, leaving `margin` px to the edge. */
   clampInside(point, margin = 0) {
-    const limit = Math.max(0, this.arenaRadius - margin);
-    const d = point.length();
-    return d > limit ? point.scale(limit / d) : point;
+    return this.dohyo.clampInside(point, margin, this.time);
   }
 
   // ───────────── Main update ─────────────
@@ -87,6 +85,7 @@ export class CombatEngine extends EventEmitter {
     if (this.live) this.time += dt;
     if (this.phase === 'fight') this.ai.update(dt, this);
 
+    if (this.live) this.dohyo.applyForces(this.bugs, dt, this.time); // slopes and turntables
     this.physics.step(this.bugs, dt, { puddles: this.puddles });
     if (this.live) for (const bug of this.bugs) { this.spinHit(bug); this.shaftStrain(bug, dt); }
     this.updateFallen(dt);
@@ -119,7 +118,7 @@ export class CombatEngine extends EventEmitter {
     for (const bug of this.bugs) {
       if (bug.out) continue;
       let reason = null;
-      if (bug.pos.length() > R) reason = 'ringout';
+      if (this.dohyo.isOut(bug.pos, this.time)) reason = 'ringout';
       else if (bug.chassis.isBroken) reason = 'destroyed';
       else if (bug.stallStrikes >= MATCH.STALL_OUT_STRIKES) reason = 'stallout';
       if (reason) this.eliminate(bug, reason);
@@ -274,9 +273,11 @@ export class CombatEngine extends EventEmitter {
 
   /** Steer toward a point (tap or held/dragged finger). Cancels any swipe cruise. */
   /** @param {{backing?: boolean}} opts backing: drive there tail first */
-  moveTo(bug, point, { backing = false } = {}) {
+  moveTo(bug, point, { backing = false, route = false } = {}) {
     if (!this.live || bug.out) return;
-    bug.control.target = Vector2D.from(point);
+    // AI pilots route round the donut hole rather than driving into it.
+    const p = Vector2D.from(point);
+    bug.control.target = route ? this.dohyo.route(bug.pos, p, bug.radius * 1.5, this.time) : p;
     bug.control.cruise = null;
     bug.control.backing = backing;
   }
@@ -537,24 +538,27 @@ export class AIController {
   }
 
   update(dt, engine) {
+    this.engine = engine;
     const { me, foe, difficulty, style } = this;
     if (me.out || me.stalled || foe.out) return;
     this.think -= dt;
     if (this.think > 0) return;
     this.think = this.reaction * (0.7 + Math.random() * 0.6);
 
-    const R = engine.arenaRadius;
-    const myD = me.pos.length();
-    const foeD = foe.pos.length();
+    // Distances measured as "how far towards an edge", so the same rules work on every dohyo.
+    const R = ARENA.R0;
+    const myD = R - engine.edgeDistance(me.pos);
+    const foeD = R - engine.edgeDistance(foe.pos);
     const sFrac = me.stamina / me.stats.staminaMax;
     const toFoe = foe.pos.sub(me.pos);
     const dist = toFoe.length();
 
     // 1. Edge danger: head for the middle.
     if (myD > R - me.radius * 1.7) {
-      engine.moveTo(me, me.pos.scale(0.25));
+      const safe = engine.dohyo.safePoint(me.pos, engine.time);
+      engine.moveTo(me, safe, { route: true });
       if (dist < 120 && sFrac > 0.3 && !me.twinDrive && Math.random() < difficulty * 0.5 * style.dodge) {
-        engine.dash(me, me.pos.negate().normalize());
+        engine.dash(me, safe.sub(me.pos).normalize());
       }
       return;
     }
@@ -581,17 +585,17 @@ export class AIController {
     });
 
     // 4. Positioning, by temperament.
-    const outward = foeD > 1 ? foe.pos.normalize() : toFoe.normalize();
+    const outward = foe.pos.length() > 1 ? engine.dohyo.outward(foe.pos, engine.time) : toFoe.normalize();
     const longGun = me.weapons.some((w) => !w.isBroken && w.stats.range >= 120);
     if (style.keepAway && longGun && dist < 200) {
       // Zappers hold at weapon range.
-      engine.moveTo(me, engine.clampInside(foe.pos.sub(toFoe.normalize().scale(200)), me.radius * 1.5));
+      engine.moveTo(me, engine.clampInside(foe.pos.sub(toFoe.normalize().scale(200)), me.radius * 1.5), { route: true });
     } else if (style.holdCenter && foeD < R * 0.6 && dist > 170) {
       // Turtles sit near the middle and wait for you to come to them (then brace and push back).
-      engine.moveTo(me, engine.clampInside(foe.pos.scale(0.35), me.radius * 1.5), { backing: this.backs });
+      engine.moveTo(me, engine.clampInside(engine.dohyo.safePoint(foe.pos, engine.time), me.radius * 1.5), { backing: this.backs, route: true });
     } else {
       // Everyone else closes in, aiming past the opponent to shove them outward.
-      engine.moveTo(me, engine.clampInside(foe.pos.add(outward.scale(45)), me.radius * 1.2), { backing: this.backs });
+      engine.moveTo(me, engine.clampInside(foe.pos.add(outward.scale(45)), me.radius * 1.2), { backing: this.backs, route: true });
     }
 
     // 5. Rams & shoves when lined up.
@@ -615,10 +619,11 @@ export class AIController {
     }
   }
 
-  /** Sidestep perpendicular to the threat, preferring the side toward centre. */
+  /** Sidestep perpendicular to the threat, towards the safe part of the ring. */
   dodgeDir(toFoe) {
     let d = toFoe.perp().normalize();
-    if (d.dot(this.me.pos) > 0) d = d.negate();
+    const safe = this.engine ? this.engine.dohyo.safePoint(this.me.pos, this.engine.time).sub(this.me.pos) : this.me.pos.negate();
+    if (d.dot(safe) < 0) d = d.negate();
     return d;
   }
 

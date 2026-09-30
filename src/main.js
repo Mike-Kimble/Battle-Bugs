@@ -2,6 +2,7 @@ import { ECONOMY, EVENTS, MATCH, PHYSICS, INPUT, WEAPON_CLASSES } from './config
 import { GameState } from './core/GameState.js';
 import { Vector2D } from './physics/Vector2D.js';
 import { CombatEngine } from './systems/CombatEngine.js';
+import { Dohyo } from './systems/Dohyo.js';
 import { EconomyManager, formatMoney } from './systems/EconomyManager.js';
 import { InputManager } from './systems/InputManager.js';
 import { CanvasRenderer } from './render/CanvasRenderer.js';
@@ -58,7 +59,7 @@ class App {
       screenToWorld: (x, y) => this.renderer.screenToWorld(x, y),
       clientToCss: (x, y) => this.renderer.clientToCss(x, y),
       hitTest: (w) => this.hitTest(w),
-      onRing: (w) => !this.engine || w.length() <= this.engine.arenaRadius,
+      onRing: (w) => !this.engine || this.engine.onRing(w),
     });
     this.bindInput();
 
@@ -141,7 +142,8 @@ class App {
     this.state.save();
 
     this.match = { challenger, tournament, stake, bet, player, moneyBefore, endTimer: null, banner: null };
-    this.engine = new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty, style: challenger.style });
+    // Every bout is on one of the five dohyo, at random.
+    this.engine = new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty, style: challenger.style, dohyo: Dohyo.random() });
     this.wireEngine(this.engine);
 
     $('#workshop-screen').classList.remove('active');
@@ -278,7 +280,7 @@ class App {
     const t = performance.now() / 1000;
     const b = this.renderer.beginWorld(realDt);
     this.arena.drawBackground(b, t);
-    this.arena.drawRing(b, engine.arenaRadius, engine.time, engine.shrinking);
+    this.arena.drawRing(b, engine.dohyo, engine.time);
     this.arena.drawPuddles(b, engine.puddles, t);
     const order = [...engine.bugs].sort((a, c) => (c.outReason === 'ringout') - (a.outReason === 'ringout'));
     for (const bug of order) this.sprite.drawBug(b, bug, { time: t });

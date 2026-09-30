@@ -115,9 +115,7 @@ export class CanvasRenderer {
     ctx.fillText(`${mm}:${ss}`, W / 2, 24);
     ctx.font = '9px "Press Start 2P", ui-monospace, monospace';
     ctx.fillStyle = warn ? '#ff7a7a' : '#8f86a8';
-    const phaseText = engine.time < ARENA.STATIC_UNTIL
-      ? `RING SHRINKS IN ${Math.ceil(ARENA.STATIC_UNTIL - engine.time)}s`
-      : engine.time < ARENA.COLLAPSE_AT ? `DOHYO COLLAPSING · R ${Math.round(engine.arenaRadius)}` : 'COLLAPSED';
+    const phaseText = engine.dohyo.status(engine.time);
     ctx.fillText(phaseText, W / 2, 48);
 
     const panelW = Math.min(260, (W - 150) / 2);
