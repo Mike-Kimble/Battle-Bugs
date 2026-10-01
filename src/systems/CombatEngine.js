@@ -1,5 +1,5 @@
 import { ARENA, MATCH, PHYSICS, ACTIONS, EVENTS, PILOT_SKILL } from '../config/constants.js';
-import { PILOT_STYLES, heavyGear } from '../config/partsData.js';
+import { PILOT_STYLES, heavyGear, turbineLine } from '../config/partsData.js';
 import { EventEmitter } from '../core/EventEmitter.js';
 import { Dohyo } from './Dohyo.js';
 import { PhysicsEngine } from '../physics/PhysicsEngine.js';
@@ -355,8 +355,8 @@ export class CombatEngine extends EventEmitter {
 
   /**
    * A chain wears when it drives heavy tyres or tracks. A Standard Drive Shaft or
-   * chain can't take turbine revs: it snaps halfway through
-   * the match, leaving only the turbine's thrust. (Turbines want a High-Speed Shaft.)
+   * chain can't take full turbine revs: it snaps halfway through the match —
+   * unless it's on the wheel side of a gearbox behind a High-Speed Shaft.
    */
   shaftStrain(bug, dt) {
     if (bug.out) return;
@@ -368,7 +368,8 @@ export class CombatEngine extends EventEmitter {
       if (r.broke) this.emit(EVENTS.PART_BROKEN, { bug, part: chain });
     }
     if (this.time < MATCH.DURATION / 2 || bug.engine?.stats.kind !== 'turbine') return;
-    for (const shaft of bug.drivetrain.filter((p) => (p.stats.shaft === 'std' || p.stats.shaft === 'chain') && !p.isBroken)) {
+    // A plain shaft lasts on the wheel side of the full line (High-Speed Shaft → gearbox → shaft).
+    for (const shaft of bug.drivetrain.filter((p) => (p.stats.shaft === 'std' || p.stats.shaft === 'chain') && !p.isBroken && !turbineLine(bug, p.bay || 0).complete)) {
       shaft.hp = Math.min(shaft.hp, shaft.maxHp * 0.3);
       shaft.failed = true;
       this.emit(EVENTS.PART_BROKEN, { bug, part: shaft, breakdown: true });

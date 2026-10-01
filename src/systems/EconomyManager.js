@@ -1,6 +1,6 @@
 import { ECONOMY, PILOT_SKILL, winRate } from '../config/constants.js';
 import {
-  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, RIVAL_EXCUSES, CHALLENGER_ROSTER, RARITY, worksWith, THRUST_DRIVES, heavyGear,
+  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, RIVAL_EXCUSES, CHALLENGER_ROSTER, RARITY, worksWith, THRUST_DRIVES, heavyGear, turbineLine, turbineComplete,
 } from '../config/partsData.js';
 import { BattleBug } from '../entities/BattleBug.js';
 import { Part, makeId } from '../entities/Part.js';
@@ -233,7 +233,7 @@ export class EconomyManager {
    * your spares, or bought off the Marketplace. Returns where it came from.
    */
   fitMatching(bug, uid) {
-    const u = bug.unmatched().find((x) => x.part.uid === uid);
+    const u = bug.unmatched({ cooling: true }).find((x) => x.part.uid === uid);
     if (!u) throw new Error('Those drives already match');
     const spare = this.state.inventory.find((p) => p.key === u.part.key && !p.isScrap);
     if (spare) { this.equipFromInventory(bug, spare.uid, undefined, u.missingOn); return 'spares'; }
@@ -251,12 +251,34 @@ export class EconomyManager {
     return listing ? { where: 'market', price: this.partPrice(listing) } : null;
   }
 
-  /** Your manager goes and finds one (it turns up on the Marketplace). */
+  /**
+   * One go at finding a part to match your other drive: 40% the first time,
+   * then 20% likelier after each bout they keep looking. Found → on the Marketplace.
+   * @returns {{found: boolean, next?: number}}
+   */
+  huntForMatch(key) {
+    const hunt = this.state.managerHunt || (this.state.managerHunt = {});
+    const odds = hunt[key] ?? ECONOMY.MATCH_FIND_FIRST;
+    if (chance(odds) && this.stockPick(key)) {
+      delete hunt[key];
+      return { found: true };
+    }
+    hunt[key] = Math.min(1, odds + ECONOMY.MATCH_FIND_STEP);
+    return { found: false, next: hunt[key] };
+  }
+
+  /** Is the manager already looking for one of these? (Their next try is after your next bout.) */
+  huntOdds(key) {
+    return this.state.managerHunt?.[key] ?? null;
+  }
+
+  /** Send your manager looking for a part to match your other drive. */
   managerFind(key) {
     if (!this.state.staff.manager) throw new Error('You need a manager to go looking');
     this.assertNotInField();
-    if (!this.stockPick(key)) throw new Error("There's already one on the Marketplace");
-    return PARTS[key].name;
+    if (this.huntOdds(key) !== null) throw new Error('Your manager is already looking — give it a bout');
+    if (this.matchSource(key)) throw new Error("There's already one to be had");
+    return { name: PARTS[key].name, ...this.huntForMatch(key) };
   }
 
   /** Take a part off into your spares. Returns every part that came off (a drive brings its add-ons). */
@@ -502,7 +524,8 @@ export class EconomyManager {
     if (!engineKey || !tiresKey || PARTS[tiresKey].type === 'castor') return [];
     const kind = PARTS[engineKey].stats.kind;
     if (kind === 'plasma') return [];
-    return [kind === 'turbine' ? 'high_speed_shaft' : 'standard_shaft'];
+    // A turbine needs the full line: High-Speed Shaft → reducer → drive shaft.
+    return kind === 'turbine' ? ['high_speed_shaft', 'standard_gearbox', 'standard_shaft'] : ['standard_shaft'];
   }
 
   generateBug(tier, { condition = () => rand(0.7, 1), alien = true, fullSlots = false } = {}) {
@@ -899,7 +922,7 @@ export class EconomyManager {
       try { displaced = bug.equip(new Part(key)); } catch { continue; } // e.g. a motor that doesn't match its twin
       p.purse -= PARTS[key].value;
       // A twin gets one for each drive.
-      const odd = bug.unmatched().filter((u) => u.part.key === key);
+      const odd = bug.unmatched({ cooling: true }).filter((u) => u.part.key === key);
       for (const u of odd) { bug.equip(new Part(key), undefined, u.missingOn); p.purse -= PARTS[key].value; }
       for (const old of displaced) p.purse += Math.round(old.value * old.hpRatio * ECONOMY.SCRAP_RATE);
       break;
@@ -1540,7 +1563,13 @@ export class EconomyManager {
     const add = (type, reason, urgent = true, only) => needs.push({ type, reason, urgent, only });
     if (!bug.engine) add('engine', "there's no motor in her");
     if (bug.unshafted) add('drivetrain', "there's no drive shaft — the motor isn't connected to the wheels", true, (st) => !!st.shaft);
-    else if (bug.tires?.type === 'tires' && bug.engine?.stats.kind === 'turbine' && !bug.drivetrain.some((p) => p.stats.shaft === 'hss' && !p.isBroken)) add('drivetrain', 'a turbine needs a High-Speed Shaft to drive the wheels properly', true, (st) => st.shaft === 'hss');
+    else if (bug.tires?.type === 'tires' && bug.engine?.stats.kind === 'turbine' && !turbineComplete(bug)) {
+      // The turbine line: High-Speed Shaft → gearbox → drive shaft.
+      const line = turbineLine(bug, 0);
+      if (!line.hss) add('drivetrain', 'a turbine needs a High-Speed Shaft on the turbine side', true, (st) => st.shaft === 'hss');
+      else if (!line.gearbox) add('drivetrain', "there's no gearbox behind the turbine — she's just spinning the wheels", true, (st) => st.group === 'gearbox');
+      else add('drivetrain', 'the gearbox needs a drive shaft on the wheel side', true, (st) => !!st.shaft && st.shaft !== 'chain');
+    }
     if (bug.stranded) add('tires', "castors aren't driven — this motor needs proper tyres");
     else if (s.castor) add('castor', 'less rolling resistance means harder acceleration', false);
     else if (s.fDrive > s.fGrip * 1.05) add('tires', 'traction-limited — the motor out-muscles your tires');
@@ -1812,11 +1841,17 @@ export class EconomyManager {
     if (mechPick && s.staff.manager && !this.inField && chance(ECONOMY.MANAGER_FINDS_PICK)) {
       if (this.stockPick(mechPick.key)) report.lines.push(`Manager: tracked down the ${PARTS[mechPick.key].name} your mechanic wanted — it's on the Marketplace.`);
     }
-    // Twin drives out of step: your manager tracks down the parts to match them up.
+    // Twin drives out of step: your manager goes hunting for the parts to match them up
+    // (and gets likelier to turn one up with every bout they keep looking).
     if (s.staff.manager && !this.inField && s.activeBug) {
-      const keys = [...new Set(s.activeBug.unmatched().map((u) => u.part.key))].filter((k) => !this.matchSource(k));
-      for (const k of keys) if (this.stockPick(k)) report.lines.push(`Manager: found a ${PARTS[k].name} to match your other drive — it's on the Marketplace.`);
+      const keys = [...new Set(s.activeBug.unmatched({ cooling: true }).map((u) => u.part.key))].filter((k) => !this.matchSource(k));
+      for (const k of keys) {
+        const r = this.huntForMatch(k);
+        if (r.found) report.lines.push(`Manager: found a ${PARTS[k].name} to match your other drive — it's on the Marketplace.`);
+        else report.lines.push(`Manager: still hunting for a ${PARTS[k].name} to match your other drive (${Math.round(r.next * 100)}% next time).`);
+      }
     }
+    for (const k of Object.keys(s.managerHunt || {})) if (!s.activeBug?.unmatched({ cooling: true }).some((u) => u.part.key === k)) delete s.managerHunt[k];
     this.ensureReplacementListing();
     if (s.staff.manager) {
       const deals = [...s.market.parts, ...s.market.vehicles].filter((l) => this.isRareDeal(l));

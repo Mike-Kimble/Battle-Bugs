@@ -43,6 +43,7 @@ export class GameState extends EventEmitter {
     this.fine = null; // { amount, battlesLeft }
     this.rivalId = null; // the first alien you beat in a title match: they follow you to the Grand Final
     this.arrears = {};
+    this.managerHunt = {}; // part key → the manager's chance of finding one to match your other drive next time
     this.blacklist = 0; // bouts left that nobody will work for you (you stiffed your staff)
     this.collectors = []; // [{ role, owed, taken }] ex-staff helping themselves to your parts // { mechanic|manager: { amount, bouts } } — a missed wage, to pay in the Admin tab
     this.roamerId = null; // the homeless pilot (the rookie, unless they became your rival)
@@ -131,6 +132,7 @@ export class GameState extends EventEmitter {
     s.elitesOut = !!d.elitesOut;
     s.roamerId = d.roamerId || null;
     s.arrears = d.arrears || {};
+    s.managerHunt = d.managerHunt || {};
     s.blacklist = d.blacklist || 0;
     s.collectors = d.collectors || [];
     s.log = d.log || [];
@@ -175,6 +177,7 @@ export class GameState extends EventEmitter {
       elitesOut: this.elitesOut,
       roamerId: this.roamerId,
       arrears: this.arrears,
+      managerHunt: this.managerHunt,
       blacklist: this.blacklist,
       collectors: this.collectors,
       log: this.log.slice(-60),

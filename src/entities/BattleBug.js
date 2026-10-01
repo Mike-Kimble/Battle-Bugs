@@ -62,15 +62,16 @@ export class BattleBug {
   }
 
   /**
-   * Twin drives: what one side has and the other hasn't, by part. Each drive
-   * needs the same kit, or the better-equipped side pulls. (A Limited-Slip
-   * Link joins the two drives, so one does for both.)
+   * Twin drives: what one side has and the other hasn't, by part. Enhancements
+   * and drive train need to match, or the better-equipped side pulls. (A
+   * Limited-Slip Link joins the two drives, so one does for both.) Cooling runs
+   * independently on each drive — matching it is optional (`cooling: true` to include it).
    * @returns {Array<{part, bay:number, missingOn:number}>}
    */
-  unmatched() {
+  unmatched({ cooling = false } = {}) {
     if (this.drives.length < 2) return [];
     const out = [];
-    for (const list of [this.coolers, this.mods, this.drivetrain]) {
+    for (const list of cooling ? [this.coolers, this.mods, this.drivetrain] : [this.mods, this.drivetrain]) {
       const left = list.filter((p) => this.bayOf(p) === 0 && !p.stats.lsl);
       const right = list.filter((p) => this.bayOf(p) === 1 && !p.stats.lsl);
       const spare = [...right];
@@ -84,10 +85,16 @@ export class BattleBug {
     return out;
   }
 
+  /** Twin drives running the same cooling on both (worth a cooling bonus). */
+  get coolingMatched() {
+    return this.drives.length === 2 && this.coolers.some((c) => (c.bay || 0) === 0)
+      && !this.unmatched({ cooling: true }).some((u) => u.part.type === 'cooling');
+  }
+
   /** Fit bay 1 with copies of everything on bay 0 (pro-built twins leave the factory matched). */
   mirrorBays() {
     if (this.drives.length < 2) return;
-    for (const { part, missingOn } of this.unmatched()) {
+    for (const { part, missingOn } of this.unmatched({ cooling: true })) {
       if (missingOn !== 1) continue;
       const copy = Part.create(part.key, part.hpRatio);
       copy.bay = 1;

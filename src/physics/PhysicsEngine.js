@@ -1,6 +1,6 @@
 import { PHYSICS, STAMINA, EVENTS } from '../config/constants.js';
 import { Vector2D, clamp, approach, wrapAngle } from './Vector2D.js';
-import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES, pushesThrust, hasShaft, hasDriveTrain } from '../config/partsData.js';
+import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES, pushesThrust, hasShaft, turbineLine } from '../config/partsData.js';
 
 /** Drive-train parts that live between the drive shaft and the wheels (useless without a shaft). */
 const SHAFT_PARTS = ['gearbox', 'lockgear', 'transfer', 'diff', 'coupling', 'converter'];
@@ -107,12 +107,17 @@ export class PhysicsEngine {
    */
   static driveTrain(bug, m, interactions, castor, bay = 0) {
     const fx = { vector: false, prop: 0, propRpm: false, lsl: false, tcu: false, guard: 1 };
-    const groups = new Set();
+    const groups = {};
     const turbine = bug.engine?.stats.kind === 'turbine';
-    const hss = hasDriveTrain(bug, (s) => s.shaft === 'hss', bay);
+    const line = turbineLine(bug, bay);
     const shaft = hasShaft(bug, bay);
     const tracks = bug.tires?.stats.kind === 'track';
     const where = PhysicsEngine.bayName(bug, bay);
+    // How many of each group count on this drive: a turbine runs two shafts (one each side
+    // of the gearbox); a twin-bay shell running one drive has room for two gearboxes.
+    const limit = { shaft: turbine ? 2 : 1, gearbox: (bug.chassis?.stats.drives || 1) > 1 && (bug.drives?.length || 0) < 2 ? 2 : 1 };
+    // Gearboxes work one after another: their torque gains and speed losses add up.
+    const gear = {};
     for (const p of (bug.drivetrain || []).filter((q) => (q.bay || 0) === bay)) {
       const s = p.stats;
       if (p.isBroken || !worksWith(p, bug)) {
@@ -124,9 +129,12 @@ export class PhysicsEngine {
         interactions.push({ id: `dt_noshaft_${p.uid}`, good: false, mods: {}, text: `Your ${p.name}${where} does nothing without a drive shaft to connect it.` });
         continue;
       }
-      // A gearbox on a turbine only works behind a High-Speed Shaft.
-      if (s.group === 'gearbox' && turbine && !hss) {
-        interactions.push({ id: `dt_nohss_${p.uid}`, good: false, mods: {}, text: `Your ${p.name}${where} can't take turbine revs through a plain shaft — it needs a High-Speed Shaft on the turbine side.` });
+      // A gearbox on a turbine only works in the full line: High-Speed Shaft → gearbox → drive shaft.
+      if (s.group === 'gearbox' && turbine && !castor && !line.complete) {
+        interactions.push({ id: `dt_nohss_${p.uid}`, good: false, mods: {},
+          text: !line.hss
+            ? `Your ${p.name}${where} can't take turbine revs through a plain shaft — it needs a High-Speed Shaft on the turbine side.`
+            : `Your ${p.name}${where} isn't connected to the wheels — it needs a drive shaft on the wheel side (High-Speed Shaft → gearbox → drive shaft).` });
         continue;
       }
       if (s.wheelsOnly && tracks) {
@@ -134,20 +142,34 @@ export class PhysicsEngine {
         continue;
       }
       if (s.group) {
-        if (groups.has(s.group)) {
-          interactions.push({ id: `dt_dup_${p.uid}`, good: false, mods: {}, text: `You've got two ${s.group === 'prop' ? 'propellers' : `${s.group}s`}${where || ' on one drive'} — only one can do anything. The ${p.name} is dead weight.` });
+        const max = limit[s.group] || 1;
+        if ((groups[s.group] || 0) >= max) {
+          const many = { 1: 'two', 2: 'three' }[max];
+          interactions.push({ id: `dt_dup_${p.uid}`, good: false, mods: {}, text: `You've got ${many} ${s.group === 'prop' ? 'propellers' : `${s.group}s`}${where || ' on one drive'} — only ${max === 1 ? 'one' : max} can do anything. The ${p.name} is dead weight.` });
           continue;
         }
-        groups.add(s.group);
+        groups[s.group] = (groups[s.group] || 0) + 1;
       }
       const onTyres = (k) => !(castor && s.tyresOnly?.includes(k)); // some parts only matter on driven wheels
-      for (const k of ['force', 'accel', 'vMax', 'turn', 'grip', 'drain', 'brake']) if (s[k] && onTyres(k)) m[k] *= s[k];
+      for (const k of ['force', 'accel', 'vMax', 'turn', 'grip', 'drain', 'brake']) {
+        if (!s[k] || !onTyres(k)) continue;
+        if (s.group === 'gearbox') gear[k] = (gear[k] || 0) + (s[k] - 1);
+        else m[k] *= s[k];
+      }
       if (s.vector) fx.vector = true;
       if (s.prop) { fx.prop = s.prop; fx.propRpm = !!s.propRpm; }
       if (s.lsl) fx.lsl = true;
       if (s.tcu && onTyres('tcu')) fx.tcu = true;
       if (s.rudder) fx.rudder = true;
       if (s.kind === 'reverser') fx.reverser = true;
+    }
+    for (const k in gear) m[k] *= Math.max(0.1, 1 + gear[k]);
+    if ((groups.gearbox || 0) > 1) interactions.push({ id: `dt_twin_gear${bay}`, good: true, mods: {}, text: `Two gearboxes in line${where} — their torque gains and speed losses add up.` });
+    // A turbine straight into the wheels with no gearbox in between just spins them.
+    if (turbine && !castor && bug.tires && shaft && !line.complete) {
+      m.grip *= PHYSICS.WHEELSPIN; m.turn *= PHYSICS.WHEELSPIN;
+      interactions.push({ id: `dt_wheelspin${bay}`, good: false, mods: {},
+        text: `No reducer between the turbine and the wheels${where} — she just spins them: half the grip and half the control. Run High-Speed Shaft → gearbox → drive shaft.` });
     }
     // Prop or ducted fan plus rudders on castors: steers like a fish.
     if (castor && fx.prop && fx.rudder) { m.turn *= 1.4; m.lateral *= 2.5; }
@@ -190,6 +212,11 @@ export class PhysicsEngine {
       mb.push(mm);
     }
     for (const k of MULTS) if (k !== 'force') m[k] *= mb.reduce((t, mm) => t * mm[k], 1) ** (1 / bays);
+    // Twin drives with the same cooling on both: the two loops work together, +10%.
+    if (bug.coolingMatched) {
+      addCool *= PHYSICS.MATCHED_COOLING;
+      interactions.push({ id: 'twin_cool_matched', good: true, mods: {}, text: 'Same cooling on both power plants — they work together. +10% cooling.' });
+    }
     const any = (key) => fxs.some((f) => f[key]);
     const dt = { vector: any('vector'), lsl: any('lsl'), tcu: any('tcu'), reverser: any('reverser') };
     // A self-locking gearbox (worm, cycloidal, strain wave) holds the wheels, motor or not.

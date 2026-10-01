@@ -46,6 +46,8 @@ export const PHYSICS = Object.freeze({
   SLOPE_SLEW: 3,            // rad/s a free-rolling bug turns to roll downhill (at full slope)
   CASTOR_THRUST: 1.3,       // a thrust drive on castors pushes this much harder than through wheels (before rolling resistance)
   VECTOR_FACE_RATE: 9,      // rad/s: a thrust-vectoring bug swings round to keep facing its opponent
+  WHEELSPIN: 0.5,           // turbine into the wheels with no gearbox: share of grip and control left
+  MATCHED_COOLING: 1.1,     // twin drives running the same cooling: add-on cooling bonus
   UNMATCHED_PULL: 0.06,     // twin drives: pull (as imbalance) for each part one drive has and the other hasn't
   TWIN_SKEW: 0.7,           // rad off line at full imbalance between twin drives (one side dead)
   PUSHED_SPEED: 25,         // moving this fast against your drive direction = being pushed
@@ -208,6 +210,8 @@ export const ECONOMY = Object.freeze({
 
   MECHANIC_DISCOUNT: 0.9,    // mechanic gets 10% off parts & repairs
   MANAGER_FINDS_PICK: 0.8,   // chance the manager stocks the mechanic's pick after a fight
+  MATCH_FIND_FIRST: 0.4,     // manager's chance of finding a part to match your other drive at the first try…
+  MATCH_FIND_STEP: 0.2,      // …and how much likelier after each bout they keep looking
   MIN_VEHICLE_PRICE: 100,
   FIND_CHANCE: { epic: 0.016, legendary: 0.003 }, // per part on a generated bug (scaled up for better pilots)
   TEASER_CHANCE: 0.25,       // a restock shows off an epic/legendary part you can't afford

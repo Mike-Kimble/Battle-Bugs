@@ -585,10 +585,13 @@ export class WorkshopUI {
   }
 
   /** Twin drives out of balance: each odd part, and where its match can come from. */
-  renderMatching(bug, odd, locked) {
+  renderMatching(bug, odd, locked, optional = false) {
     const eco = this.economy;
-    const box = el('div', { class: 'notice notice-warn match-box' },
-      el('strong', {}, "Drives don't match"), el('div', { class: 'small' }, "Each drive needs the same kit, or she'll pull to one side."));
+    const box = optional
+      ? el('div', { class: 'notice match-box' },
+        el('strong', {}, 'Cooling differs'), el('div', { class: 'small' }, 'Each power plant cools itself, so it works as it is — but run the same cooling on both and they work together for +10%.'))
+      : el('div', { class: 'notice notice-warn match-box' },
+        el('strong', {}, "Drives don't match"), el('div', { class: 'small' }, "Each drive needs the same kit, or she'll pull to one side."));
     for (const u of odd) {
       const src = eco.matchSource(u.part.key);
       const side = u.missingOn ? 'right' : 'left';
@@ -597,8 +600,14 @@ export class WorkshopUI {
         action = el('button', { class: 'btn btn-small btn-primary', disabled: locked, onclick: () => this.act(() => eco.fitMatching(bug, u.part.uid), `Fitted the matching ${u.part.name} from your spares`) }, 'Fit spare');
       } else if (src && !eco.inField) {
         action = el('button', { class: 'btn btn-small btn-primary', disabled: locked || this.state.money < src.price, onclick: () => this.act(() => eco.fitMatching(bug, u.part.uid), `Bought and fitted the matching ${u.part.name}`) }, `Buy & fit ${formatMoney(src.price)}`);
+      } else if (this.state.staff.manager && !eco.inField && eco.huntOdds(u.part.key) !== null) {
+        action = el('span', { class: 'muted small' }, `Manager's looking — ${Math.round(eco.huntOdds(u.part.key) * 100)}% after your next bout`);
       } else if (this.state.staff.manager && !eco.inField) {
-        action = el('button', { class: 'btn btn-small', onclick: () => this.act(() => eco.managerFind(u.part.key), (n) => `Manager: found a ${n} — it's on the Marketplace`) }, 'Ask manager to find one');
+        action = el('button', {
+          class: 'btn btn-small',
+          onclick: () => this.act(() => eco.managerFind(u.part.key),
+            (r) => (r.found ? `Manager: found a ${r.name} — it's on the Marketplace` : `Manager: no ${r.name} to be had yet — I'll keep looking (${Math.round(r.next * 100)}% after your next bout)`)),
+        }, 'Ask manager to find one');
       } else {
         action = el('span', { class: 'muted small' }, eco.inField ? 'None in your spares.' : 'None about — a manager could find you one.');
       }
@@ -669,8 +678,8 @@ export class WorkshopUI {
         if (!mine.length) section.append(el('div', { class: 'empty-slot' }, 'Empty'));
         for (const part of mine) section.append(fittedCard(part));
       });
-      const odd = bug.unmatched().filter((u) => u.part.type === type);
-      if (odd.length) section.append(this.renderMatching(bug, odd, locked));
+      const odd = bug.unmatched({ cooling: true }).filter((u) => u.part.type === type);
+      if (odd.length) section.append(this.renderMatching(bug, odd, locked, type === 'cooling'));
     } else {
       if (!equipped.length) {
         section.append(el('div', { class: 'empty-slot' }, type === 'weapon' && bug.weaponSlots === 0 ? 'No hardpoints on this frame' : 'Empty slot'));
@@ -685,9 +694,12 @@ export class WorkshopUI {
     } else if (multi && !bug.drives.length) {
       section.append(el('p', { class: 'muted small' }, `No drive fitted — ${title.toLowerCase()} mounts on the drive. Fit a drive first dummy!`));
     } else if (twinAddOn) {
-      section.append(el('p', { class: 'muted small' }, `Each drive has its own ${title.toLowerCase()} — nothing is shared. Fit the same to both, or the better-kitted side pulls her off line.${type === 'drivetrain' ? ' One gearbox, one shaft and one prop count per drive.' : ''}`));
+      section.append(el('p', { class: 'muted small' }, type === 'cooling'
+        ? 'Each power plant has its own cooling and runs it independently. The same cooling on both works together: +10%.'
+        : `Each power plant has its own ${title.toLowerCase()} — nothing is shared. Fit the same to both, or the better-kitted side pulls her off line.${type === 'drivetrain' ? ' One gearbox, one shaft and one prop count per drive (a turbine runs High-Speed Shaft → gearbox → drive shaft).' : ''}`));
     } else if (type === 'drivetrain') {
-      section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} drive-train slots used. Only one gearbox, one shaft and one prop count at a time; your mechanic knows which combinations pay off.`));
+      const gearboxes = bug.driveSlots > 1 ? 'two gearboxes (a twin-bay shell with one drive has room for both)' : 'one gearbox';
+      section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} drive-train slots used. Only ${gearboxes}, one shaft and one prop count — a turbine runs High-Speed Shaft → gearbox → drive shaft. Your mechanic knows which combinations pay off.`));
     } else if (multi) {
       section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} ${type === 'cooling' ? 'cooling' : 'enhancement'} slot${cap > 1 ? 's' : ''} used. Not every add-on suits every drive.`));
     }
