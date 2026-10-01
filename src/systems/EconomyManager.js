@@ -1574,14 +1574,16 @@ export class EconomyManager {
     else if (s.castor) add('castor', 'less rolling resistance means harder acceleration', false);
     else if (s.fDrive > s.fGrip * 1.05) add('tires', 'traction-limited — the motor out-muscles your tires');
     else if (s.fGrip > s.fDrive * 1.25) add('engine', 'power-limited — your tires can take more than the motor gives');
+    // Thrust on castors: grip isn't what moves you, so more of it is no use.
+    const gliding = s.castor && !bug.stranded;
     if (!s.castor && THRUST_DRIVES.includes(bug.engine?.stats.kind)) add('castor', 'a thrust drive accelerates hardest on castors', false);
     if (!bug.armor) add('armor', "you've got no armour — every hit goes straight to the hull");
     if (bug.weapons.length < bug.weaponSlots) add('weapon', `you've got ${bug.weaponSlots - bug.weapons.length} empty hardpoint${bug.weaponSlots - bug.weapons.length > 1 ? 's' : ''}`);
     if (s.cooling < 12) add('cooling', "your motor runs hot — you'll stall in long pushes");
     if (bug.coolers.length < BattleBug.COOLER_SLOTS && s.cooling < 16) add('cooling', 'more cooling means longer pushes', false);
     if (!bug.mods.length) add('enhancement', 'an enhancement would give you an edge', false);
-    add('engine', 'more push always helps', false);
-    add('tires', 'more grip always helps', false);
+    add('engine', gliding ? 'more thrust always helps' : 'more push always helps', false);
+    if (!gliding) add('tires', 'more grip always helps', false);
     add('armor', 'tougher plating', false);
     return needs;
   }
@@ -1853,7 +1855,8 @@ export class EconomyManager {
     }
     for (const k of Object.keys(s.managerHunt || {})) if (!s.activeBug?.unmatched({ cooling: true }).some((u) => u.part.key === k)) delete s.managerHunt[k];
     this.ensureReplacementListing();
-    if (s.staff.manager) {
+    // In the tournament your manager isn't out shopping: no finds, no deals, no whispers.
+    if (s.staff.manager && !this.inField) {
       const deals = [...s.market.parts, ...s.market.vehicles].filter((l) => this.isRareDeal(l));
       if (deals.length) report.lines.push(`Manager: ${deals.length} rare deal${deals.length > 1 ? 's' : ''} flagged on the Marketplace`);
       const gems = [...s.market.vehicles.map((l) => l.bug), ...s.challengers.map((c) => c.bug)].filter((b) => this.hiddenGem(b));

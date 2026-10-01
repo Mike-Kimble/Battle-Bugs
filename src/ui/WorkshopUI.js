@@ -450,9 +450,11 @@ export class WorkshopUI {
           row('Weight', 'mass', 'Heavier is harder to push around — and harder to move', true),
         )),
       el('p', { class: 'muted small stats-note' },
-        s.fDrive > s.fGrip
-          ? 'Traction-limited: better grip = more push.'
-          : 'Power-limited: a stronger motor = more push.'),
+        s.castor
+          ? 'Gliding on castors: thrust is what moves you — less rolling resistance or more thrust = more push.'
+          : s.fDrive > s.fGrip
+            ? 'Traction-limited: better grip = more push.'
+            : 'Power-limited: a stronger motor = more push.'),
     );
   }
 
