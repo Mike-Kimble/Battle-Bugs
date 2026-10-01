@@ -50,7 +50,9 @@ export function turbineLine(bug, bay = 0) {
   const shafts = parts.filter((p) => p.stats.shaft).length;
   const hss = parts.some((p) => p.stats.shaft === 'hss');
   const gearbox = parts.some((p) => p.stats.group === 'gearbox');
-  return { shafts, hss, gearbox, complete: hss && gearbox && shafts >= 2 };
+  // A gearbox with no shaft on its wheel side drives nothing: the wheels aren't connected.
+  const connected = shafts > 0 && !(gearbox && shafts < 2);
+  return { shafts, hss, gearbox, connected, complete: hss && gearbox && shafts >= 2 };
 }
 
 /** Every drive has the full turbine line (see turbineLine). */

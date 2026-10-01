@@ -1568,7 +1568,7 @@ export class EconomyManager {
       const line = turbineLine(bug, 0);
       if (!line.hss) add('drivetrain', 'a turbine needs a High-Speed Shaft on the turbine side', true, (st) => st.shaft === 'hss');
       else if (!line.gearbox) add('drivetrain', "there's no gearbox behind the turbine — she's just spinning the wheels", true, (st) => st.group === 'gearbox');
-      else add('drivetrain', 'the gearbox needs a drive shaft on the wheel side', true, (st) => !!st.shaft && st.shaft !== 'chain');
+      else add('drivetrain', "nothing on the wheel side of the gearbox — the wheels aren't driven, she's on thrust alone", true, (st) => !!st.shaft);
     }
     if (bug.stranded) add('tires', "castors aren't driven — this motor needs proper tyres");
     else if (s.castor) add('castor', 'less rolling resistance means harder acceleration', false);

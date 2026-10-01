@@ -134,7 +134,7 @@ export class PhysicsEngine {
         interactions.push({ id: `dt_nohss_${p.uid}`, good: false, mods: {},
           text: !line.hss
             ? `Your ${p.name}${where} can't take turbine revs through a plain shaft — it needs a High-Speed Shaft on the turbine side.`
-            : `Your ${p.name}${where} isn't connected to the wheels — it needs a drive shaft on the wheel side (High-Speed Shaft → gearbox → drive shaft).` });
+            : `Your ${p.name}${where} isn't connected to the wheels — it needs a drive shaft or chain on the wheel side (High-Speed Shaft → gearbox → drive shaft).` });
         continue;
       }
       if (s.wheelsOnly && tracks) {
@@ -165,8 +165,12 @@ export class PhysicsEngine {
     }
     for (const k in gear) m[k] *= Math.max(0.1, 1 + gear[k]);
     if ((groups.gearbox || 0) > 1) interactions.push({ id: `dt_twin_gear${bay}`, good: true, mods: {}, text: `Two gearboxes in line${where} — their torque gains and speed losses add up.` });
-    // A turbine straight into the wheels with no gearbox in between just spins them.
-    if (turbine && !castor && bug.tires && shaft && !line.complete) {
+    // A gearbox with nothing on its wheel side: the wheels aren't driven — thrust only.
+    if (turbine && !castor && bug.tires && shaft && !line.connected) {
+      interactions.push({ id: `dt_unconnected${bay}`, good: false, mods: {},
+        text: `Nothing on the wheel side of the gearbox${where} — the wheels aren't driven, so she's pushing on turbine thrust alone and the rest is dead weight. Fit a drive shaft or chain & sprockets after the gearbox.` });
+    } else if (turbine && !castor && bug.tires && shaft && !line.complete) {
+      // A turbine straight into the wheels with no gearbox in between just spins them.
       m.grip *= PHYSICS.WHEELSPIN; m.turn *= PHYSICS.WHEELSPIN;
       interactions.push({ id: `dt_wheelspin${bay}`, good: false, mods: {},
         text: `No reducer between the turbine and the wheels${where} — she just spins them: half the grip and half the control. Run High-Speed Shaft → gearbox → drive shaft.` });
@@ -241,7 +245,8 @@ export class PhysicsEngine {
       const propEff = fxs[i].prop * (fxs[i].propRpm ? 0.7 + 0.5 * (d.stats.rpm / 6400) : 1);
       // A prop or fan on a turbine adds to its thrust (a fifth of the prop's own efficiency).
       const propBoost = thrustDrive ? propEff * PHYSICS.PROP_BOOST : 0;
-      const shaft = !castor && d.stats.kind !== 'plasma' && hasShaft(bug, i);
+      // A turbine's gearbox needs a shaft (or chain) on its wheel side, or the wheels aren't driven at all.
+      const shaft = !castor && d.stats.kind !== 'plasma' && hasShaft(bug, i) && (d.stats.kind !== 'turbine' || turbineLine(bug, i).connected);
       const thrusts = castor && !tires.isBroken && pushesThrust(bug, i);
       const mode = castor ? (thrusts ? 'thrust' : 'none') : shaft ? 'shaft' : thrustDrive ? 'wheelThrust' : 'none';
       const eff = mode === 'thrust' ? (thrustDrive ? PHYSICS.CASTOR_THRUST + propBoost : propEff)
