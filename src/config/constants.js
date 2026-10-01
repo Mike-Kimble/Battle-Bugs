@@ -255,7 +255,7 @@ export const PART_TYPES = Object.freeze({
 /** Hoist regions → which part types they expose. */
 export const HOIST_REGIONS = Object.freeze({
   front: { label: 'Weapons', types: ['weapon'], blurb: 'Weapon hardpoints' },
-  center: { label: 'Inside', types: ['engine', 'cooling', 'enhancement', 'drivetrain'], blurb: 'Drive motor, cooling, enhancements & drive train' },
+  center: { label: 'Inside', types: ['engine', 'cooling', 'enhancement', 'drivetrain'], blurb: 'Power plant, cooling, enhancements & drive train' },
   sides: { label: 'Running Gear', types: ['tires'], blurb: 'Driven tyres and tracks, or gliding castors' },
   hull: { label: 'Shell', types: ['chassis', 'armor'], blurb: 'Frame & armour plating' },
 });

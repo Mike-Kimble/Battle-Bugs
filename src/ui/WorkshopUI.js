@@ -563,12 +563,12 @@ export class WorkshopUI {
     const locked = this.state.isLocked(bug);
     // Areas with several part types get a tab each (Inside: Drive · Cooling · Enhancement; Shell: Chassis · Armour).
     const type = region.types.includes(this.regionTab) ? this.regionTab : region.types[0];
-    const TAB_LABELS = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancement', drivetrain: 'Drive Train', chassis: 'Chassis', armor: 'Armour', tires: 'Tyres', castor: 'Castors' };
+    const TAB_LABELS = { engine: 'Power Plant', cooling: 'Cooling', enhancement: 'Enhancement', drivetrain: 'Drive Train', chassis: 'Chassis', armor: 'Armour', tires: 'Tyres', castor: 'Castors' };
     const tabs = region.types.length > 1
       ? el('div', { class: 'subtabs region-tabs', role: 'tablist' }, region.types.map((t) => {
         const list = bug.slotList(t);
         const fitted = t === 'tires' || t === 'castor' ? bug.tires?.type === t : bug.slotPart(t);
-        const count = list ? `${list.length}/${bug.slotCapacity(t)}` : (t === 'chassis' || fitted ? '✓' : '—');
+        const count = list ? `${list.length}/${bug.slotCapacity(t) || BattleBug.perDrive(t) || list.length}` : (t === 'chassis' || fitted ? '✓' : '—');
         return el('button', {
           class: `subtab${t === type ? ' active' : ''}`,
           role: 'tab',
@@ -628,7 +628,7 @@ export class WorkshopUI {
 
   renderSlot(bug, type, locked) {
     const inv = this.state.inventory.filter((p) => p.type === type || (type === 'tires' && p.type === 'castor'));
-    const title = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancement', drivetrain: 'Drive Train', tires: 'Running Gear', castor: 'Castors', armor: 'Armour', weapon: 'Weapons', chassis: 'Chassis' }[type];
+    const title = { engine: 'Power Plant', cooling: 'Cooling', enhancement: 'Enhancement', drivetrain: 'Drive Train', tires: 'Running Gear', castor: 'Castors', armor: 'Armour', weapon: 'Weapons', chassis: 'Chassis' }[type];
     const section = el('section', { class: 'slot-section' }, el('h3', {}, title));
     const multi = bug.slotList(type); // weapons, cooling and enhancements have several slots
     const cap = bug.slotCapacity(type);
@@ -736,7 +736,7 @@ export class WorkshopUI {
     }
     // Straight to the right aisle of the Marketplace (closed while you're in the tournament).
     if (this.onShop && !this.economy.inField) {
-      const label = { engine: 'Drive', cooling: 'Cooling', enhancement: 'Enhancements', drivetrain: 'Drive Train', tires: 'Running Gear', castor: 'Running Gear', armor: 'Armour', weapon: 'Weapons' }[type];
+      const label = { engine: 'Power Plant', cooling: 'Cooling', enhancement: 'Enhancements', drivetrain: 'Drive Train', tires: 'Running Gear', castor: 'Running Gear', armor: 'Armour', weapon: 'Weapons' }[type];
       section.append(el('button', {
         class: 'btn btn-small shop-link',
         onclick: () => { closeModal(); this.onShop(type); },
