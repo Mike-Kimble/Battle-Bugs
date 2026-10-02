@@ -127,7 +127,6 @@ export class TerminalUI {
 
   renderHeader() {
     const s = this.state;
-    const cw = Math.min(s.record.challengerWins, ECONOMY.TOURNAMENT_UNLOCK_WINS);
     this.header.replaceChildren(
       el('div', { class: 'logo' }, 'WEEVIL', el('span', {}, 'WARS')),
       el('div', { class: 'hud-stats' },
@@ -137,8 +136,6 @@ export class TerminalUI {
           el('strong', {}, `${formatMoney(s.fine.amount)} · ${s.fine.battlesLeft} left`)) : null,
         s.season > 1 ? el('div', { class: 'stat' }, el('small', {}, 'Season'), el('strong', {}, `${s.season}${s.titles ? ` · ${'★'.repeat(Math.min(s.titles, 5))}` : ''}`)) : null,
         el('div', { class: 'stat' }, el('small', {}, 'Streak'), el('strong', {}, streakText(s.record.streak))),
-        el('div', { class: 'stat' }, el('small', {}, 'Tournament'),
-          el('strong', {}, s.gameComplete ? '★ CHAMPION' : s.tournament.entered ? `IN THE FIELD · R${s.tournament.round + 1}/${ECONOMY.TOURNAMENT_ROUNDS}` : `${cw}/${ECONOMY.TOURNAMENT_UNLOCK_WINS} wins`)),
       ),
     );
   }
