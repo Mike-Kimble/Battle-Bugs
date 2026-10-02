@@ -426,10 +426,10 @@ export class TerminalUI {
   }
 
   /** A stack of like spares (× n) with its Sell button. */
-  sellPartCard(group) {
+  sellPartCard(group, extra = null) {
     const p = group.best;
     return partCard(p, this.economy, {
-      group,
+      group, extra,
       compareTo: p.type === 'chassis' ? undefined : counterpart(this.state.activeBug, p),
       actions: [sellStackButton(group, this.economy, (fn, msg) => this.act(fn, msg))],
     });
@@ -469,13 +469,11 @@ export class TerminalUI {
     };
 
     const countFor = (key) => {
-      if (key === 'sell') return s.inventory.length;
+      if (key === 'sell') return s.inventory.length + s.vehicles.filter((v) => !s.isLocked(v)).length;
       if (key === 'chassis') return s.market.vehicles.length;
       return s.market.parts.filter((l) => aisleOf(l.part) === key).length;
     };
-    const spares = cat === 'chassis'
-      ? s.vehicles.filter((v) => !s.isLocked(v))
-      : s.inventory.filter((p) => aisleOf(p) === cat);
+    const myVehicles = s.vehicles.filter((v) => !s.isLocked(v));
 
     const on = (key) => key === cat || key === group;
     const topnav = el('div', { class: 'subtabs', role: 'tablist' }, MARKET_CATEGORIES.map(([key, label]) => el('button', {
@@ -532,32 +530,7 @@ export class TerminalUI {
       })));
     }
 
-    const sellCards = cat === 'chassis'
-      ? spares.map((bug) => el('article', { class: 'card vehicle' },
-        el('div', { class: 'card-row' },
-          this.sprite.renderThumbnail(bug, 64),
-          el('div', { class: 'card-info' },
-            el('h3', {}, bug.name),
-            el('div', { class: 'small muted' }, `${bug.chassis.name} · ${this.vehicleKind(bug)}${bug.id === s.activeVehicleId ? ' · on the hoist' : ''}`),
-            hpBar(bug.condition, { label: `Condition ${Math.round(bug.condition * 100)}%` }))),
-        el('div', { class: 'part-actions' },
-          el('button', {
-            class: 'btn btn-small btn-danger',
-            onclick: () => this.confirm(`Sell ${bug.name}?`, this.economy.sellWarning(bug),
-              () => this.act(() => this.economy.sellVehicle(bug.id), (v) => `Sold for ${formatMoney(v)}`)),
-          }, `Sell ${formatMoney(this.economy.vehicleSellPrice(bug))}`))))
-      : this.economy.spareGroups(spares).map((g) => this.sellPartCard(g));
-
-    if (cat === 'sell') {
-      const groups = PART_GROUPS.map(([type, label]) => [label, s.inventory.filter((p) => aisleOf(p) === type)]).filter(([, ps]) => ps.length);
-      return el('div', { class: 'market' },
-        subnav,
-        el('p', { class: 'muted' }, catBlurb, ` Buyers pay ${Math.round(ECONOMY.SELL_RATE * 100)}% of value × condition; broken parts fetch scrap only.`),
-        this.economy.hotStreak ? el('div', { class: 'notice notice-gold' }, `🔥 You're on a ${s.record.streak}-win streak — buyers want some of your secret sauce and are paying 10–20% extra.`) : null,
-        groups.length
-          ? groups.map(([label, ps]) => [el('h3', {}, `${label} (${ps.length})`), el('div', { class: 'card-grid parts' }, this.economy.spareGroups(ps).map((g) => this.sellPartCard(g)))])
-          : el('p', { class: 'muted' }, 'No spare components. Remove parts on the hoist or strip a vehicle to sell them here.'));
-    }
+    if (cat === 'sell') return this.renderSell(subnav, catBlurb, myVehicles);
 
     return el('div', { class: 'market' },
       subnav,
@@ -566,13 +539,69 @@ export class TerminalUI {
         manager ? 'Your manager is flagging rare deals.' : ''),
       el('h3', {}, `${catLabel} for sale`),
       forSale.childElementCount ? forSale : el('p', { class: 'muted' }, 'Sold out — new stock arrives after your next bout.'),
-      ...(cat === 'chassis' ? [
-        el('h3', {}, `Sell your vehicles (${spares.length})`),
-        spares.length
-          ? el('div', { class: 'card-grid' }, sellCards)
-          : el('p', { class: 'muted small' }, 'Your garage is empty.'),
-      ] : []),
+      cat === 'chassis' && myVehicles.length ? el('p', { class: 'muted small' }, 'Selling one of your own vehicles? That\'s on the Sell tab.') : null,
     );
+  }
+
+  /**
+   * The Sell tab: your spare parts in stacks, each with a tick box (plus
+   * Select all and Sell all selected), then your vehicles.
+   */
+  renderSell(subnav, catBlurb, myVehicles) {
+    const s = this.state;
+    const eco = this.economy;
+    const byType = PART_GROUPS.map(([type, label]) => [label, eco.spareGroups(s.inventory.filter((p) => aisleOf(p) === type))]).filter(([, gs]) => gs.length);
+    const all = byType.flatMap(([, gs]) => gs);
+    // Ticked stacks (forget any that have since gone).
+    const picked = this.sellPicked || (this.sellPicked = new Set());
+    for (const id of [...picked]) if (!all.some((g) => g.id === id)) picked.delete(id);
+    const chosen = all.filter((g) => picked.has(g.id));
+    const total = chosen.reduce((t, g) => t + eco.groupSellTotal(g, g.parts.length), 0);
+    const items = chosen.reduce((t, g) => t + g.parts.length, 0);
+    const toggle = (id, on) => { if (on) picked.add(id); else picked.delete(id); this.render(); };
+    const tick = (g) => el('label', { class: 'check-row small sell-tick' },
+      el('input', { type: 'checkbox', checked: picked.has(g.id) || null, 'aria-label': `Select ${g.best.name}`, onchange: (e) => toggle(g.id, e.target.checked) }), 'Select');
+    const bar = all.length ? el('div', { class: 'sell-bar' },
+      el('label', { class: 'check-row' },
+        el('input', {
+          type: 'checkbox', checked: (chosen.length === all.length) || null, 'aria-label': 'Select all',
+          onchange: (e) => { picked.clear(); if (e.target.checked) for (const g of all) picked.add(g.id); this.render(); },
+        }), 'Select all'),
+      el('button', {
+        class: 'btn btn-small btn-primary', disabled: !chosen.length,
+        onclick: () => this.confirm(`Sell ${items} part${items === 1 ? '' : 's'}?`, `Every part in the ${chosen.length} selected stack${chosen.length === 1 ? '' : 's'} goes, for ${formatMoney(total)} in all.`,
+          () => this.act(() => { const v = eco.sellGroups(chosen); picked.clear(); return v; }, (v) => `Sold ${items} part${items === 1 ? '' : 's'} for ${formatMoney(v)}`)),
+      }, chosen.length ? `Sell all selected (${formatMoney(total)})` : 'Sell all selected')) : null;
+    return el('div', { class: 'market' },
+      subnav,
+      el('p', { class: 'muted' }, catBlurb, ` Buyers pay ${Math.round(ECONOMY.SELL_RATE * 100)}% of value × condition; broken parts fetch scrap only.`),
+      eco.hotStreak ? el('div', { class: 'notice notice-gold' }, `🔥 You're on a ${s.record.streak}-win streak — buyers want some of your secret sauce and are paying 10–20% extra.`) : null,
+      el('h3', {}, `Spare parts (${s.inventory.length})`),
+      bar,
+      byType.length
+        ? byType.map(([label, gs]) => [el('h4', {}, `${label} (${gs.reduce((t, g) => t + g.parts.length, 0)})`), el('div', { class: 'card-grid parts' }, gs.map((g) => this.sellPartCard(g, tick(g))))])
+        : el('p', { class: 'muted' }, 'No spare components. Remove parts on the hoist or strip a vehicle to sell them here.'),
+      el('h3', {}, `Your vehicles (${myVehicles.length})`),
+      myVehicles.length
+        ? el('div', { class: 'card-grid' }, myVehicles.map((bug) => this.vehicleSellCard(bug)))
+        : el('p', { class: 'muted small' }, 'Your garage is empty.'));
+  }
+
+  vehicleSellCard(bug) {
+    const s = this.state;
+    return el('article', { class: 'card vehicle' },
+      el('div', { class: 'card-row' },
+        this.sprite.renderThumbnail(bug, 64),
+        el('div', { class: 'card-info' },
+          el('h3', {}, bug.name),
+          el('div', { class: 'small muted' }, `${bug.chassis.name} · ${this.vehicleKind(bug)}${bug.id === s.activeVehicleId ? ' · on the hoist' : ''}`),
+          hpBar(bug.condition, { label: `Condition ${Math.round(bug.condition * 100)}%` }))),
+      el('div', { class: 'part-actions' },
+        el('button', {
+          class: 'btn btn-small btn-danger',
+          onclick: () => this.confirm(`Sell ${bug.name}?`, this.economy.sellWarning(bug),
+            () => this.act(() => this.economy.sellVehicle(bug.id), (v) => `Sold for ${formatMoney(v)}`)),
+        }, `Sell ${formatMoney(this.economy.vehicleSellPrice(bug))}`)));
   }
 
   // ───────────── Staff ─────────────

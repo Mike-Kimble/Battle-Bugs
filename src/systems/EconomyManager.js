@@ -142,7 +142,7 @@ export class EconomyManager {
     }
     return [...map.values()].map((ps) => {
       ps.sort((a, b) => b.hpRatio - a.hpRatio);
-      return { key: ps[0].key, parts: ps, best: ps[0], scrap: ps[0].isScrap };
+      return { id: `${ps[0].key}${ps[0].isScrap ? '|scrap' : ''}`, key: ps[0].key, parts: ps, best: ps[0], scrap: ps[0].isScrap };
     });
   }
 
@@ -153,6 +153,12 @@ export class EconomyManager {
 
   sellOrder(group) {
     return [...group.parts].sort((a, b) => a.hpRatio - b.hpRatio);
+  }
+
+  /** Sell every part in each of these stacks at once. Returns the total. */
+  sellGroups(groups) {
+    this.assertNotInField();
+    return groups.reduce((t, g) => t + this.sellFromGroup(g, g.parts.length), 0);
   }
 
   /** Sell `count` from a stack, worst condition first. Returns the total. */

@@ -493,7 +493,7 @@ export class WorkshopUI {
     );
   }
 
-  /** Everything fitted to the vehicle, rarest first: "Category: Name — Rarity". */
+  /** Everything fitted to the vehicle, rarest first: "Category: Name — ★★ Rarity". */
   renderComponents(bug) {
     const CATEGORY = { chassis: 'Chassis', engine: 'Power Plant', tires: 'Running Gear', castor: 'Running Gear', armor: 'Armour', weapon: 'Weapon', cooling: 'Cooling', enhancement: 'Enhancement', drivetrain: 'Drive Train' };
     const parts = [...bug.parts].sort((a, b) => RARITY[b.rarity].rank - RARITY[a.rarity].rank || b.tier - a.tier || a.name.localeCompare(b.name));
@@ -502,6 +502,7 @@ export class WorkshopUI {
       el('ul', { class: 'component-list' }, parts.map((p) => el('li', {},
         el('span', { class: 'muted' }, `${CATEGORY[p.type] || p.type}: `),
         p.name, ' — ',
+        el('span', { class: 'stars' }, `${'★'.repeat(p.tier)}`), ' ',
         el('span', { class: `rarity-${p.rarity}` }, RARITY[p.rarity].label)))));
   }
 
