@@ -261,6 +261,19 @@ export class EconomyManager {
     return this.hasFreeSlot(bug, part.type) && !this.fitProblem(part, bug) && !this.state.isLocked(bug);
   }
 
+  /**
+   * Where a part could be bought and bolted straight on: on twin drives, the
+   * drives (0, 1) with a free slot that it suits; otherwise [null] if it fits, [] if not.
+   */
+  fitBays(part, bug) {
+    if (!bug || this.state.isLocked(bug)) return [];
+    if (BattleBug.isAddOn(part.type) && bug.drives.length > 1) {
+      const per = BattleBug.perDrive(part.type);
+      return [0, 1].filter((b) => bug.addOnsOn(part.type, b).length < per && !this.fitProblem(part, bug, undefined, b));
+    }
+    return this.canFitNow(part, bug) ? [null] : [];
+  }
+
   /** @param {number} [bay] cooling / enhancements / drive train: which drive to mount it on */
   equipFromInventory(bug, partUid, slot, bay) {
     const part = this.state.getPart(partUid);
@@ -394,12 +407,13 @@ export class EconomyManager {
   }
 
   /** Buy a part and fit it straight onto `bug` (for an empty slot). */
-  buyAndFit(listingId, bug) {
+  /** @param {number} [bay] twin drives: which drive to fit it to */
+  buyAndFit(listingId, bug, bay) {
     const listing = this.state.market.parts.find((l) => l.id === listingId);
-    const problem = listing && this.fitProblem(listing.part, bug);
+    const problem = listing && this.fitProblem(listing.part, bug, undefined, bay);
     if (problem) throw new Error(problem);
     const part = this.buyPartListing(listingId);
-    return this.equipFromInventory(bug, part.uid);
+    return this.equipFromInventory(bug, part.uid, undefined, bay);
   }
 
   /** Does `bug` have a free slot for a part of this type? */

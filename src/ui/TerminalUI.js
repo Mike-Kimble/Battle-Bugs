@@ -526,16 +526,20 @@ export class TerminalUI {
       forSale = el('div', { class: 'card-grid parts' }, s.market.parts.filter((l) => aisleOf(l.part) === cat).map((l) => partCard(l.part, this.economy, {
         compareTo: counterpart(active, l.part),
         extra: dealBadge(l),
-        actions: [this.economy.canFitNow(l.part, active)
-          // A free slot and it suits the vehicle: buy it and bolt it straight on (otherwise it's just "Buy").
-          ? el('button', {
-            class: 'btn btn-small btn-primary', disabled: s.money < this.economy.partPrice(l),
-            onclick: () => this.act(() => this.economy.buyAndFit(l.id, active), `Bought and fitted ${l.part.name} to ${active.name}`),
-          }, `Buy & fit ${formatMoney(this.economy.partPrice(l))}`)
-          : el('button', {
-            class: 'btn btn-small btn-primary', disabled: s.money < this.economy.partPrice(l),
-            onclick: () => this.act(() => this.economy.buyPartListing(l.id), `Bought ${l.part.name}`),
-          }, `Buy ${formatMoney(this.economy.partPrice(l))}`),
+        actions: [...(() => {
+          // Buy it and bolt it straight on where there's room and it suits (on twin drives: a button
+          // per drive it fits); if it fits nowhere, it's just "Buy".
+          const price = formatMoney(this.economy.partPrice(l));
+          const broke = s.money < this.economy.partPrice(l);
+          const bays = this.economy.fitBays(l.part, active);
+          if (!bays.length) {
+            return [el('button', { class: 'btn btn-small btn-primary', disabled: broke, onclick: () => this.act(() => this.economy.buyPartListing(l.id), `Bought ${l.part.name}`) }, `Buy ${price}`)];
+          }
+          return bays.map((b) => el('button', {
+            class: 'btn btn-small btn-primary', disabled: broke,
+            onclick: () => this.act(() => this.economy.buyAndFit(l.id, active, b ?? undefined), () => `Bought and fitted ${l.part.name} to ${b == null ? active.name : `Drive ${b + 1}`}${this.economy.strippedNote(l.part)}`),
+          }, b == null ? `Buy & fit ${price}` : `Buy & fit to Drive ${b + 1} · ${price}`));
+        })(),
         s.staff.mechanic ? el('span', { class: 'small muted' }, el('s', {}, formatMoney(l.price)), ' mechanic −10%') : null],
       })));
     }
