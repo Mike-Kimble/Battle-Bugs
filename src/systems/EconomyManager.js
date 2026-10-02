@@ -1629,6 +1629,41 @@ export class EconomyManager {
     this.state.addLog(`Entered the Inter-Planetary Tournament with ${bug.name}`);
   }
 
+  // ───────────── Scarab Standoff ─────────────
+  /** Open once you've put a 5-win streak together (and you're not in the main tournament). */
+  get standoffAvailable() {
+    return this.state.standoffOpen && !this.inField;
+  }
+
+  /**
+   * Two pilots of about your ability: the ones whose rides rate closest to
+   * yours (no elite tournament pilots). They bring copies of their own bugs.
+   */
+  standoffField(bug) {
+    const target = this.rating(bug);
+    const pool = this.state.pool.filter((p) => !p.elite && p.bug?.isBattleReady)
+      .sort((a, b) => Math.abs(this.rating(a.bug) - target) - Math.abs(this.rating(b.bug) - target))
+      .slice(0, 5);
+    const picks = [];
+    while (picks.length < 2 && pool.length) picks.push(pool.splice(Math.floor(Math.random() * Math.min(pool.length, 3)), 1)[0]);
+    while (picks.length < 2) { const p = this.sparringPartner(bug); picks.push({ ...p, skill: p.difficulty }); }
+    return picks.map((p) => ({
+      name: p.name, planet: p.planet, style: p.style, difficulty: p.skill ?? p.difficulty,
+      bug: BattleBug.fromJSON({ ...p.bug.toJSON(), pilot: { name: p.name, planet: p.planet } }),
+    }));
+  }
+
+  /** Pay the entry fee and meet your two opponents. */
+  enterStandoff() {
+    const bug = this.state.activeBug;
+    if (!this.standoffAvailable) throw new Error(`Win ${ECONOMY.STANDOFF_STREAK} in a row to open the Scarab Standoff`);
+    if (!bug?.isBattleReady) throw new Error(bug ? bug.battleIssues()[0] : 'No vehicle');
+    if (!this.state.canAfford(ECONOMY.STANDOFF_FEE)) throw new Error(`The entry fee is ${formatMoney(ECONOMY.STANDOFF_FEE)}`);
+    this.state.spend(ECONOMY.STANDOFF_FEE);
+    this.state.addLog(`Entered the Scarab Standoff with ${bug.name}`);
+    return this.standoffField(bug);
+  }
+
   /** The tournament is over for you (won, knocked out or withdrawn): staff get the wages they ran up. */
   withdrawTournament(report = null) {
     Object.assign(this.state.tournament, { entered: false, vehicleId: null, round: 0, opponent: null, field: null });
@@ -1972,7 +2007,8 @@ export class EconomyManager {
    * @param {{result:'win'|'loss'|'tie', reason:string, challenger:object, opponentBug:BattleBug,
    *   playerBug:BattleBug, tournament:boolean, stake:{type:'cash'|'titles', amount?:number}|null, bet:object|null}} m
    */
-  settleMatch({ result, reason, challenger, opponentBug, playerBug, tournament, stake, bet }) {
+  /** standoff: the Scarab Standoff (three on the donut; the prize if you're the last one standing). */
+  settleMatch({ result, reason, challenger, opponentBug, playerBug, tournament, stake, bet, standoff = false }) {
     const s = this.state;
     const startMoney = s.money;
     const report = { result, reason, lines: [], bounty: 0, captured: null, lostVehicle: null, champion: false, arrest: false };
@@ -1987,6 +2023,10 @@ export class EconomyManager {
     else s.record.ties++;
     if (result === 'win') s.record.streak = Math.max(0, s.record.streak || 0) + 1;
     if (result === 'loss') s.record.streak = Math.min(0, s.record.streak || 0) - 1;
+    if (!s.standoffOpen && s.record.streak >= ECONOMY.STANDOFF_STREAK) {
+      s.standoffOpen = true;
+      report.lines.push(`★ ${ECONOMY.STANDOFF_STREAK} wins in a row — the Scarab Standoff is open to you (Tournaments tab).`);
+    }
 
     const capture = () => {
       opponentBug.pilot = null;
@@ -2002,7 +2042,17 @@ export class EconomyManager {
       report.lines.push(`Captured vehicle: ${opponentBug.name} (${Math.round(opponentBug.condition * 100)}% condition) — it's on your hoist.`);
     };
 
-    if (tournament) {
+    if (standoff) {
+      if (result === 'win') {
+        s.earn(ECONOMY.STANDOFF_PRIZE);
+        report.bounty = ECONOMY.STANDOFF_PRIZE;
+        report.lines.push(`Last bug standing in the Scarab Standoff: +${formatMoney(ECONOMY.STANDOFF_PRIZE)}`);
+      } else if (result === 'loss') {
+        report.lines.push('Knocked out of the Scarab Standoff — the entry fee is gone.');
+      } else {
+        report.lines.push('Nobody left standing — no prize this time.');
+      }
+    } else if (tournament) {
       // No purses and no captured vehicles in the tournament — only the grand prize.
       if (result === 'win') {
         s.tournament.round++;
@@ -2085,7 +2135,7 @@ export class EconomyManager {
     if (!tournament && challenger.record && result !== 'tie') {
       if (result === 'win') challenger.record.l++; else challenger.record.w++;
     }
-    if (!tournament && result === 'win') {
+    if (!tournament && !standoff && result === 'win') {
       s.record.challengerWins++;
       if (s.record.challengerWins === ECONOMY.TOURNAMENT_UNLOCK_WINS) report.lines.push('★ The Inter-Planetary Tournament is now OPEN to you!');
       if (s.record.challengerWins === ECONOMY.MECHANIC_SHOWS_AT_WINS) report.lines.push('A mechanic has heard about your wins and is looking for work — see the Admin tab.');

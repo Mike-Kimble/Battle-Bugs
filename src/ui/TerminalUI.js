@@ -48,7 +48,7 @@ function streakText(n = 0) {
  * tournament desk. Also renders the top status bar.
  */
 export class TerminalUI {
-  constructor(root, header, tabbar, { state, economy, sprite, onFight, onTrain, onNewGame, onBack }) {
+  constructor(root, header, tabbar, { state, economy, sprite, onFight, onTrain, onNewGame, onBack, onStandoff }) {
     this.root = root;
     this.header = header;
     this.tabbar = tabbar;
@@ -59,6 +59,7 @@ export class TerminalUI {
     this.onFight = onFight;
     this.onTrain = onTrain;
     this.onBack = onBack; // (back) => reopen the Garage area you came from
+    this.onStandoff = onStandoff;
     this.trainingDohyo = 0; // 0 = random
     this.onNewGame = onNewGame;
     this.tab = 'hangar';
@@ -818,11 +819,42 @@ export class TerminalUI {
         card('Training Dummy', 'A motorless dummy vehicle with no weapons. It just sits there and gets pushed around — perfect for practising rams, shoves and ring-outs.', 'dummy', 'PRACTISE')));
   }
 
+  /** The Scarab Standoff: a one-bout free-for-all, open after a 5-win streak. */
+  renderStandoff() {
+    const s = this.state;
+    const eco = this.economy;
+    const bug = s.activeBug;
+    const fee = ECONOMY.STANDOFF_FEE;
+    const card = el('div', { class: 'card standoff' },
+      el('h3', {}, '🪲 Scarab Standoff'),
+      el('p', {}, `You and two pilots of your level on the donut ring — three-way, every bug for itself. Last one standing wins ${formatMoney(ECONOMY.STANDOFF_PRIZE)}.`),
+      el('p', { class: 'small muted' }, `Entry ${formatMoney(fee)}. It's one bout: no bracket, no wagers, no captures.`));
+    if (!s.standoffOpen) {
+      const streak = Math.max(0, s.record.streak || 0);
+      card.append(el('div', { class: 'notice' }, `Locked. Put together a ${ECONOMY.STANDOFF_STREAK}-win streak to get an invitation (${Math.min(streak, ECONOMY.STANDOFF_STREAK)}/${ECONOMY.STANDOFF_STREAK}).`));
+      return card;
+    }
+    if (eco.inField) {
+      card.append(el('p', { class: 'muted small' }, 'Not while you\'re in the Inter-Planetary Tournament.'));
+      return card;
+    }
+    const canPay = s.money >= fee;
+    card.append(
+      el('p', {}, 'Entering with: ', el('strong', {}, bug?.name ?? '—'), bug && !bug.isBattleReady ? el('span', { class: 'bad' }, ' (not battle-ready)') : ''),
+      el('button', {
+        class: 'btn btn-fight', disabled: !bug?.isBattleReady || !canPay,
+        onclick: () => this.confirm('Enter the Scarab Standoff?', `Pay the ${formatMoney(fee)} entry fee and fight two pilots of your level at once on the donut. Last one standing wins ${formatMoney(ECONOMY.STANDOFF_PRIZE)}.`, () => this.onStandoff?.()),
+      }, canPay ? `ENTER · ${formatMoney(fee)}` : `Entry ${formatMoney(fee)} — you have ${formatMoney(s.money)}`));
+    return card;
+  }
+
   renderTournament() {
     const s = this.state;
     const eco = this.economy;
     const t = s.tournament;
+    const standoff = this.renderStandoff();
     const wrap = el('div', { class: 'tournament' },
+      standoff,
       el('h3', {}, 'The Inter-Planetary Tournament'),
       el('p', {}, `${ECONOMY.TOURNAMENT_ROUNDS} rounds against the galaxy's finest. Win the final for the ${formatMoney(ECONOMY.TOURNAMENT_PRIZE)} grand prize — and the game. `,
         'No purses and no captured vehicles along the way.'),

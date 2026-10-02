@@ -120,7 +120,8 @@ export class CanvasRenderer {
 
     const panelW = Math.min(260, (W - 150) / 2);
     this.drawBugPanel(ctx, engine.player, 10, 8, panelW, 'left');
-    this.drawBugPanel(ctx, engine.opponent, W - 10 - panelW, 8, panelW, 'right');
+    // Every opponent down the right (a free-for-all has two).
+    engine.bugs.filter((b) => b !== engine.player).forEach((b, i) => this.drawBugPanel(ctx, b, W - 10 - panelW, 8 + i * 62, panelW, 'right'));
 
     for (const f of ui.floats || []) this.drawFloat(ctx, f);
     if (ui.menu) this.drawRadialMenu(ctx, ui.menu, engine.player);

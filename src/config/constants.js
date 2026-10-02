@@ -82,6 +82,7 @@ export const ACTIONS = Object.freeze({
   SHOVE_DURATION: 0.55,
   DASH_COST: 8,               // swipe handbrake turn
   CHAIN_WEAR: 0.012,          // share of a chain's max HP lost per second of driving heavy tyres or tracks
+  MELEE_SWITCH: 0.7,          // free-for-all: an AI switches target when someone is this much closer
   VECTOR_NUDGE: 2,            // thrust vectoring: a swipe nudges you this many body radii (a vehicle's length)
   SPIN_COST: 28,              // twin drives: a swipe spins 360° on the spot instead
   SPIN_COOLDOWN: 3,           // seconds before you can spin again
@@ -219,6 +220,10 @@ export const ECONOMY = Object.freeze({
   FINE_BATTLES: 3,           // battles allowed to pay the fine
 
   MECHANIC_DISCOUNT: 0.9,    // mechanic gets 10% off parts & repairs
+  STANDOFF_STREAK: 5,        // win this many in a row to open the Scarab Standoff
+  STANDOFF_FEE: 250,
+  STANDOFF_PRIZE: 1000,
+  STANDOFF_DOHYO: 2,          // fought on the donut
   MATCH_FIND_FIRST: 0.4,     // manager's chance of finding a part to match your other drive at the first try…
   MATCH_FIND_STEP: 0.2,      // …and how much likelier after each bout they keep looking
   MIN_VEHICLE_PRICE: 100,

@@ -47,6 +47,7 @@ class App {
       onFight: (challenger, opts) => this.startMatch(challenger, opts),
       onTrain: (mode, dohyo) => this.startTraining(mode, dohyo),
       onBack: (back) => this.workshop.reopen(back),
+      onStandoff: () => this.startStandoff(),
       onNewGame: () => this.newGame(),
     });
     this.state.on(EVENTS.STATE_CHANGE, () => {
@@ -139,6 +140,27 @@ class App {
     });
   }
 
+  /** The Scarab Standoff: you and two pilots of your level on the donut — last one standing takes the prize. */
+  startStandoff() {
+    const player = this.state.activeBug;
+    let field;
+    try { field = this.economy.enterStandoff(); } catch (err) { toast(err.message, 'bad'); return; }
+    this.state.newVehicleIds.clear();
+    this.state.compareRef = null;
+    this.state.save();
+    const [a, b] = field;
+    const event = { id: 'standoff', name: 'Scarab Standoff', standoff: true };
+    this.beginBattle(player, event, {
+      standoff: true,
+      moneyBefore: this.state.money + ECONOMY.STANDOFF_FEE,
+      engine: new CombatEngine({
+        player, opponent: a.bug, difficulty: a.difficulty, style: a.style,
+        extras: [{ bug: b.bug, difficulty: b.difficulty, style: b.style }],
+        dohyo: new Dohyo(ECONOMY.STANDOFF_DOHYO),
+      }),
+    });
+  }
+
   startMatch(challenger, { tournament = false, betPct } = {}) {
     const player = tournament ? this.state.getVehicle(this.state.tournament.vehicleId) : this.state.activeBug;
     if (!player?.isBattleReady) {
@@ -174,11 +196,11 @@ class App {
   }
 
   /** Put a fight on screen and run it (a real bout or a training session). */
-  beginBattle(player, challenger, { engine, tournament = false, stake = null, bet = null, moneyBefore = this.state.money, training = null }) {
+  beginBattle(player, challenger, { engine, tournament = false, stake = null, bet = null, moneyBefore = this.state.money, training = null, standoff = false }) {
     closeModal();
     this.workshop.stop();
     this.sprite.clear();
-    this.match = { challenger, tournament, stake, bet, player, moneyBefore, training, endTimer: null, banner: null };
+    this.match = { challenger, tournament, stake, bet, player, moneyBefore, training, standoff, endTimer: null, banner: null };
     this.engine = engine;
     this.wireEngine(this.engine);
 
@@ -333,7 +355,7 @@ class App {
   finishMatch() {
     cancelAnimationFrame(this.raf);
     const engine = this.engine;
-    const { challenger, tournament, stake, bet, player, training } = this.match;
+    const { challenger, tournament, stake, bet, player, training, standoff } = this.match;
     const res = engine.result;
     this.engine = null;
     this.input.disable();
@@ -351,6 +373,7 @@ class App {
       tournament,
       stake,
       bet,
+      standoff,
     });
     report.moneyBefore = this.match.moneyBefore;
     this.state.commit();

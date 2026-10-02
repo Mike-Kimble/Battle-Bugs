@@ -24,13 +24,14 @@ export class CombatEngine extends EventEmitter {
    */
   /** @param {{dohyo?: Dohyo}} opts dohyo: which ring (defaults to the classic) */
   /** training: a practice session — nothing wears out (no per-match wear, no chain wear). */
-  constructor({ player, opponent, difficulty = 0.5, style = null, dohyo = null, ai = true, training = false }) {
+  /** extras: more opponents ([{ bug, difficulty, style }]) — a free-for-all, last one on the ring wins. */
+  constructor({ player, opponent, difficulty = 0.5, style = null, dohyo = null, ai = true, training = false, extras = [] }) {
     super();
     this.training = training;
     this.dohyo = dohyo || new Dohyo(1);
     this.player = player;
     this.opponent = opponent;
-    this.bugs = [player, opponent];
+    this.bugs = [player, opponent, ...extras.map((e) => e.bug)];
     this.physics = new PhysicsEngine(this);
     this.phase = 'countdown'; // countdown → fight → resolving → over
     this.countdown = MATCH.COUNTDOWN;
@@ -42,8 +43,16 @@ export class CombatEngine extends EventEmitter {
     this.critRolled = new Set(); // vital parts already rolled for a breakdown this match
     this.critical = null;        // { bug, part }: a frame that broke down (catastrophic damage)
 
-    player.resetForBattle(new Vector2D(-ARENA.R0 * 0.45, 0), 0);
-    opponent.resetForBattle(new Vector2D(ARENA.R0 * 0.45, 0), Math.PI);
+    if (this.bugs.length > 2) {
+      // Free-for-all: spread round the ring, everyone facing the middle.
+      this.bugs.forEach((b, i) => {
+        const a = Math.PI + (i * Math.PI * 2) / this.bugs.length;
+        b.resetForBattle(Vector2D.fromAngle(a, ARENA.R0 * 0.5), a + Math.PI);
+      });
+    } else {
+      player.resetForBattle(new Vector2D(-ARENA.R0 * 0.45, 0), 0);
+      opponent.resetForBattle(new Vector2D(ARENA.R0 * 0.45, 0), Math.PI);
+    }
     // Durability: only cheap armour and cheap running gear can be wrecked in a
     // single match. Everything else loses at most MATCH_DAMAGE_CAP of its max HP
     // per match, so from full it takes at least two fights to drop to 15%.
@@ -54,6 +63,9 @@ export class CombatEngine extends EventEmitter {
       }
     }
     this.ai = ai ? new AIController(opponent, player, difficulty, style) : null; // a training dummy has no pilot
+    this.ais = this.ai ? [this.ai, ...extras.map((e) => new AIController(e.bug, player, e.difficulty ?? difficulty, e.style ?? null))] : [];
+    // Free-for-all: everyone picks someone to go for — not necessarily you.
+    if (this.melee) for (const ai of this.ais) ai.foe = this.bugs.filter((b) => b !== ai.me)[Math.floor(Math.random() * (this.bugs.length - 1))];
 
     this.on(EVENTS.COLLISION, (c) => this.onCollision(c));
   }
@@ -66,7 +78,22 @@ export class CombatEngine extends EventEmitter {
   edgeDistance(pos) { return this.dohyo.edgeDistance(pos, this.time); }
   get live() { return this.phase === 'fight' || this.phase === 'resolving'; }
 
-  other(bug) { return bug === this.player ? this.opponent : this.player; }
+  /** A free-for-all (more than two on the ring). */
+  get melee() { return this.bugs.length > 2; }
+
+  /** Who `bug` is up against: the other one — or, in a free-for-all, the nearest still on the ring. */
+  other(bug) {
+    if (!this.melee) return bug === this.player ? this.opponent : this.player;
+    const rest = this.bugs.filter((b) => b !== bug);
+    const alive = rest.filter((b) => !b.out);
+    return (alive.length ? alive : rest).reduce((n, b) => (b.pos.distanceTo(bug.pos) < n.pos.distanceTo(bug.pos) ? b : n));
+  }
+
+  /** Has the bout been settled? (Two on the ring: anyone out. Free-for-all: you're out, or everyone else is.) */
+  get decided() {
+    if (!this.melee) return this.eliminations.length > 0;
+    return this.player.out || this.bugs.every((b) => b === this.player || b.out);
+  }
 
   /** Pull a point back inside the current ring, leaving `margin` px to the edge. */
   clampInside(point, margin = 0) {
@@ -85,7 +112,16 @@ export class CombatEngine extends EventEmitter {
     }
 
     if (this.live) this.time += dt;
-    if (this.phase === 'fight' && this.ai) this.ai.update(dt, this);
+    if (this.phase === 'fight') {
+      for (const ai of this.ais) {
+        if (this.melee) {
+          // Stick with your target unless they're gone or someone else is clearly closer.
+          const near = this.other(ai.me);
+          if (ai.foe.out || near.pos.distanceTo(ai.me.pos) < ai.foe.pos.distanceTo(ai.me.pos) * ACTIONS.MELEE_SWITCH) ai.foe = near;
+        }
+        ai.update(dt, this);
+      }
+    }
 
     for (const bug of this.bugs) bug.control.face = this.other(bug).pos; // thrust-vectoring bugs keep facing their opponent
     if (this.live) this.dohyo.applyForces(this.bugs, dt, this.time); // slopes and turntables
@@ -133,6 +169,19 @@ export class CombatEngine extends EventEmitter {
       return;
     }
 
+    if (this.phase === 'resolving' && this.melee) {
+      // Last one on the ring wins; you out with nobody left standing either is a draw.
+      const allOut = this.bugs.every((b) => b.out);
+      const windowClosed = (this.time - this.firstElimAt) * 1000 >= MATCH.TIE_WINDOW_MS;
+      if (!allOut && !windowClosed) return;
+      const mine = this.eliminations.find((e) => e.bug === this.player);
+      const last = this.eliminations[this.eliminations.length - 1];
+      if (allOut && this.player.out && mine && last.time - mine.time <= MATCH.TIE_WINDOW_MS / 1000) this.finish('tie', mine.reason);
+      else if (this.player.out) this.finish('loss', mine.reason);
+      else this.finish('win', last.reason);
+      return;
+    }
+
     if (this.phase === 'resolving') {
       const bothOut = this.bugs.every((b) => b.out);
       const windowClosed = (this.time - this.firstElimAt) * 1000 >= MATCH.TIE_WINDOW_MS;
@@ -152,6 +201,10 @@ export class CombatEngine extends EventEmitter {
     bug.control.cruise = null;
     bug.lunge = null;
     this.eliminations.push({ bug, reason, time: this.time });
+    if (reason === 'ringout') this.emit(EVENTS.RING_OUT, { bug });
+    if (reason === 'stallout') this.emit(EVENTS.STALL, { bug, strikes: bug.stallStrikes, stallOut: true });
+    // A free-for-all goes on until it's settled.
+    if (!this.decided) return;
     // The survivor digs in at the tawara: cancel its charge and brake hard so a
     // winning shove doesn't carry it over the edge too.
     for (const other of this.bugs) {
@@ -161,8 +214,6 @@ export class CombatEngine extends EventEmitter {
       other.control.cruise = null;
       other.vel.scaleInPlace(ACTIONS.VICTORY_BRAKE);
     }
-    if (reason === 'ringout') this.emit(EVENTS.RING_OUT, { bug });
-    if (reason === 'stallout') this.emit(EVENTS.STALL, { bug, strikes: bug.stallStrikes, stallOut: true });
     if (this.firstElimAt === null) {
       this.firstElimAt = this.time;
       this.phase = 'resolving';
