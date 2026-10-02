@@ -12,6 +12,18 @@ const rand = (a = 0, b = 1) => a + Math.random() * (b - a);
 const randInt = (a, b) => Math.floor(rand(a, b + 1));
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 /** What a challenger says once a fight is on. */
+/** What a pilot says when they won't put their ride on the line. */
+const TITLE_REFUSALS = [
+  'My ride? Not a chance. Get lost.',
+  'Ummmm... No.',
+  'In your dreams!',
+  'Certainly!   Not.',
+  "There's the door.",
+  "I'd rather slam my antenna in the door.",
+  'No thanks, chum.',
+  'Why would I risk this for your junk?',
+];
+
 const ACCEPT_LINES = [
   "You're on!", "Let's do it!", "Sure, I wasn't doing much this afternoon anyway.", 'Hold my Cola.',
   'Hell yeah!', "Ok, let's go.", 'Sure thing, slick.',
@@ -1466,8 +1478,9 @@ export class EconomyManager {
     const sure = (c.rookie && !c.titleAsked) || s.comeback;
     c.titleAsked = true;
     if (!sure && chance(ECONOMY.TITLE_REFUSAL)) {
-      n.log.push({ who: 'them', text: 'My ride? Not a chance. Get lost.' });
-      return { status: 'reject', message: `${c.bug.pilot?.name || c.bug.name}: My ride? Not a chance. Get lost.`, ...this.reject(c) };
+      const no = pick(TITLE_REFUSALS);
+      n.log.push({ who: 'them', text: no });
+      return { status: 'reject', message: `${c.bug.pilot?.name || c.bug.name}: ${no}`, ...this.reject(c) };
     }
     n.deal = { type: 'titles' };
     n.counter = null;
