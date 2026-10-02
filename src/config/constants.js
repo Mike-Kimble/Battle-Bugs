@@ -89,7 +89,8 @@ export const STAMINA = Object.freeze({
  */
 export const HEAT = Object.freeze({
   MAX: 100,
-  // Flat out, with a Cooling score of 0 you overheat in 7s; at a score of 100 you never do.
+  // Flat out, with a Cooling score of 0 you overheat in 7s; at a score of 100 you never do —
+  // cooling removes that share of the heat you make, so it covers drive train and running gear losses too.
   OVERHEAT_SECONDS: 7,
   IDLE_COOL_BASE: 0.3,       // resting cools you even with no cooling: (base + cooling score) × the full-throttle heat rate
   WEAPON_FRACTION: 0.3,      // a weapon shot: 30% of its stamina cost

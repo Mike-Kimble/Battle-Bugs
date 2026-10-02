@@ -671,7 +671,8 @@ export class PhysicsEngine {
     if (driving) {
       // Grip and rolling resistance take more energy; so does a drive train that wastes it.
       const load = (effort * s.drainMult * (s.gearLoad ?? 1) * HEAT.REF_EFFICIENCY) / (s.driveEff || 1);
-      bug.heat += heatRate * (load - coolScore) * dt;
+      // Cooling takes away its share of whatever heat you make: at 100% it all goes, however lossy the drive.
+      bug.heat += heatRate * load * (1 - coolScore) * dt;
       const emptyIn = STAMINA.EMPTY_SECONDS_WORST + (STAMINA.EMPTY_SECONDS_BEST - STAMINA.EMPTY_SECONDS_WORST) * staminaScore ** STAMINA.EMPTY_CURVE;
       bug.stamina -= (s.staminaMax / emptyIn) * load * dt;
     } else {
