@@ -255,7 +255,12 @@ export class EconomyManager {
     if (part.stats.group === 'gearbox') {
       const fitted = bug.drivetrain.filter((p) => p.stats.group === 'gearbox' && p !== part).length;
       const replacing = slot != null && bug.addOnsOn('drivetrain', onBay ?? 0)[slot]?.stats.group === 'gearbox';
-      if (fitted >= PhysicsEngine.gearboxLimit(bug) && !replacing) return 'No room dummy!';
+      if (fitted >= PhysicsEngine.gearboxLimit(bug) && !replacing) {
+        // Both on the other drive and none on this one: point them at it.
+        const here = onBay == null ? fitted : bug.addOnsOn('drivetrain', onBay).filter((p) => p.stats.group === 'gearbox').length;
+        if (onBay != null && here === 0) return "This won't fit, maybe take a reducer off the other drive?";
+        return 'No room dummy!';
+      }
     }
     if (!this.fits(part, bug, onBay)) {
       if (part.stats.jacket && bug.drives.length > 1) return `That drive needs ${/^[AEIOU]/.test(JACKET_NAMES[part.stats.jacket]) ? 'an' : 'a'} ${JACKET_NAMES[part.stats.jacket]} of its own first`;
