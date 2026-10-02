@@ -1,4 +1,4 @@
-import { ECONOMY, PILOT_SKILL, winRate } from '../config/constants.js';
+import { ECONOMY, PHYSICS, PILOT_SKILL, winRate } from '../config/constants.js';
 import {
   PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, RIVAL_EXCUSES, CHALLENGER_ROSTER, RARITY, worksWith, JACKET_NAMES, THRUST_DRIVES, heavyGear, turbineLine, turbineComplete, driveKind,
 } from '../config/partsData.js';
@@ -6,6 +6,7 @@ import { STAFF_ROSTER } from '../config/staff.js';
 import { BattleBug } from '../entities/BattleBug.js';
 import { PhysicsEngine } from '../physics/PhysicsEngine.js';
 import { Part, makeId } from '../entities/Part.js';
+import { Racer } from '../entities/Racer.js';
 
 // ───────────── RNG helpers ─────────────
 const rand = (a = 0, b = 1) => a + Math.random() * (b - a);
@@ -29,6 +30,9 @@ const ACCEPT_LINES = [
   'Hell yeah!', "Ok, let's go.", 'Sure thing, slick.',
 ];
 const chance = (p) => Math.random() < p;
+/** Race Bug names: built for speed, and named like it. */
+const RACE_ADJECTIVES = ['Nitro', 'Slipstream', 'Redline', 'Apex', 'Blitz', 'Quicksilver', 'Flat-Out', 'Hairpin', 'Chicane', 'Turbo', 'Overdrive', 'Afterglow'];
+const RACE_NOUNS = ['Gnat', 'Midge', 'Dart', 'Skimmer', 'Whippet', 'Hornet', 'Dragonfly', 'Flea', 'Mayfly', 'Streak', 'Pond Skater', 'Cricket'];
 const clampTier = (t) => Math.max(1, Math.min(5, t));
 const roundTo = (n, step) => Math.max(step, Math.round(n / step) * step);
 
@@ -946,6 +950,10 @@ export class EconomyManager {
    */
   ensurePool() {
     const s = this.state;
+    if (this.racing) {
+      for (const p of s.pool) this.refreshPilot(p);
+      return;
+    }
     if (!s.pool.length) {
       const [rookie, ...rest] = CHALLENGER_ROSTER;
       s.pool.push(this.makeRookie(rookie));
@@ -983,7 +991,7 @@ export class EconomyManager {
    */
   repickRoamer() {
     const s = this.state;
-    if (!s.roamerId) return;
+    if (!s.roamerId || this.racing) return;
     const old = s.pool.find((p) => p.id === s.roamerId);
     const worst = s.pool.filter((p) => p.id !== s.rivalId && !p.elite).sort((x, y) => this.strength(x) - this.strength(y))[0];
     if (!worst || worst === old) return;
@@ -1099,7 +1107,7 @@ export class EconomyManager {
     // The elite come out once 5★ pilots are your level: a 5★ regular on the board,
     // a 4★ ride of your own, or a board that's scrolled up after walk-offs.
     const best = this.bestVehicle;
-    if (s.challengers.some((c) => !c.elite && c.tier >= 5) || (best && this.vehicleStars(best) >= ECONOMY.ELITE_AT_STARS) || s.board.tierShift > 0) s.elitesOut = true;
+    if (!this.racing && (s.challengers.some((c) => !c.elite && c.tier >= 5) || (best && this.vehicleStars(best) >= ECONOMY.ELITE_AT_STARS) || s.board.tierShift > 0)) s.elitesOut = true;
     this.sortBoard();
   }
 
@@ -1115,7 +1123,7 @@ export class EconomyManager {
    */
   setRival(pilot, lostBugName) {
     const s = this.state;
-    if (s.rivalId || !pilot?.record) return false;
+    if (s.rivalId || !pilot?.record || this.racing) return false; // rivalries are made in the ring, not on the track
     const wasRoamer = this.isRoamer(pilot);
     s.rivalId = pilot.id;
     pilot.rookie = false; // no longer anybody's easy first fight
@@ -1207,6 +1215,7 @@ export class EconomyManager {
 
   /** Pilots use the same logic as your mechanic: repair, then buy the optimal affordable part. */
   maintainPilot(p) {
+    if (this.racing) { this.maintainRacer(p); return; }
     const bug = p.bug;
     for (const part of bug.parts) {
       const cost = Math.ceil(part.missingHp * (part.value / part.maxHp) * ECONOMY.REPAIR_RATE);
@@ -1262,7 +1271,7 @@ export class EconomyManager {
     const p = free.sort((x, y) => Math.abs(this.rating(x.bug) - target) - Math.abs(this.rating(y.bug) - target))[0];
     if (best) {
       p.bug = this.matchedBug();
-      if (p.style === 'zapper' && !p.bug.weapons.length && p.bug.weaponSlots) p.bug.equip(Part.create(pickPartKey('weapon', p.tier + 1), rand(0.7, 1)));
+      if (!this.racing && p.style === 'zapper' && !p.bug.weapons.length && p.bug.weaponSlots) p.bug.equip(Part.create(pickPartKey('weapon', p.tier + 1), rand(0.7, 1)));
     }
     return this.refreshPilot(p);
   }
@@ -1275,7 +1284,7 @@ export class EconomyManager {
     let pickBug = null;
     let err = Infinity;
     for (let i = 0; i < 24 && err > 0.06; i++) {
-      const bug = this.generateBug(clampTier(star + (i % 2)));
+      const bug = this.racing ? this.generateRaceBug(clampTier(star + (i % 2))) : this.generateBug(clampTier(star + (i % 2)));
       const e = Math.abs(this.rating(bug) - target) / target;
       if (e < err) { pickBug = bug; err = e; }
     }
@@ -1366,6 +1375,7 @@ export class EconomyManager {
   // ───────────── Confidence & wagers ─────────────
   /** Rough fighting strength used for odds, haggling and the manager's bets. */
   rating(bug) {
+    if (this.racing) return this.raceRating(bug); // on the Race board, all that counts is speed round the S
     const s = bug.getStats();
     const armor = bug.armor && !bug.armor.isBroken ? bug.armor.stats.absorb * bug.armor.hpRatio * 20 : 0;
     const guns = bug.weapons.filter((w) => !w.isBroken).length * 5;
@@ -1418,7 +1428,7 @@ export class EconomyManager {
     const ideal = this.targetStake(c);
     n.target ??= ideal;
     n.round += 1;
-    n.log.push({ who: 'you', text: `I'll fight you for ${formatMoney(amount)}.` });
+    n.log.push({ who: 'you', text: `I'll ${this.racing ? 'race' : 'fight'} you for ${formatMoney(amount)}.` });
 
     const respond = (status, value, text) => {
       if (status === 'accept') {
@@ -1471,7 +1481,7 @@ export class EconomyManager {
   /** Ask to play for titles (pink slips). 20% of challengers refuse. */
   offerTitles(c) {
     const n = this.nego(c);
-    n.log.push({ who: 'you', text: 'Let\'s play for titles — winner takes the loser\'s vehicle.' });
+    n.log.push({ who: 'you', text: `Let's ${this.racing ? 'race' : 'play'} for titles — winner takes the loser's vehicle.` });
     // Sure things: the rookie's first title offer, and your first one after losing
     // your only ride (everyone fancies taking a cheap replacement off you).
     const s = this.state;
@@ -1775,6 +1785,138 @@ export class EconomyManager {
 
   withdrawWeave() {
     Object.assign(this.state.weave, { entered: false, round: 0, field: [] });
+  }
+
+  // ───────────── The Race board ─────────────
+  /**
+   * Roughly how long a bug takes from its start pad to the finish line on the
+   * S-track, flown well: flat out down the first straight, braking to what its
+   * grip can hold round the hairpin, then the run to the line.
+   */
+  raceTime(bug) {
+    const st = bug.getStats();
+    if (!(st.vMax > 0) || !(st.accel > 0) || !(st.mass > 0)) return 99;
+    const a = st.accel;
+    const b = Math.max(PhysicsEngine.idleBrake(st), st.accelRev ?? st.accel) * 0.85;
+    const aLat = (st.fGrip / st.mass) * PHYSICS.LATERAL_GRIP * (st.lateralMult ?? 1);
+    const vc = Math.max(1, Math.min(st.vMax, Math.sqrt(aLat * 130) * 0.865));
+    // A straight of length L from v0, braking down to v1 at its end.
+    const straight = (L, v0, v1) => {
+      const vp = Math.min(st.vMax, Math.sqrt((2 * a * b * L + b * v0 * v0 + a * v1 * v1) / (a + b)));
+      const dA = (vp * vp - v0 * v0) / (2 * a);
+      const dB = Math.max(0, (vp * vp - v1 * v1) / (2 * b));
+      return (vp - v0) / a + Math.max(0, L - dA - dB) / vp + Math.max(0, vp - v1) / b;
+    };
+    // …and flat out from the hairpin to the line.
+    const run = (L, v0) => {
+      const vp = Math.min(st.vMax, Math.sqrt(v0 * v0 + 2 * a * L));
+      return (vp - v0) / a + Math.max(0, L - (vp * vp - v0 * v0) / (2 * a)) / vp;
+    };
+    return Math.min(99, straight(520, 0, vc) + 408 / vc + run(200, vc));
+  }
+
+  /** A bug's racing strength: the quicker it gets to the line, the higher. */
+  raceRating(bug) {
+    return 1000 / this.raceTime(bug);
+  }
+
+  /**
+   * A Race Bug: built for the S-track, not the ring. The pilot's crew tries a
+   * few builds of the tier, strips out the weapons and plating (dead weight
+   * on a race track), never glides on castors, and keeps the quickest.
+   */
+  generateRaceBug(tier, { condition = () => rand(0.8, 1) } = {}) {
+    let best = null;
+    let bestT = Infinity;
+    for (let i = 0; i < 12 || !best; i++) {
+      const bug = this.generateBug(tier, { condition });
+      for (const w of [...bug.weapons]) bug.unequip(w);
+      if (bug.armor) bug.unequip(bug.armor);
+      if (bug.tires?.type === 'castor' && i < 30) continue;
+      const t = this.raceTime(bug);
+      if (t < bestT) { best = bug; bestT = t; }
+    }
+    best.name = `${pick(RACE_ADJECTIVES)} ${pick(RACE_NOUNS)}`;
+    return best;
+  }
+
+  /** Every pilot's racing side: a Race Bug, a racing skill (not the same as their fighting) and a racing record. */
+  ensureRacers() {
+    const s = this.state;
+    const pool = s.battleBoard?.pool || s.pool;
+    const have = new Set(s.racers.map((r) => r.owner.id));
+    for (const p of pool) {
+      if (have.has(p.id)) continue;
+      const rookie = p.rookie && p.record.w + p.record.l === 0;
+      const skill = rookie ? 0.05 : Math.max(0.1, Math.min(0.95, p.skill + rand(-0.15, 0.15)));
+      const races = rookie ? 0 : randInt(4, 40);
+      let w = 0;
+      for (let i = 0; i < races; i++) if (chance(winRate(skill))) w++;
+      const bug = this.generateRaceBug(rookie ? 1 : this.vehicleStars(p.bug), rookie ? { condition: () => rand(0.5, 0.65) } : undefined);
+      s.racers.push(new Racer(p, { bug, skill, record: { w, l: races - w } }));
+    }
+    for (const r of s.racers) this.refreshPilot(r);
+  }
+
+  /**
+   * Work on the Race board: for the length of `fn`, the board, the walk-offs
+   * and the pool are the racers', and every rating is a race rating — so the
+   * board, haggling, titles and bets all run as they do on the Battle tab.
+   */
+  onRaceBoard(fn) {
+    if (this.racing) return fn();
+    const s = this.state;
+    this.ensureRacers();
+    const rb = s.raceBoard;
+    s.battleBoard = { pool: s.pool, challengers: s.challengers, board: s.board };
+    s.pool = s.racers;
+    s.challengers = rb.challengers;
+    s.board = rb;
+    this.racing = true;
+    try {
+      return fn();
+    } finally {
+      s.raceBoard = s.board;
+      s.raceBoard.challengers = s.challengers;
+      ({ pool: s.pool, challengers: s.challengers, board: s.board } = s.battleBoard);
+      s.battleBoard = null;
+      this.racing = false;
+    }
+  }
+
+  /** The economy as seen from the Race tab: every call runs on the Race board. */
+  get raceDesk() {
+    this._raceDesk ||= new Proxy(this, {
+      get: (target, key) => target.onRaceBoard(() => {
+        const v = Reflect.get(target, key, target);
+        return typeof v === 'function' ? (...args) => target.onRaceBoard(() => v.apply(target, args)) : v;
+      }),
+    });
+    return this._raceDesk;
+  }
+
+  get raceOpen() {
+    return !!this.state.raceOpen;
+  }
+
+  /** A racer's pit crew between races: repairs, then the one part that takes most time off a run to the line. */
+  maintainRacer(p) {
+    const bug = p.bug;
+    for (const part of bug.parts) {
+      const cost = Math.ceil(part.missingHp * (part.value / part.maxHp) * ECONOMY.REPAIR_RATE);
+      if (cost <= p.purse) { p.purse -= cost; part.repair(); }
+    }
+    const types = ['engine', 'tires', 'enhancement', 'drivetrain', 'cooling'].sort(() => Math.random() - 0.5);
+    for (const type of types) {
+      const key = this.optimalPart(bug, type, p.purse, { owned: [], discount: 1 });
+      if (!key) continue;
+      let displaced;
+      try { displaced = bug.equip(new Part(key)); } catch { continue; }
+      p.purse -= PARTS[key].value;
+      for (const old of displaced || []) p.purse += Math.round(old.value * old.hpRatio * ECONOMY.SCRAP_RATE);
+      break;
+    }
+    this.refreshPilot(p);
   }
 
   /** The tournament is over for you (won, knocked out or withdrawn): staff get the wages they ran up. */
@@ -2123,12 +2265,14 @@ export class EconomyManager {
    *   playerBug:BattleBug, tournament:boolean, stake:{type:'cash'|'titles', amount?:number}|null, bet:object|null}} m
    */
   /** standoff: the Scarab Standoff (three on the donut; the prize if you're the last one standing). */
-  settleMatch({ result, reason, challenger, opponentBug, playerBug, tournament, stake, bet, standoff = false, winner = null, weave = false }) {
+  settleMatch({ result, reason, challenger, opponentBug, playerBug, tournament, stake, bet, standoff = false, winner = null, weave = false, race = false }) {
     const s = this.state;
     const startMoney = s.money;
+    // A race off the Race board: the stakes are settled (and the board moves on) over there.
+    const onBoard = (fn) => (race ? this.onRaceBoard(fn) : fn());
     const report = { result, reason, lines: [], bounty: 0, captured: null, lostVehicle: null, champion: false, arrest: false };
     // Beating an established rival (not the win that makes them one) earns a fresh excuse by DM.
-    const beatRival = !tournament && result === 'win' && !!s.rivalId && challenger.id === s.rivalId;
+    const beatRival = !tournament && !race && result === 'win' && !!s.rivalId && challenger.id === s.rivalId;
     const rivalRideName = opponentBug?.name;
     // Clear fight-only state (ring-out fall, stalls, effects) so neither bug is drawn mid-plunge afterwards.
     for (const b of [playerBug, opponentBug]) b?.resetForBattle(b.pos, 0);
@@ -2173,6 +2317,10 @@ export class EconomyManager {
           report.bounty = ECONOMY.WEAVE_PRIZE;
           report.lines.push(`Weevil Weave champion! +${formatMoney(ECONOMY.WEAVE_PRIZE)}`);
           this.withdrawWeave();
+          if (!s.raceOpen) {
+            s.raceOpen = true;
+            report.lines.push("★ The Race tab is open — challenge the pilots' Race Bugs on the S-track, for cash or titles.");
+          }
         } else {
           report.lines.push(`Won round ${w.round} of the Weevil Weave — next up: ${w.field[w.round].name} (Tournaments tab).`);
         }
@@ -2221,52 +2369,56 @@ export class EconomyManager {
       } else {
         report.lines.push('Draw — tournament rules: the round will be re-fought.');
       }
-    } else if (stake?.type === 'titles') {
-      if (result === 'win') {
-        const lostName = opponentBug.name;
-        capture();
-        // They're back to the junkyard, like you once were.
-        challenger.bug = this.junkBug(`Scrap ${pick(BUG_NOUNS)}`);
-        this.refreshPilot(challenger);
-        // The first alien you beat for their title never forgets it.
-        if (this.setRival(challenger, lostName)) report.lines.push(`${challenger.name} took that loss personally…`);
-      } else if (result === 'loss') {
-        s.removeVehicle(playerBug.id);
-        report.lostVehicle = playerBug;
-        report.lines.push(`You lost the title: ${playerBug.name} now belongs to ${challenger.name || challenger.bug.pilot?.name || 'the challenger'}.`);
-        // They keep whichever bug is better and sell the other.
-        if (challenger.purse != null) {
-          playerBug.alien = true;
-          playerBug.resetForBattle(playerBug.pos, 0);
-          if (this.rating(playerBug) > this.rating(challenger.bug)) {
-            challenger.purse += Math.round(this.vehicleValue(challenger.bug) * ECONOMY.SELL_RATE);
-            challenger.bug = playerBug;
+    } else if (stake) {
+      onBoard(() => {
+        if (stake.type === 'titles') {
+          if (result === 'win') {
+            const lostName = opponentBug.name;
+            capture();
+            // They're back to the junkyard, like you once were.
+            challenger.bug = this.junkBug(`Scrap ${pick(BUG_NOUNS)}`);
+            this.refreshPilot(challenger);
+            // The first alien you beat for their title never forgets it.
+            if (this.setRival(challenger, lostName)) report.lines.push(`${challenger.name} took that loss personally…`);
+          } else if (result === 'loss') {
+            s.removeVehicle(playerBug.id);
+            report.lostVehicle = playerBug;
+            report.lines.push(`You lost the title: ${playerBug.name} now belongs to ${challenger.name || challenger.bug.pilot?.name || 'the challenger'}.`);
+            // They keep whichever bug is better and sell the other.
+            if (challenger.purse != null) {
+              playerBug.alien = true;
+              playerBug.resetForBattle(playerBug.pos, 0);
+              if (this.rating(playerBug) > this.rating(challenger.bug)) {
+                challenger.purse += Math.round(this.vehicleValue(challenger.bug) * ECONOMY.SELL_RATE);
+                challenger.bug = playerBug;
+              } else {
+                challenger.purse += Math.round(this.vehicleValue(playerBug) * ECONOMY.SELL_RATE);
+              }
+              this.refreshPilot(challenger);
+            }
+            if (!s.vehicles.length) {
+              report.lines.push('You have no vehicles left — find a replacement on the Marketplace.');
+              s.comeback = true; // the next title offer will be snapped up
+            }
           } else {
-            challenger.purse += Math.round(this.vehicleValue(playerBug) * ECONOMY.SELL_RATE);
+            report.lines.push('Draw — both titles stay put.');
           }
-          this.refreshPilot(challenger);
+        } else if (stake?.type === 'cash') {
+          if (result === 'win') {
+            report.bounty = stake.amount;
+            s.earn(stake.amount);
+            if (challenger.purse != null) challenger.purse = Math.max(0, challenger.purse - stake.amount);
+            report.lines.push(`Won the wager: +${formatMoney(stake.amount)}`);
+          } else if (result === 'loss') {
+            const paid = Math.min(stake.amount, s.money);
+            s.spend(paid);
+            if (challenger.purse != null) challenger.purse += paid;
+            report.lines.push(`Lost the wager: −${formatMoney(paid)}`);
+          } else {
+            report.lines.push('Draw — the wager is void.');
+          }
         }
-        if (!s.vehicles.length) {
-          report.lines.push('You have no vehicles left — find a replacement on the Marketplace.');
-          s.comeback = true; // the next title offer will be snapped up
-        }
-      } else {
-        report.lines.push('Draw — both titles stay put.');
-      }
-    } else if (stake?.type === 'cash') {
-      if (result === 'win') {
-        report.bounty = stake.amount;
-        s.earn(stake.amount);
-        if (challenger.purse != null) challenger.purse = Math.max(0, challenger.purse - stake.amount);
-        report.lines.push(`Won the wager: +${formatMoney(stake.amount)}`);
-      } else if (result === 'loss') {
-        const paid = Math.min(stake.amount, s.money);
-        s.spend(paid);
-        if (challenger.purse != null) challenger.purse += paid;
-        report.lines.push(`Lost the wager: −${formatMoney(paid)}`);
-      } else {
-        report.lines.push('Draw — the wager is void.');
-      }
+      });
     }
 
     if (beatRival) this.rivalExcuse(challenger, rivalRideName);
@@ -2281,7 +2433,7 @@ export class EconomyManager {
     if (!tournament && challenger.record && result !== 'tie') {
       if (result === 'win') challenger.record.l++; else challenger.record.w++;
     }
-    if (!tournament && !standoff && !weave && result === 'win') {
+    if (!tournament && !standoff && !weave && !race && result === 'win') {
       s.record.challengerWins++;
       if (s.record.challengerWins === ECONOMY.MECHANIC_SHOWS_AT_WINS) report.lines.push('A mechanic has heard about your wins and is looking for work — see the Admin tab.');
       if (s.record.challengerWins === ECONOMY.MANAGER_SHOWS_AT_WINS) report.lines.push('A manager wants to represent you — see the Admin tab.');
@@ -2302,7 +2454,7 @@ export class EconomyManager {
     if (s.staff.mechanic) this.runMechanic(report);
     if (s.staff.manager) this.runManager(report);
 
-    this.afterBout(challenger, tournament);
+    onBoard(() => this.afterBout(challenger, tournament));
     // The mechanic's pick is judged on the bug you'll fight with next.
     const mechPick = s.staff.mechanic ? this.mechanicAdvice(s.activeBug).pick : null;
     this.generateMarket();

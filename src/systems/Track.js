@@ -11,7 +11,9 @@ import { Vector2D } from '../physics/Vector2D.js';
  * renderer can use it unchanged.
  */
 export class Track {
-  constructor() {
+  /** @param {string} label what's on the line: the Weevil Weave, or a race off the Race board */
+  constructor({ label = 'Weevil Weave' } = {}) {
+    this.label = label;
     this.kind = 'weave';
     this.isTrack = true;
     this.angle = 0;
@@ -110,5 +112,5 @@ export class Track {
   }
   applyForces() {}
   floorVelocity() { return null; }
-  status() { return 'WEEVIL WEAVE · FIRST ACROSS THE CENTRE LINE WINS'; }
+  status() { return `${this.label.toUpperCase()} · FIRST ACROSS THE CENTRE LINE WINS`; }
 }

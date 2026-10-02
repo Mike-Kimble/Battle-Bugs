@@ -650,7 +650,7 @@ export class SpriteRenderer {
     c.style.width = `${size}px`;
     c.style.height = `${size}px`;
     const g = c.getContext('2d');
-    const rng = seeded(hashString(pilot.id || pilot.name || 'x'));
+    const rng = seeded(hashString(pilot.portraitId || pilot.id || pilot.name || 'x'));
     const r = () => rng();
     const hue = Math.floor(r() * 360);
     const skin = `hsl(${hue} 55% 50%)`;

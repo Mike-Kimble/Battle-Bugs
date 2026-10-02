@@ -809,7 +809,9 @@ export class RaceAI {
     if (me.out || me.stalled) return;
     this.think -= dt;
     if (this.think > 0) return;
-    this.think = 0.12 + (1 - difficulty) * 0.2;
+    const v = me.vel.length();
+    // Quick reactions at speed: a fast bug covers a lot of track between decisions.
+    this.think = Math.min(0.12 + (1 - difficulty) * 0.2, 30 / Math.max(1, v));
     // Nervous pilots lift off now and then.
     if (Math.random() < (1 - difficulty) * 0.12) { engine.stop(me); return; }
     const { s } = track.nearest(me.pos);
@@ -817,16 +819,19 @@ export class RaceAI {
     const turnAt = (d) => { const t = track.tangentAt(s + dir * d); return Math.abs(Math.atan2(here.cross(t), here.dot(t))); };
     // How fast this bug can take a hairpin on its grip (castors hardly at all), and how far it needs to slow down.
     const st = me.stats;
-    const v = me.vel.length();
     const aLat = st.mass > 0 ? (st.fGrip / st.mass) * PHYSICS.LATERAL_GRIP * (st.lateralMult ?? 1) : 0;
     const vCurve = Math.sqrt(aLat * 130) * (0.55 + 0.35 * difficulty);
-    const aBrake = (st.accelRev ?? st.accel) + PhysicsEngine.idleBrake(st);
-    const brakeDist = Math.max(0, (v * v - vCurve * vCurve) / (2 * Math.max(1, aBrake))) + 60;
+    // Brake whichever way stops harder: lift off and let the grip (and any reverse thrusters) slow you, or drive backwards.
+    const aCoast = PhysicsEngine.idleBrake(st);
+    const aReverse = st.accelRev ?? st.accel;
+    const aBrake = Math.max(aCoast, aReverse) * 0.85;
+    const brakeDist = Math.max(0, (v * v - vCurve * vCurve) / (2 * Math.max(1, aBrake))) + 60 + v * this.think;
     let bendAhead = false;
     for (let d = 40; d <= brakeDist; d += 40) if (turnAt(d) > 0.5) { bendAhead = true; break; }
     if (bendAhead && v > vCurve) {
-      // Too hot for the bend: thrust against the slide to scrub speed.
-      engine.moveTo(me, me.pos.sub(me.vel.normalize().scale(120)));
+      // Too hot for the bend: scrub off speed.
+      if (aCoast >= aReverse) engine.stop(me);
+      else engine.moveTo(me, me.pos.sub(me.vel.normalize().scale(120)));
       return;
     }
     // Look further ahead on the straights, closer (slower) into a hairpin.

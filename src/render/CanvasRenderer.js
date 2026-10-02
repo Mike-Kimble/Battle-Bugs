@@ -133,9 +133,9 @@ export class CanvasRenderer {
 
     if (engine.phase === 'countdown') {
       const n = Math.ceil(engine.countdown);
-      this.drawBanner(ctx, n > 0 ? String(n) : 'FIGHT!', '#ffd24a', 1 - (engine.countdown % 1));
+      this.drawBanner(ctx, n > 0 ? String(n) : (engine.race ? 'GO!' : 'FIGHT!'), '#ffd24a', 1 - (engine.countdown % 1));
     } else if (engine.time < 0.8) {
-      this.drawBanner(ctx, 'FIGHT!', '#ffd24a', 1);
+      this.drawBanner(ctx, engine.race ? 'GO!' : 'FIGHT!', '#ffd24a', 1);
     }
     if (ui.banner) this.drawBanner(ctx, ui.banner.text, ui.banner.color, 1);
     ctx.restore();

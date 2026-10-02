@@ -8,6 +8,7 @@ const TABS = [
   ['hangar', 'Garage'],
   ['market', 'Marketplace'],
   ['challengers', 'Battle'],
+  ['race', 'Race'],
   ['staff', 'Admin'],
   ['training', 'Training'],
   ['tournament', 'Tournaments'],
@@ -78,7 +79,8 @@ export class TerminalUI {
 
   /** The tabs you can use: in the tournament, only the Garage and the Tournaments. */
   get visibleTabs() {
-    return this.economy.inField ? TABS.filter(([k]) => k === 'hangar' || k === 'tournament') : TABS;
+    if (this.economy.inField) return TABS.filter(([k]) => k === 'hangar' || k === 'tournament');
+    return TABS.filter(([k]) => k !== 'race' || this.economy.raceOpen); // the Race tab opens once you've won the Weevil Weave
   }
 
   render() {
@@ -86,6 +88,7 @@ export class TerminalUI {
     this.renderHeader();
     const body = {
       challengers: () => this.renderChallengers(),
+      race: () => this.renderChallengers({ race: true }),
       hangar: () => this.renderHangar(),
       market: () => this.renderMarket(),
       staff: () => this.renderStaff(),
@@ -141,6 +144,14 @@ export class TerminalUI {
     );
   }
 
+  /** What you can see of a Race Bug from the pit wall: its running gear, and whether it's carrying anything nasty. */
+  raceChips(bug) {
+    return el('div', { class: 'chips' },
+      bug.tires ? el('span', { class: 'chip' }, bug.tires.name) : null,
+      bug.weapons.length ? bug.weapons.map((w) => el('span', { class: 'chip chip-weapon', style: { borderColor: WEAPON_CLASSES[w.stats.class].color, color: WEAPON_CLASSES[w.stats.class].color } }, w.name))
+        : el('span', { class: 'chip chip-dim' }, 'Unarmed'));
+  }
+
   weaponChips(bug) {
     if (!bug.weapons.length) return el('div', { class: 'chips' }, el('span', { class: 'chip chip-dim' }, 'Unarmed'));
     return el('div', { class: 'chips' }, bug.weapons.map((w) => el('span', {
@@ -150,39 +161,48 @@ export class TerminalUI {
   }
 
   // ───────────── Challenger board ─────────────
-  renderChallengers() {
+  /** The Battle tab — and the Race tab, the same board run on the pilots' Race Bugs. */
+  renderChallengers({ race = false } = {}) {
     const s = this.state;
     const active = s.activeBug;
     if (s.tournament.entered) {
       return el('div', { class: 'notice' }, 'You are entered in the Inter-Planetary Tournament. Fight your bracket from the Tournaments tab.',
         el('button', { class: 'btn btn-primary', onclick: () => this.setTab('tournament') }, 'Go to Tournament'));
     }
-    if (!s.challengers.length) this.economy.generateChallengers();
+    const eco = race ? this.economy.raceDesk : this.economy;
+    if (!(race ? s.raceBoard : s).challengers.length) eco.generateChallengers();
+    const board = race ? s.raceBoard : s.board;
+    const list = race ? s.raceBoard.challengers : s.challengers;
     const ready = active?.isBattleReady;
-    const walked = s.board.rejected;
+    const walked = board.rejected;
     return el('div', {},
-      this.economy.tournamentReady ? el('div', { class: 'notice notice-gold' },
+      !race && this.economy.tournamentReady ? el('div', { class: 'notice notice-gold' },
         `📈 Manager: "You're good enough for the Tournament, and you can cover the ${formatMoney(ECONOMY.TOURNAMENT_FEE)} entry with change to spare. I'd enter."`,
         el('button', { class: 'btn btn-small btn-primary', onclick: () => this.setTab('tournament') }, 'Go to Tournament')) : null,
-      el('p', { class: 'muted' }, 'Pick a challenger and agree the stakes: haggle over ', el('strong', {}, 'cash'),
-        ', or play for ', el('strong', {}, 'titles'), ' — winner drives off in the loser\'s vehicle. Your fighter: ',
-        el('strong', {}, active ? active.name : '—'), active && !ready ? el('span', { class: 'bad' }, ' (not battle-ready)') : ''),
+      race
+        ? el('p', { class: 'muted' }, 'Race the pilots\' Race Bugs on the S-track — first with their whole vehicle over the centre line wins, fall off and you lose. Haggle over ', el('strong', {}, 'cash'),
+          ', or race for ', el('strong', {}, 'titles'), ' — winner drives off in the loser\'s vehicle. Your racer: ',
+          el('strong', {}, active ? active.name : '—'), active && !ready ? el('span', { class: 'bad' }, ' (not race-ready)') : '')
+        : el('p', { class: 'muted' }, 'Pick a challenger and agree the stakes: haggle over ', el('strong', {}, 'cash'),
+          ', or play for ', el('strong', {}, 'titles'), ' — winner drives off in the loser\'s vehicle. Your fighter: ',
+          el('strong', {}, active ? active.name : '—'), active && !ready ? el('span', { class: 'bad' }, ' (not battle-ready)') : ''),
       !active ? el('div', { class: 'notice notice-warn' }, 'You have no vehicle. Buy one from Marketplace › Chassis.',
         el('button', { class: 'btn btn-primary', onclick: () => { this.marketCat = 'chassis'; this.setTab('market'); } }, 'Go to Chassis')) : null,
       active && !ready ? el('div', { class: 'notice notice-warn' },
-        el('strong', {}, `${active.name} isn't ready to fight:`),
+        el('strong', {}, `${active.name} isn't ready to ${race ? 'race' : 'fight'}:`),
         el('ul', { class: 'issues' }, active.battleIssues().map((i) => el('li', {}, i))),
         el('div', { class: 'part-actions' },
           !active.engine ? el('button', { class: 'btn btn-primary', onclick: () => { this.marketCat = 'engine'; this.setTab('market'); } }, 'Buy a motor') : null,
           el('button', { class: 'btn', onclick: () => this.setTab('hangar') }, 'Open the Garage'))) : null,
-      s.board.tierShift ? el('p', { class: 'small warn-text' }, `▲ The board has scrolled up ${s.board.tierShift} difficulty level${s.board.tierShift > 1 ? 's' : ''} after everyone walked off.`) : null,
-      walked.length ? el('p', { class: 'small muted' }, `Walked off (back after your next fight): ${walked.map((c) => this.pilotName(c)).join(', ')}`) : null,
-      el('div', { class: 'card-grid' }, s.challengers.map((c) => this.challengerCard(c, { ready }))));
+      board.tierShift ? el('p', { class: 'small warn-text' }, `▲ The board has scrolled up ${board.tierShift} difficulty level${board.tierShift > 1 ? 's' : ''} after everyone walked off.`) : null,
+      walked.length ? el('p', { class: 'small muted' }, `Walked off (back after your next ${race ? 'race' : 'fight'}): ${walked.map((c) => this.pilotName(c)).join(', ')}`) : null,
+      el('div', { class: 'card-grid' }, list.map((c) => this.challengerCard(c, { ready, race }))));
   }
 
-  challengerCard(c, { ready, onFight, label }) {
+  challengerCard(c, { ready, onFight, label, race = false }) {
     const bug = c.bug;
-    const eco = this.economy;
+    const eco = race ? this.economy.raceDesk : this.economy;
+    const go = race ? 'RACE' : 'FIGHT';
     const deal = c.nego?.deal;
     let foot;
     if (onFight) {
@@ -195,10 +215,10 @@ export class TerminalUI {
         el('div', { class: 'bounty' }, el('small', {}, 'Agreed stakes'), el('strong', {}, deal.type === 'cash' ? formatMoney(deal.amount) : 'TITLES')),
         el('div', { class: 'part-actions' },
           el('button', { class: 'btn btn-small', onclick: () => this.act(() => eco.cancelDeal(c)) }, 'Renegotiate'),
-          el('button', { class: 'btn btn-fight', disabled: !ready || !affordable, onclick: () => this.fight(c, { tournament: false }) }, 'FIGHT')));
+          el('button', { class: 'btn btn-fight', disabled: !ready || !affordable, onclick: () => this.fight(c, { tournament: false, race }) }, go)));
     } else {
       foot = el('div', { class: 'card-foot card-foot-end' },
-        el('button', { class: 'btn btn-small btn-primary', disabled: !ready, onclick: () => this.openChat(c) }, 'Message'));
+        el('button', { class: 'btn btn-small btn-primary', disabled: !ready, onclick: () => this.openChat(c, { race }) }, 'Message'));
     }
     const story = c.story ? c.story.replaceAll('{name}', c.name).replaceAll('{planet}', c.planet).replaceAll('{bug}', `${bug.name}`) : null;
     return el('article', { class: `card challenger${deal ? ' has-deal' : ''}` },
@@ -209,12 +229,12 @@ export class TerminalUI {
           el('h2', { class: 'pilot-name' }, this.pilotTitle(c)),
           el('div', { class: 'bug-subtitle' }, bug.name),
           el('div', { class: 'tier', title: 'Ranking' }, '★'.repeat(c.tier), el('span', { class: 'dim' }, '★'.repeat(5 - c.tier))),
-          c.record ? el('div', { class: 'pilot-record' }, `Record ${c.record.w}W – ${c.record.l}L`) : null,
-          this.venueLine(c)),
+          c.record ? el('div', { class: 'pilot-record' }, `${race ? 'Race record' : 'Record'} ${c.record.w}W – ${c.record.l}L`) : null,
+          race ? el('div', { class: 'small muted venue' }, 'Raced on the S-track') : this.venueLine(c)),
         this.sprite.renderThumbnail(bug, 72)),
       story ? el('p', { class: 'pilot-story' }, story) : null,
       onFight ? null : this.managerHunch(bug),
-      this.weaponChips(bug),
+      race ? this.raceChips(bug) : this.weaponChips(bug),
       foot,
     );
   }
@@ -265,7 +285,8 @@ export class TerminalUI {
       this.onFight(c, opts);
       return;
     }
-    const eco = this.economy;
+    const eco = opts.race ? this.economy.raceDesk : this.economy;
+    const what = opts.race ? 'race' : 'fight';
     const bug = s.activeBug;
     let pct = s.managerBetPct;
 
@@ -279,7 +300,7 @@ export class TerminalUI {
         el('div', {}, 'Your manager fancies you to ', el('strong', { class: plan.side === 'win' ? 'good' : 'bad' }, side)),
         plan.stake >= 1
           ? el('div', {}, `Bet: ${formatMoney(plan.stake)} on you to ${side} → pays ${formatMoney(plan.stake * plan.mult)} if right.`)
-          : el('div', { class: 'muted' }, pct <= 0 ? 'No bet this fight.' : 'Not confident enough either way to bet.'),
+          : el('div', { class: 'muted' }, pct <= 0 ? `No bet this ${what}.` : 'Not confident enough either way to bet.'),
         plan.side === 'lose' && plan.stake >= 1 && s.fixStreak >= ECONOMY.FIXING_WARNING
           ? el('div', { class: 'muted small' }, 'Word around the pits is this is starting to look like match-fixing… anyway.') : null,
         eco.bigBetFate(plan.side, plan.stake) === 'refused'
@@ -288,18 +309,18 @@ export class TerminalUI {
     };
     const slider = el('input', {
       type: 'range', min: 0, max: Math.round(ECONOMY.MANAGER_BET_MAX * 100), step: 5, value: Math.round(pct * 100),
-      'aria-label': 'Manager betting limit for this fight',
+      'aria-label': `Manager betting limit for this ${what}`,
       oninput: (e) => { pct = Number(e.target.value) / 100; update(); },
     });
     update();
-    openModal(`Pre-fight · ${this.pilotName(c)}`, el('div', { class: 'nego' },
+    openModal(`Pre-${what} · ${this.pilotName(c)}`, el('div', { class: 'nego' },
       el('p', {}, 'Stakes: ', el('strong', {}, opts.tournament ? `Tournament purse ${formatMoney(c.bounty)}` : deal?.type === 'titles' ? 'TITLES' : formatMoney(deal?.amount ?? 0))),
-      el('h3', {}, "Manager's betting limit for this fight"),
+      el('h3', {}, `Manager's betting limit for this ${what}`),
       el('div', { class: 'slider-row' }, slider, pctLabel),
       el('p', { class: 'small muted' }, `Share of the cash left after your wager (${formatMoney(Math.max(0, s.money - reserved))}) the manager may bet — 0% means no bet. Default ${Math.round(s.managerBetPct * 100)}% (Admin tab).`),
       preview,
       el('div', { class: 'part-actions' },
-        el('button', { class: 'btn btn-fight', onclick: () => { closeModal(); this.onFight(c, { ...opts, betPct: pct }); } }, 'FIGHT'))));
+        el('button', { class: 'btn btn-fight', onclick: () => { closeModal(); this.onFight(c, { ...opts, betPct: pct }); } }, opts.race ? 'RACE' : 'FIGHT'))));
   }
 
   // ───────────── Stakes ─────────────
@@ -330,8 +351,8 @@ export class TerminalUI {
    * controls underneath. The window is built once — replies are appended to the
    * log and only the controls change. A rejection ends the chat; only ✕ closes it.
    */
-  openChat(c) {
-    const eco = this.economy;
+  openChat(c, { race = false } = {}) {
+    const eco = race ? this.economy.raceDesk : this.economy;
     const s = this.state;
     const who = this.pilotName(c);
     let log = eco.nego(c).log;
@@ -347,7 +368,7 @@ export class TerminalUI {
     let shown = 0;
     const renderLog = () => {
       if (!log.length) {
-        logEl.replaceChildren(el('div', { class: 'muted small' }, `Say something to ${who}. Name a cash stake, or play for titles — winner takes the loser's vehicle.`));
+        logEl.replaceChildren(el('div', { class: 'muted small' }, `Say something to ${who}. Name a cash stake, or ${race ? 'race' : 'play'} for titles — winner takes the loser's vehicle.`));
         return;
       }
       if (shown === 0) logEl.replaceChildren();
@@ -358,14 +379,14 @@ export class TerminalUI {
     const renderControls = () => {
       const n = c.nego;
       if (ended) {
-        controls.replaceChildren(el('p', { class: 'muted small chat-ended' }, 'Press ✕ to return to Battle.'));
+        controls.replaceChildren(el('p', { class: 'muted small chat-ended' }, `Press ✕ to return to ${race ? 'Race' : 'Battle'}.`));
         return;
       }
       if (n?.deal) {
         // They've said yes: the only thing left to do is fight.
         controls.replaceChildren(el('div', { class: 'chat-go' },
           el('span', { class: 'muted small' }, `Stakes: ${n.deal.type === 'cash' ? formatMoney(n.deal.amount) : 'TITLES'}`),
-          el('button', { class: 'btn btn-fight', onclick: () => { closeModal(); this.fight(c, { tournament: false }); } }, 'Go Battle')));
+          el('button', { class: 'btn btn-fight', onclick: () => { closeModal(); this.fight(c, { tournament: false, race }); } }, race ? 'Go Race' : 'Go Battle')));
         return;
       }
       const max = Math.max(1, s.money);
@@ -393,7 +414,7 @@ export class TerminalUI {
       slider,
       el('div', { class: 'part-actions' },
         offerBtn,
-        el('button', { class: 'btn btn-danger', type: 'button', onclick: () => attempt(() => eco.offerTitles(c)) }, 'Play for titles'))));
+        el('button', { class: 'btn btn-danger', type: 'button', onclick: () => attempt(() => eco.offerTitles(c)) }, race ? 'Race for titles' : 'Play for titles'))));
     };
 
     // Their answer is added to the log; reject ends the chat, anything else updates the controls.

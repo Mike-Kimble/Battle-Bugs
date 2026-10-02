@@ -5,6 +5,7 @@ import { EventEmitter } from './EventEmitter.js';
 import { Storage } from './Storage.js';
 import { BattleBug } from '../entities/BattleBug.js';
 import { Part } from '../entities/Part.js';
+import { Racer } from '../entities/Racer.js';
 
 const SAVE_VERSION = 2; // v2: the fixed 20-pilot roster
 
@@ -55,6 +56,10 @@ export class GameState extends EventEmitter {
     this.pendingWages = {}; // role → wages built up during the tournament, paid when it's over
     this.managerWages = false; // your manager sets the wages after each bout
     this.weave = { open: false, entered: false, round: 0, field: [] }; // the Weevil Weave race
+    this.raceOpen = false; // the Race tab: open once you've won the Weevil Weave
+    this.racers = []; // every pilot's racing side (their Race Bug), one per pilot in the pool
+    this.raceBoard = { challengers: [], rejected: [], rejections: 0, tierShift: 0 }; // the Race tab's board
+    this.battleBoard = null; // while the economy works on the Race board: the Battle board, set aside
     this.forgetIn = 0; // bouts until a scatter-brained manager next forgets the mechanic's wage
     this.managerHunt = {}; // part key → the manager's chance of finding one to match your other drive next time
     this.blacklist = 0; // bouts left that nobody will work for you (you stiffed your staff)
@@ -162,6 +167,14 @@ export class GameState extends EventEmitter {
     s.candidate = d.candidate || {};
     s.managerWages = !!d.managerWages;
     s.weave = { open: false, entered: false, round: 0, field: [], ...d.weave };
+    s.raceOpen = !!d.raceOpen;
+    const owners = new Map(s.pool.map((p) => [p.id, p]));
+    s.racers = (d.racers || []).filter((r) => owners.has(r.pilotId)).map((r) => Racer.fromJSON(r, owners.get(r.pilotId)));
+    const racerById = new Map(s.racers.map((r) => [r.id, r]));
+    const racersOf = (ids) => (ids || []).map((id) => racerById.get(id)).filter(Boolean);
+    s.raceBoard = { rejections: 0, tierShift: 0, ...d.raceBoard, challengers: racersOf(d.raceBoard?.challengerIds), rejected: racersOf(d.raceBoard?.rejectedIds) };
+    delete s.raceBoard.challengerIds;
+    delete s.raceBoard.rejectedIds;
     s.pendingWages = d.pendingWages || {};
     s.forgetIn = d.forgetIn || 0;
     s.managerHunt = d.managerHunt || {};
@@ -172,6 +185,9 @@ export class GameState extends EventEmitter {
   }
 
   toJSON() {
+    // Mid-way through Race board business the Battle board is set aside: save the real ones.
+    const battle = this.battleBoard || this;
+    const race = this.battleBoard ? { ...this.board, challengers: this.challengers } : this.raceBoard;
     return {
       version: SAVE_VERSION,
       money: this.money,
@@ -179,9 +195,12 @@ export class GameState extends EventEmitter {
       activeVehicleId: this.activeVehicleId,
       inventory: this.inventory.map((p) => p.toJSON()),
       record: this.record,
-      pool: this.pool.map((p) => ({ ...p, bug: p.bug.toJSON() })),
-      challengerIds: this.challengers.map((c) => c.id),
-      board: { rejections: this.board.rejections, tierShift: this.board.tierShift, rejectedIds: this.board.rejected.map((c) => c.id) },
+      pool: battle.pool.map((p) => ({ ...p, bug: p.bug.toJSON() })),
+      challengerIds: battle.challengers.map((c) => c.id),
+      board: { rejections: battle.board.rejections, tierShift: battle.board.tierShift, rejectedIds: battle.board.rejected.map((c) => c.id) },
+      raceOpen: this.raceOpen,
+      racers: this.racers.map((r) => r.toJSON()),
+      raceBoard: { rejections: race.rejections, tierShift: race.tierShift, challengerIds: race.challengers.map((c) => c.id), rejectedIds: race.rejected.map((c) => c.id) },
       market: {
         parts: this.market.parts.map((l) => ({ ...l, part: l.part.toJSON() })),
         vehicles: this.market.vehicles.map((l) => ({ ...l, bug: l.bug.toJSON() })),

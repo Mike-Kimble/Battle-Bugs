@@ -178,7 +178,7 @@ class App {
     });
   }
 
-  startMatch(challenger, { tournament = false, betPct } = {}) {
+  startMatch(challenger, { tournament = false, betPct, race = false } = {}) {
     const player = tournament ? this.state.getVehicle(this.state.tournament.vehicleId) : this.state.activeBug;
     if (!player?.isBattleReady) {
       toast(player ? player.battleIssues()[0] : 'No vehicle', 'bad');
@@ -201,23 +201,23 @@ class App {
 
     const moneyBefore = this.state.money;
     // The manager bets from whatever isn't already staked on the fight.
-    const bet = this.economy.placeManagerBet(challenger, player, stake?.type === 'cash' ? stake.amount : 0, betPct ?? this.state.managerBetPct);
+    const bet = (race ? this.economy.raceDesk : this.economy).placeManagerBet(challenger, player, stake?.type === 'cash' ? stake.amount : 0, betPct ?? this.state.managerBetPct);
     if (bet) toast(`Your manager bet ${formatMoney(bet.stake)} on you to ${bet.side === 'win' ? 'WIN' : 'LOSE'}`, bet.side === 'win' ? 'good' : 'bad');
     this.state.save();
 
     this.beginBattle(player, challenger, {
-      tournament, stake, bet, moneyBefore,
-      // Home and away in turn (the rookie's ring is random).
-      engine: new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty, style: challenger.style, dohyo: new Dohyo(this.economy.venueFor(challenger)) }),
+      tournament, stake, bet, moneyBefore, race,
+      // Races are on the S-track; fights home and away in turn (the rookie's ring is random).
+      engine: new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty, style: challenger.style, dohyo: race ? new Track({ label: 'S-track race' }) : new Dohyo(this.economy.venueFor(challenger)) }),
     });
   }
 
   /** Put a fight on screen and run it (a real bout or a training session). */
-  beginBattle(player, challenger, { engine, tournament = false, stake = null, bet = null, moneyBefore = this.state.money, training = null, standoff = false, weave = false }) {
+  beginBattle(player, challenger, { engine, tournament = false, stake = null, bet = null, moneyBefore = this.state.money, training = null, standoff = false, weave = false, race = false }) {
     closeModal();
     this.workshop.stop();
     this.sprite.clear();
-    this.match = { challenger, tournament, stake, bet, player, moneyBefore, training, standoff, weave, endTimer: null, banner: null };
+    this.match = { challenger, tournament, stake, bet, player, moneyBefore, training, standoff, weave, race, endTimer: null, banner: null };
     this.engine = engine;
     this.wireEngine(this.engine);
 
@@ -374,7 +374,7 @@ class App {
   finishMatch() {
     cancelAnimationFrame(this.raf);
     const engine = this.engine;
-    const { challenger, tournament, stake, bet, player, training, standoff, weave } = this.match;
+    const { challenger, tournament, stake, bet, player, training, standoff, weave, race } = this.match;
     const res = engine.result;
     this.engine = null;
     this.input.disable();
@@ -394,6 +394,7 @@ class App {
       bet,
       standoff,
       weave,
+      race,
       winner: res.winner,
     });
     report.moneyBefore = this.match.moneyBefore;
@@ -494,7 +495,9 @@ class App {
     });
     bar.replaceChildren(
       el('div', { class: 'weapon-row' }, this.weaponButtons.map((b) => b.btn)),
-      el('div', { class: 'battle-help' }, 'On the ring: touch & drag to steer (behind you = reverse) · Off the ring: swipe for a handbrake turn · Tap foe: ram · Double-tap: shove · Hold your bug: weapons'),
+      el('div', { class: 'battle-help' }, this.engine.race
+        ? 'Touch & drag to steer round the S (behind you = reverse) · First with all of your bug over the centre line wins · Tap foe: ram · Hold your bug: weapons'
+        : 'On the ring: touch & drag to steer (behind you = reverse) · Off the ring: swipe for a handbrake turn · Tap foe: ram · Double-tap: shove · Hold your bug: weapons'),
       this.match?.training
         ? el('button', { class: 'btn btn-small btn-danger forfeit', onclick: () => this.exitTraining() }, 'Exit')
         : el('button', { class: 'btn btn-small btn-danger forfeit', onclick: () => this.engine?.forfeit() }, 'Forfeit'),
