@@ -829,9 +829,9 @@ export class TerminalUI {
       el('h3', {}, '🪲 Scarab Standoff'),
       el('p', {}, `You and two pilots of your level on the donut ring — three-way, every bug for itself. Last one standing wins ${formatMoney(ECONOMY.STANDOFF_PRIZE)}.`),
       el('p', { class: 'small muted' }, `Entry ${formatMoney(fee)}. It's one bout: no bracket, no wagers, no captures.`));
-    if (!s.standoffOpen) {
+    if (!eco.standoffOpen) {
       const streak = Math.max(0, s.record.streak || 0);
-      card.append(el('div', { class: 'notice' }, `Locked. Put together a ${ECONOMY.STANDOFF_STREAK}-win streak to get an invitation (${Math.min(streak, ECONOMY.STANDOFF_STREAK)}/${ECONOMY.STANDOFF_STREAK}).`));
+      card.append(el('div', { class: 'notice' }, `Closed. Open while you're on a ${ECONOMY.STANDOFF_STREAK}-win streak (${Math.min(streak, ECONOMY.STANDOFF_STREAK)}/${ECONOMY.STANDOFF_STREAK}).`));
       return card;
     }
     if (eco.inField) {

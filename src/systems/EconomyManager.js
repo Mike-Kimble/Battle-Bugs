@@ -1630,9 +1630,14 @@ export class EconomyManager {
   }
 
   // ───────────── Scarab Standoff ─────────────
-  /** Open once you've put a 5-win streak together (and you're not in the main tournament). */
+  /** You're on a 5-win streak (or better): open for as long as the streak lasts. */
+  get standoffOpen() {
+    return (this.state.record.streak || 0) >= ECONOMY.STANDOFF_STREAK;
+  }
+
+  /** Open on the streak — and not while you're in the main tournament. */
   get standoffAvailable() {
-    return this.state.standoffOpen && !this.inField;
+    return this.standoffOpen && !this.inField;
   }
 
   /**
@@ -2021,11 +2026,13 @@ export class EconomyManager {
     if (result === 'win') s.record.wins++;
     else if (result === 'loss') s.record.losses++;
     else s.record.ties++;
+    const streakBefore = s.record.streak || 0;
     if (result === 'win') s.record.streak = Math.max(0, s.record.streak || 0) + 1;
     if (result === 'loss') s.record.streak = Math.min(0, s.record.streak || 0) - 1;
-    if (!s.standoffOpen && s.record.streak >= ECONOMY.STANDOFF_STREAK) {
-      s.standoffOpen = true;
-      report.lines.push(`★ ${ECONOMY.STANDOFF_STREAK} wins in a row — the Scarab Standoff is open to you (Tournaments tab).`);
+    if (result === 'win' && s.record.streak === ECONOMY.STANDOFF_STREAK) {
+      report.lines.push(`★ ${ECONOMY.STANDOFF_STREAK} wins in a row — the Scarab Standoff is open to you while the streak lasts (Tournaments tab).`);
+    } else if (streakBefore >= ECONOMY.STANDOFF_STREAK && s.record.streak < ECONOMY.STANDOFF_STREAK) {
+      report.lines.push('Your winning streak is over — the Scarab Standoff is closed until you win five in a row again.');
     }
 
     const capture = () => {
