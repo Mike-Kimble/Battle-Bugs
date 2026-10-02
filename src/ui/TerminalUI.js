@@ -10,7 +10,7 @@ const TABS = [
   ['challengers', 'Challenger Board'],
   ['staff', 'Admin'],
   ['training', 'Training'],
-  ['tournament', 'Tournament'],
+  ['tournament', 'Tournaments'],
 ];
 
 const MARKET_CATEGORIES = [
@@ -140,7 +140,7 @@ export class TerminalUI {
     const s = this.state;
     const active = s.activeBug;
     if (s.tournament.entered) {
-      return el('div', { class: 'notice' }, 'You are entered in the Inter-Planetary Tournament. Fight your bracket from the Tournament tab.',
+      return el('div', { class: 'notice' }, 'You are entered in the Inter-Planetary Tournament. Fight your bracket from the Tournaments tab.',
         el('button', { class: 'btn btn-primary', onclick: () => this.setTab('tournament') }, 'Go to Tournament'));
     }
     if (!s.challengers.length) this.economy.generateChallengers();
