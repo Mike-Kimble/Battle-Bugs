@@ -7,7 +7,7 @@ import { el, toast, hpBar, partCard, openModal, closeModal, counterpart, vehicle
 const TABS = [
   ['hangar', 'Garage'],
   ['market', 'Marketplace'],
-  ['challengers', 'Challengers'],
+  ['challengers', 'Battle'],
   ['staff', 'Admin'],
   ['training', 'Training'],
   ['tournament', 'Tournaments'],
@@ -358,7 +358,7 @@ export class TerminalUI {
     const renderControls = () => {
       const n = c.nego;
       if (ended) {
-        controls.replaceChildren(el('p', { class: 'muted small chat-ended' }, 'Press ✕ to return to Challengers.'));
+        controls.replaceChildren(el('p', { class: 'muted small chat-ended' }, 'Press ✕ to return to Battle.'));
         return;
       }
       if (n?.deal) {
