@@ -269,25 +269,25 @@ export const PARTS = Object.freeze({
   // ───────────── ENHANCEMENTS (propulsion add-ons, 1 slot) ─────────────
   // stats multipliers: force (power), accel, vMax (top speed), staminaMax, drain (<1 = sustain);
   // cool (+stamina/s recovery); works?, uses? (battles)
-  air_filter: enhance('Air Filter', 1, C, 60, 1, { kind: 'intake', force: 1.05, works: HOT }, 'Lets a piston engine breathe. Modest, reliable.'),
-  lucky_dice: enhance('Fuzzy Dice', 1, C, 40, 1, { kind: 'charm', staminaMax: 1.04 }, 'Hang them from the mirror. Pilots swear by them.'),
-  chrome_exhaust: enhance('Chrome Exhaust', 1, U, 110, 4, { kind: 'exhaust', force: 1.05, vMax: 1.03, works: ['combustion', 'torque', 'turbine'] }, 'Louder is faster. Slightly.'),
-  spark_plugs: enhance('Iridium Spark Plugs', 1, U, 90, 1, { kind: 'ignition', force: 1.04, accel: 1.05, works: HOT }, 'A cleaner bang in every cylinder. Piston engines only.'),
+  air_filter: enhance('Pod Filter', 1, C, 60, 1, { kind: 'intake', force: 1.05, works: HOT }, 'An open pod filter lets a piston engine breathe. Modest, reliable.'),
+  lucky_dice: enhance('Stage 1 Tune', 1, C, 40, 1, { kind: 'tune', staminaMax: 1.04 }, 'A basic remap of the motor controller. A little more staying power on any drive.'),
+  chrome_exhaust: enhance('Ported Exhaust', 1, U, 110, 4, { kind: 'exhaust', force: 1.05, vMax: 1.03, works: HOT }, 'Ported and polished so a piston engine breathes out freely. Louder is faster. Slightly.'),
+  spark_plugs: enhance('Iridium Spark Plugs', 1, U, 90, 1, { kind: 'ignition', force: 1.04, accel: 1.05, works: ['combustion'] }, 'A cleaner bang in every cylinder. Combustion engines only.'),
   turbocharger: enhance('Turbocharger', 2, C, 320, 8, { kind: 'turbo', force: 1.15, drain: 1.08, works: HOT }, 'Exhaust-driven boost for piston engines. Runs a little hotter.'),
   nos_bottle: enhance('NOS Bottle', 2, U, 260, 6, { kind: 'nitro', force: 1.25, accel: 1.25, drain: 1.1, uses: 5, works: ['combustion', 'torque', 'turbine'] }, 'Nitrous for the brave. Huge kick — good for 5 battles.'),
   capacitor_bank: enhance('Capacitor Bank', 2, U, 340, 7, { kind: 'capacitor', accel: 1.2, staminaMax: 1.05, works: ['electric'] }, 'Dumps stored charge on launch. Electric motors only.'),
-  thermal_battery: enhance('Thermal Battery', 2, R, 420, 6, { kind: 'battery', cool: 3, staminaMax: 1.06 }, 'Soaks up motor heat and hands it back as charge. Great recovery on any drive.'),
+  thermal_battery: enhance('Stage 2 Tune', 2, R, 420, 6, { kind: 'tune', cool: 3, staminaMax: 1.06 }, 'A proper remap: runs the motor cooler and longer. Great recovery on any drive.'),
   light_flywheel: enhance('Lightweight Flywheel', 2, C, 240, 3, { kind: 'flywheel', accel: 1.12, works: ['combustion', 'torque'] }, 'Less spinning mass, snappier launches. Only piston motors have a flywheel to lighten — combustion and torque drives.'),
   supercharger: enhance('Supercharger', 3, U, 640, 12, { kind: 'turbo', force: 1.2, drain: 1.1, works: HOT }, 'Belt-driven boost. Big power, hotter running.'),
-  afterburner: enhance('Afterburner', 3, R, 780, 8, { kind: 'burner', vMax: 1.15, accel: 1.1, drain: 1.18, works: ['turbine', 'plasma'] }, 'Sets the exhaust on fire on purpose. Turbines and plasma only.'),
+  afterburner: enhance('Afterburner', 3, R, 780, 8, { kind: 'burner', vMax: 1.15, accel: 1.1, drain: 1.18, works: ['turbine'] }, 'Sets the exhaust on fire on purpose. Turbines only.'),
   regen_brakes: enhance('Regen Brakes', 3, U, 560, 6, { kind: 'regen', cool: 2, drain: 0.93, works: ['electric', 'fusion'] }, 'Turns braking back into charge. Electric or fusion only.'),
   stamina_governor: enhance('Stamina Governor', 3, C, 500, 4, { kind: 'governor', drain: 0.85, force: 0.95 }, 'Holds the motor back a touch so it lasts much longer.'),
   launch_control: enhance('Launch Control', 3, R, 720, 4, { kind: 'launch', accel: 1.2, cool: 1 }, 'A little box that gets every start perfect. Works with anything.'),
   twin_turbo: enhance('Twin Turbo', 4, R, 1150, 14, { kind: 'turbo', force: 1.25, drain: 1.1, works: HOT }, 'Two turbos. Twice the whistle.'),
-  ion_injector: enhance('Ion Injector', 4, R, 1200, 6, { kind: 'injector', force: 1.15, vMax: 1.08, works: ['turbine', 'electric'] }, 'Charged-particle boost for turbines and electric drives.'),
+  ion_injector: enhance('Ion Injector', 4, R, 1200, 6, { kind: 'injector', force: 1.15, vMax: 1.08, works: ['turbine', 'electric', 'plasma'] }, 'Charged-particle boost for turbine, electric and plasma drives.'),
   fusion_stabiliser: enhance('Fusion Stabiliser', 4, E, 1500, 8, { kind: 'stabiliser', drain: 0.8, staminaMax: 1.1, works: ['fusion', 'plasma'] }, 'Tames a star in a can. Barely breaks a sweat all bout.'),
   plasma_overdrive: enhance('Plasma Overdrive', 5, E, 1900, 10, { kind: 'overdrive', force: 1.3, vMax: 1.08, drain: 1.15, works: ['plasma'] }, 'Pushes a plasma drive past the red line. And keeps pushing.'),
-  neural_copilot: enhance('Neural Co-Pilot', 5, L, 2600, 4, { kind: 'copilot', accel: 1.2, cool: 4, drain: 0.9 }, 'A tiny AI rides along, feathering the throttle so you never waste a drop. Works with anything.'),
+  neural_copilot: enhance('Stage 3 Tune', 5, L, 2600, 4, { kind: 'tune', accel: 1.2, cool: 4, drain: 0.9 }, 'The full works: a bespoke remap that feathers every input so you never waste a drop. Works with anything.'),
   time_warp_nitro: enhance('Time-Warp Nitro', 5, L, 2800, 6, { kind: 'nitro', force: 1.4, accel: 1.4, uses: 3, works: null }, 'Nitro from next week. Unbelievable — for 3 battles.'),
 
   // ───────────── DRIVE TRAIN (propulsion, 4 slots) ─────────────

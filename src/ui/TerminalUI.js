@@ -28,7 +28,7 @@ const PART_GROUPS = [['engine', 'Power Plant'], ['cooling', 'Cooling'], ['enhanc
 const PROPULSION_SUBS = [
   ['engine', 'Power Plant', 'Motors & power cores. Power, revs (top speed) and cooling.'],
   ['cooling', 'Cooling', 'Heat exchangers, misters, radiators, fans, jackets… Three cooling slots. Not everything suits every drive.'],
-  ['enhancement', 'Enhancement', 'Turbos, nitro, afterburners… One enhancement slot per drive. Not everything suits every drive.'],
+  ['enhancement', 'Enhancement', 'Tunes, turbos, nitro, afterburners… One enhancement slot per drive. Not everything suits every drive.'],
   ['drivetrain', 'Drive Train', 'Gearboxes, shafts, props, rudders and diffs. Four drive-train slots. Some suit thrust drives, some shaft drives — and some combos work far better together.'],
 ];
 /** Categories with their own aisles, keyed by the top-level tab. */
