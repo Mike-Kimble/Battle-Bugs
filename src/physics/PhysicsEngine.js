@@ -1,6 +1,6 @@
 import { PHYSICS, STAMINA, EVENTS } from '../config/constants.js';
 import { Vector2D, clamp, approach, wrapAngle } from './Vector2D.js';
-import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES, pushesThrust, hasShaft, turbineLine, driveKind } from '../config/partsData.js';
+import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES, pushesThrust, hasShaft, hasDriveTrain, turbineLine, driveKind } from '../config/partsData.js';
 
 /** Drive-train parts that live between the drive shaft and the wheels (useless without a shaft). */
 const SHAFT_PARTS = ['gearbox', 'lockgear', 'transfer', 'diff', 'coupling', 'converter'];
@@ -150,6 +150,16 @@ export class PhysicsEngine {
         interactions.push({ id: `dt_tracks_${p.uid}`, good: false, mods: {}, text: `A ${p.name} does nothing for tracks — they already drive along their whole length.` });
         continue;
       }
+      // A differential on twin drives needs them joined by a Limited-Slip Link — then one does for both.
+      const twin = (bug.drives?.length || 0) > 1;
+      if (s.kind === 'diff' && twin) {
+        if (!hasDriveTrain(bug, (st) => st.lsl)) {
+          interactions.push({ id: `dt_diff_${p.uid}`, good: false, mods: {}, text: `A ${p.name} can't work across two separate drives — join them with a Limited-Slip Link first. Until then it's dead weight.` });
+          continue;
+        }
+        if (shared.diff) continue; // the drives work as one: a second diff adds nothing
+        shared.diff = true;
+      }
       if (s.group) {
         const max = limit[s.group] || 1;
         const used = s.group === 'gearbox' ? shared.gearbox : (groups[s.group] || 0);
@@ -167,6 +177,8 @@ export class PhysicsEngine {
       for (const k of ['force', 'accel', 'vMax', 'turn', 'grip', 'drain', 'brake']) {
         if (!s[k] || !onTyres(k)) continue;
         if (s.group === 'gearbox') gear[k] = (gear[k] || 0) + (s[k] - 1);
+        // Linked drives work as one: a diff on either drive turns the whole vehicle (undo the averaging across drives).
+        else if (s.kind === 'diff' && twin) m[k] *= s[k] ** bug.drives.length;
         else m[k] *= s[k];
       }
       if (s.vector) fx.vector = true;

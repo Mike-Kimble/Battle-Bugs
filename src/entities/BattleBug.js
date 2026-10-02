@@ -74,8 +74,8 @@ export class BattleBug {
     if (this.drives[0].stats.kind !== this.drives[1].stats.kind) return [];
     const out = [];
     for (const list of cooling ? [this.coolers, this.mods, this.drivetrain] : [this.mods, this.drivetrain]) {
-      const left = list.filter((p) => this.bayOf(p) === 0 && !p.stats.lsl);
-      const right = list.filter((p) => this.bayOf(p) === 1 && !p.stats.lsl);
+      const left = list.filter((p) => this.bayOf(p) === 0 && !p.stats.lsl && p.stats.kind !== 'diff');
+      const right = list.filter((p) => this.bayOf(p) === 1 && !p.stats.lsl && p.stats.kind !== 'diff');
       const spare = [...right];
       for (const p of left) {
         const i = spare.findIndex((q) => q.key === p.key);
