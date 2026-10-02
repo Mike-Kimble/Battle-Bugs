@@ -1,6 +1,6 @@
 import { ECONOMY, EVENTS, SAVE_KEY } from '../config/constants.js';
 import { STARTER_BUG, FIGHTING_STYLES, currentKey } from '../config/partsData.js';
-import { DEFAULT_STAFF } from '../config/staff.js';
+import { DEFAULT_STAFF, STAFF_ROSTER } from '../config/staff.js';
 import { EventEmitter } from './EventEmitter.js';
 import { Storage } from './Storage.js';
 import { BattleBug } from '../entities/BattleBug.js';
@@ -154,8 +154,9 @@ export class GameState extends EventEmitter {
     s.earnAvg = d.earnAvg || 0;
     s.staffId = d.staffId || {};
     // Saves from before staff had names: they turn out to be the ones who do it straight.
+    // …and anyone no longer on the roster (they've left the business) is replaced by the same.
     for (const role of ['mechanic', 'manager']) {
-      if ((s.staff[role] || s.strike[role]) && !s.staffId[role]) s.staffId[role] = DEFAULT_STAFF[role];
+      if ((s.staff[role] || s.strike[role]) && !STAFF_ROSTER[role][s.staffId[role]]) s.staffId[role] = DEFAULT_STAFF[role];
     }
     s.candidate = d.candidate || {};
     s.managerWages = !!d.managerWages;

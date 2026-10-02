@@ -24,7 +24,6 @@ export const MECHANICS = Object.freeze({
   marla: { name: 'Marla Two-Spanners', pay: 1, blindTo: 'torque' },
   quill: { name: 'Quill Ashthorax', pay: 1, blindTo: 'turbine' },
   dibbo: { name: 'Dibbo Coilgrub', pay: 1, blindTo: 'electric' },
-  hesk: { name: 'Hesk Nullwing', pay: 1 },
   rumbo: { name: 'Rumbo Greasepit', pay: 1, blindTo: 'plasma' },
 });
 
