@@ -1,6 +1,6 @@
 import { PHYSICS, STAMINA, EVENTS } from '../config/constants.js';
 import { Vector2D, clamp, approach, wrapAngle } from './Vector2D.js';
-import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES, pushesThrust, hasShaft, hasDriveTrain, turbineLine, driveKind } from '../config/partsData.js';
+import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES, pushesThrust, hasShaft, hasDriveTrain, turbineLine, driveKind, linkActive } from '../config/partsData.js';
 
 /** Drive-train parts that live between the drive shaft and the wheels (useless without a shaft). */
 const SHAFT_PARTS = ['gearbox', 'lockgear', 'transfer', 'diff', 'coupling', 'converter'];
@@ -127,10 +127,30 @@ export class PhysicsEngine {
     const limit = { shaft: turbine ? 2 : 1, gearbox: PhysicsEngine.gearboxLimit(bug) };
     // Gearboxes work one after another: their torque gains and speed losses add up.
     const gear = {};
+    const propHere = hasDriveTrain(bug, (st) => !!st.prop, bay);
     for (const p of (bug.drivetrain || []).filter((q) => (q.bay || 0) === bay)) {
       const s = p.stats;
       if (p.isBroken || !worksWith(p, bug)) {
         if (!p.isBroken) interactions.push({ id: `dt_nofit_${p.uid}`, good: false, mods: {}, text: `Your ${p.name} doesn't suit this drive — it's dead weight.` });
+        continue;
+      }
+      // Castors aren't driven: traction aids do nothing, and gearing only helps if it's driving a prop.
+      if (castor && (s.kind === 'tcu' || s.kind === 'transfer')) {
+        interactions.push({ id: `dt_castor_${p.uid}`, good: false, mods: {}, text: `A ${p.name} does nothing on castors — they aren't driven. It's dead weight.` });
+        continue;
+      }
+      if (castor && (s.group === 'gearbox' || s.kind === 'converter') && !propHere) {
+        interactions.push({ id: `dt_castor_${p.uid}`, good: false, mods: {}, text: `Your ${p.name}${where} has nothing to drive on castors — it needs a propeller or ducted fan on the same drive.` });
+        continue;
+      }
+      // Thrust vectoring needs thrust to steer: a thrust drive, or a prop or fan on that drive.
+      if (s.vector && !THRUST_DRIVES.includes(driveKind(bug, bay)) && !propHere) {
+        interactions.push({ id: `dt_vector_${p.uid}`, good: false, mods: {}, text: `Your ${p.name}${where} has no thrust to steer — it needs a turbine or plasma drive, or a propeller or ducted fan.` });
+        continue;
+      }
+      // A Limited-Slip Link can't couple a plasma drive (it has no shaft to share).
+      if (s.lsl && (bug.drives || []).some((d) => d.stats.kind === 'plasma')) {
+        interactions.push({ id: `dt_lslplasma_${p.uid}`, good: false, mods: {}, text: `A ${p.name} can't couple a plasma drive — there's no shaft to share. It's dead weight.` });
         continue;
       }
       // Gearboxes, diffs, couplings and the like sit between the drive shaft and the wheels.
@@ -153,7 +173,7 @@ export class PhysicsEngine {
       // A differential on twin drives needs them joined by a Limited-Slip Link — then one does for both.
       const twin = (bug.drives?.length || 0) > 1;
       if (s.kind === 'diff' && twin) {
-        if (!hasDriveTrain(bug, (st) => st.lsl)) {
+        if (!linkActive(bug)) {
           interactions.push({ id: `dt_diff_${p.uid}`, good: false, mods: {}, text: `A ${p.name} can't work across two separate drives — join them with a Limited-Slip Link first. Until then it's dead weight.` });
           continue;
         }

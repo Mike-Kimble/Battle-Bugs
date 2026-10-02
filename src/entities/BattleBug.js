@@ -1,6 +1,6 @@
 import { PHYSICS, ACTIONS } from '../config/constants.js';
 import { Part, makeId } from './Part.js';
-import { pushesThrust, hasDriveTrain, hasShaft } from '../config/partsData.js';
+import { pushesThrust, hasDriveTrain, hasShaft, linkActive } from '../config/partsData.js';
 import { PhysicsEngine } from '../physics/PhysicsEngine.js';
 import { Vector2D, clamp } from '../physics/Vector2D.js';
 
@@ -174,7 +174,7 @@ export class BattleBug {
   /** Drive bays on this frame: 1, or 2 on the bigger shells. */
   get driveSlots() { return this.chassis.stats.drives || 1; }
   /** Two working drives: it can spin on the spot. */
-  get twinDrive() { return this.drives.length === 2 && this.drives.every((d) => !d.isBroken) && !hasDriveTrain(this, (s) => s.lsl); } // a Limited-Slip Link stops the spin
+  get twinDrive() { return this.drives.length === 2 && this.drives.every((d) => !d.isBroken) && !linkActive(this); } // a Limited-Slip Link stops the spin
   get hull() { return this.chassis; }
   /** World/collision radius. The catalogue radius is the sprite design size. */
   get radius() { return this.chassis.stats.radius * PHYSICS.BUG_SCALE; }
