@@ -380,7 +380,9 @@ class App {
     });
     report.moneyBefore = this.match.moneyBefore;
     this.state.commit();
-    this.showResults(report, engine);
+    // Champion of the galaxy: no bout summary, straight to the celebration.
+    if (report.champion) this.showChampion();
+    else this.showResults(report, engine);
   }
 
   /**
