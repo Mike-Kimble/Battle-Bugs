@@ -125,7 +125,7 @@ export class PhysicsEngine {
    * are broken, do nothing.
    */
   static driveTrain(bug, m, interactions, castor, bay = 0, shared = {}) {
-    const fx = { vector: false, prop: 0, propRpm: false, lsl: false, tcu: false, guard: 1 };
+    const fx = { vector: false, prop: 0, propRpm: false, lsl: false, tcu: false, guard: 1, eff: 1 };
     const groups = { gearbox: 0 };
     shared.gearbox = shared.gearbox || 0;
     const turbine = driveKind(bug, bay) === 'turbine';
@@ -204,6 +204,8 @@ export class PhysicsEngine {
         groups[s.group] = (groups[s.group] || 0) + 1;
         if (s.group === 'gearbox') shared.gearbox += 1;
       }
+      // Every working part in the line loses a little to friction and inertia (dead weight doesn't turn).
+      fx.eff *= s.eff ?? 1;
       const onTyres = (k) => !(castor && s.tyresOnly?.includes(k)); // some parts only matter on driven wheels
       for (const k of ['force', 'accel', 'vMax', 'turn', 'grip', 'drain', 'brake']) {
         if (!s[k] || !onTyres(k)) continue;
@@ -377,6 +379,7 @@ export class PhysicsEngine {
         accel: mass > 0 ? (pushI / mass) * m.accel : 0,
         vMax: rpmAvg > 0 ? vMax * (d.stats.rpm / rpmAvg) : 0,
         cooling: d.stats.cooling * twinK * m.cooling + (coolBy[i] || 0),
+        driveEff: fxs[i]?.eff ?? 1,
       };
     }) : null;
 
@@ -415,6 +418,10 @@ export class PhysicsEngine {
       castor,
       // How hard the running gear is to push along: more grip and rolling resistance = more heat and stamina.
       gearLoad: PhysicsEngine.gearLoad(tires),
+      // Drive train efficiency (each working part's rating multiplied together; a twin averages its drives):
+      // what's lost is friction and inertia, so a less efficient line costs more heat and stamina.
+      driveEff: fxs.reduce((t, f) => t + f.eff, 0) / fxs.length,
+      driveEffs: fxs.length > 1 ? fxs.map((f) => f.eff) : null,
       pinned: castor && !!tires.stats.pinned,
       // Wheels or tracks nothing is holding: no motor, no working shaft, or a thrust
       // drive on wheels — unless a self-locking gearbox (worm, cycloidal, strain wave) holds them.
@@ -662,7 +669,8 @@ export class PhysicsEngine {
     const effort = bug.lunge || bug.spin ? 1 : throttle;
     const driving = effort > 0 && !bug.stalled;
     if (driving) {
-      const load = effort * s.drainMult * (s.gearLoad ?? 1); // grip and rolling resistance take more energy
+      // Grip and rolling resistance take more energy; so does a drive train that wastes it.
+      const load = (effort * s.drainMult * (s.gearLoad ?? 1) * HEAT.REF_EFFICIENCY) / (s.driveEff || 1);
       bug.heat += heatRate * (load - coolScore) * dt;
       const emptyIn = STAMINA.EMPTY_SECONDS_WORST + (STAMINA.EMPTY_SECONDS_BEST - STAMINA.EMPTY_SECONDS_WORST) * staminaScore ** STAMINA.EMPTY_CURVE;
       bug.stamina -= (s.staminaMax / emptyIn) * load * dt;

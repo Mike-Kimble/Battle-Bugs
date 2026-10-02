@@ -100,6 +100,7 @@ export const HEAT = Object.freeze({
   LOAD_KIND: { track: 1.2, pads: 1.1, slick: 0.9 }, // …× the tread type
   LOAD_CASTOR_BASE: 0.5,     // castors: base + roll × this
   LOAD_CASTOR_ROLL: 2,
+  REF_EFFICIENCY: 0.97,      // a plain Standard Drive Shaft line: the 7s / 10–60s timings are for this
   RECOVER_AT: 0.4,           // an overheated motor restarts once it's cooled to 40%
 });
 

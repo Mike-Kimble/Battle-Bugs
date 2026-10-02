@@ -103,6 +103,7 @@ export const PART_SCORES = {
   ],
   // Drive train: only the effects a part actually has are shown (like add-ons).
   drivetrain: [
+    { label: 'Efficiency', get: (p) => Math.round((p.stats.eff ?? 1) * 100) },
     { label: 'Power', get: (p) => pct((p.stats.force || 1) - 1, 0.35) },
     { label: 'Acceleration', get: (p) => pct((p.stats.accel || 1) - 1, REF.boostAccel) },
     { label: 'Top speed', get: (p) => pct((p.stats.vMax || 1) - 1, REF.boostSpeed) },

@@ -230,7 +230,7 @@ export function sellStackButton(group, economy, act, { disabled = false, title =
 }
 
 /** Derived stats each drive of a twin contributes to (shown Drive 1/Drive 2). */
-const PER_DRIVE = ['fDrive', 'fUsable', 'accel', 'vMax', 'cooling'];
+const PER_DRIVE = ['fDrive', 'fUsable', 'accel', 'vMax', 'cooling', 'driveEff'];
 
 /** Stats with every part at full HP — used to show damage penalties. */
 function pristineStats(bug) {
@@ -461,7 +461,7 @@ export class WorkshopUI {
     // The reference vehicle is compared fully repaired.
     const rs = ref ? pristineStats(ref) : null;
     // Scores out of 100 — the bar (and the number) stop at 100.
-    const refFor = { fDrive: REF.fDrive, fGrip: REF.fGrip, fUsable: REF.fUsable, accel: REF.accel, vMax: REF.vMax, staminaMax: REF.stamina, regen: REF.regen, cooling: REF.cooling, mass: REF.mass };
+    const refFor = { fDrive: REF.fDrive, fGrip: REF.fGrip, fUsable: REF.fUsable, accel: REF.accel, vMax: REF.vMax, staminaMax: REF.stamina, regen: REF.regen, cooling: REF.cooling, driveEff: 1, mass: REF.mass };
     const sc = (key, v) => capped((v / refFor[key]) * 100);
     const row = (label, key, hint, neutral = false) => {
       // Bar = current value, red = what repairs would restore, white tick = reference.
@@ -490,6 +490,7 @@ export class WorkshopUI {
           row('Stamina', 'staminaMax', "Energy for driving, moves and weapons. Resting brings a little back; run it dry and the chassis regen refills it. Grippy tyres and tracks use it faster, castors slower"),
           row('Regen', 'regen', `Once stamina runs out completely: how soon the chassis regen kicks in (${s.regenDelay?.toFixed(1)}s) and how fast it refills you (${Math.round(s.regenRate || 0)}/s)`),
           row('Cooling', 'cooling', 'How fast heat goes away. Run too hot and you overheat — a thermal stall. Grippy tyres and tracks heat you faster, castors slower'),
+          row('Efficiency', 'driveEff', "Drive train: how much of the motor's work reaches the wheels or thrust. The rest is friction and inertia — paid for in heat and stamina"),
           row('Weight', 'mass', 'Heavier is harder to push around — and harder to move', true),
         )),
       el('p', { class: 'muted small stats-note' },
