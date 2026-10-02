@@ -205,19 +205,76 @@ class App {
     if (bet) toast(`Your manager bet ${formatMoney(bet.stake)} on you to ${bet.side === 'win' ? 'WIN' : 'LOSE'}`, bet.side === 'win' ? 'good' : 'bad');
     this.state.save();
 
+    const heats = race ? { n: 1, me: 0, them: 0 } : null; // a race is best of 3
     this.beginBattle(player, challenger, {
-      tournament, stake, bet, moneyBefore, race,
+      tournament, stake, bet, moneyBefore, race, heats,
       // Races are on the S-track; fights home and away in turn (the rookie's ring is random).
-      engine: new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty, style: challenger.style, dohyo: race ? new Track({ label: 'S-track race' }) : new Dohyo(this.economy.venueFor(challenger)) }),
+      engine: new CombatEngine({ player, opponent: challenger.bug, difficulty: challenger.difficulty, style: challenger.style, dohyo: race ? this.heatTrack(heats) : new Dohyo(this.economy.venueFor(challenger)) }),
     });
   }
 
+  /** The S-track for a heat of a best-of-3 race, with the score so far on the board. */
+  heatTrack(h) {
+    return new Track({ label: `Race · heat ${h.n} · ${h.me}–${h.them}` });
+  }
+
+  /**
+   * A heat of a best-of-3 race is over. Returns the race result once someone has
+   * won two heats (or a bug can't go on); otherwise shows the score and lines up the next heat.
+   */
+  scoreHeat(res, engine) {
+    const h = this.match.heats;
+    if (res.result === 'win') h.me++;
+    else if (res.result === 'loss') h.them++;
+    const need = ECONOMY.RACE_HEATS_TO_WIN;
+    const done = res.reasonKey === 'forfeit' || h.me >= need || h.them >= need || h.n >= ECONOMY.RACE_MAX_HEATS
+      || !this.match.player.isBattleReady || !engine.opponent.isBattleReady;
+    if (!done) {
+      this.showHeat(res, engine);
+      return null;
+    }
+    // Forfeit, or a bug too broken to race on: the other side takes the race.
+    let result = h.me > h.them ? 'win' : h.them > h.me ? 'loss' : 'tie';
+    if (res.reasonKey === 'forfeit' || !this.match.player.isBattleReady) result = 'loss';
+    else if (!engine.opponent.isBattleReady) result = 'win';
+    const verdict = result === 'win' ? 'won the race' : result === 'loss' ? 'lost the race' : 'race drawn';
+    return { ...res, result, reason: `${res.reason} — ${verdict} ${h.me}–${h.them}` };
+  }
+
+  /** Between heats: the score, and the next heat. */
+  showHeat(res, engine) {
+    const h = this.match.heats;
+    const root = $('#overlay-root');
+    const word = res.result === 'win' ? 'WON' : res.result === 'loss' ? 'LOST' : 'NO RESULT';
+    let timer = null;
+    const next = () => {
+      clearTimeout(timer);
+      if (!root.querySelector('.heat-card')) return;
+      root.classList.remove('open');
+      root.replaceChildren();
+      h.n++;
+      const { challenger, player } = this.match;
+      this.beginBattle(player, challenger, {
+        ...this.match,
+        engine: new CombatEngine({ player, opponent: engine.opponent, difficulty: challenger.difficulty, style: challenger.style, dohyo: this.heatTrack(h), matchWear: false }),
+      });
+    };
+    root.replaceChildren(el('div', { class: `result-card result-${res.result} heat-card` },
+      el('h1', {}, `HEAT ${h.n} ${word}`),
+      el('p', { class: 'result-reason' }, res.reason),
+      el('p', { class: 'heat-score' }, `You ${h.me} – ${h.them} ${this.match.challenger.name || engine.opponent.name}`),
+      el('p', { class: 'muted' }, `Best of 3: first to ${ECONOMY.RACE_HEATS_TO_WIN} heats takes the race. Damage carries over — no repairs between heats. The summary comes at the end of the race.`),
+      el('button', { class: 'btn btn-primary btn-big', onclick: next }, `Heat ${h.n + 1}`)));
+    root.classList.add('open');
+    timer = setTimeout(next, MATCH.HEAT_PAUSE * 1000); // straight on to the next heat
+  }
+
   /** Put a fight on screen and run it (a real bout or a training session). */
-  beginBattle(player, challenger, { engine, tournament = false, stake = null, bet = null, moneyBefore = this.state.money, training = null, standoff = false, weave = false, race = false }) {
+  beginBattle(player, challenger, { engine, tournament = false, stake = null, bet = null, moneyBefore = this.state.money, training = null, standoff = false, weave = false, race = false, heats = null }) {
     closeModal();
     this.workshop.stop();
     this.sprite.clear();
-    this.match = { challenger, tournament, stake, bet, player, moneyBefore, training, standoff, weave, race, endTimer: null, banner: null };
+    this.match = { challenger, tournament, stake, bet, player, moneyBefore, training, standoff, weave, race, heats, endTimer: null, banner: null };
     this.engine = engine;
     this.wireEngine(this.engine);
 
@@ -302,7 +359,7 @@ class App {
     });
     engine.on(EVENTS.WEAPON_FIRE, (e) => this.weaponVfx(e));
     engine.on(EVENTS.MATCH_END, (res) => {
-      const text = res.result === 'win' ? 'VICTORY!' : res.result === 'loss' ? (res.winner ? `${res.winner.toUpperCase()} WINS` : 'DEFEAT') : 'DRAW';
+      const text = this.match.heats ? (res.result === 'win' ? 'HEAT WON!' : res.result === 'loss' ? 'HEAT LOST' : 'NO RESULT') : res.result === 'win' ? 'VICTORY!' : res.result === 'loss' ? (res.winner ? `${res.winner.toUpperCase()} WINS` : 'DEFEAT') : 'DRAW';
       const color = res.result === 'win' ? '#5bd66b' : res.result === 'loss' ? '#ff4a4a' : '#ffd24a';
       this.match.banner = { text, color };
       this.match.endTimer = MATCH.RESULT_DELAY;
@@ -375,12 +432,16 @@ class App {
     cancelAnimationFrame(this.raf);
     const engine = this.engine;
     const { challenger, tournament, stake, bet, player, training, standoff, weave, race } = this.match;
-    const res = engine.result;
+    let res = engine.result;
     this.engine = null;
     this.input.disable();
     if (training) {
       this.endTraining(training, res);
       return;
+    }
+    if (this.match.heats) {
+      res = this.scoreHeat(res, engine);
+      if (!res) return; // on to the next heat
     }
 
     const report = this.economy.settleMatch({

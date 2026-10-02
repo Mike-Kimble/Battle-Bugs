@@ -18,6 +18,7 @@ export const MATCH = Object.freeze({
   TIE_WINDOW_MS: 250,   // both eliminated within this window → tie
   STALL_OUT_STRIKES: 3, // a bug that enters thermal stall this many times "stalls out"
   RESULT_DELAY: 1.4,    // seconds of slow-mo before the result screen
+  HEAT_PAUSE: 3,        // seconds on the score between heats of a race
   FIXED_DT: 1 / 120,
   MAX_FRAME_DT: 0.1,
   DAMAGE_CAP: 0.425,    // most parts lose at most this share of max HP per match: from full, two fights to reach 15%
@@ -226,6 +227,8 @@ export const ECONOMY = Object.freeze({
   WEAVE_FEE: 500,            // Weevil Weave: a three-round race, unlocked by winning the Scarab Standoff
   WEAVE_PRIZE: 3000,
   WEAVE_ROUNDS: 3,
+  RACE_HEATS_TO_WIN: 2,      // Race tab races are best of 3: first to win two heats
+  RACE_MAX_HEATS: 5,         // …with no-result heats re-run, up to this many in all
   STANDOFF_PRIZE: 1000,
   STANDOFF_DOHYO: 2,          // fought on the donut
   MATCH_FIND_FIRST: 0.4,     // manager's chance of finding a part to match your other drive at the first try…

@@ -28,9 +28,11 @@ export class CombatEngine extends EventEmitter {
   /** @param {{dohyo?: Dohyo}} opts dohyo: which ring (defaults to the classic) */
   /** training: a practice session — nothing wears out (no per-match wear, no chain wear). */
   /** extras: more opponents ([{ bug, difficulty, style }]) — a free-for-all, last one on the ring wins. */
-  constructor({ player, opponent, difficulty = 0.5, style = null, dohyo = null, ai = true, training = false, extras = [] }) {
+  /** matchWear: false for the later heats of a best-of-3 race — the per-match wear is taken once, in the first heat. */
+  constructor({ player, opponent, difficulty = 0.5, style = null, dohyo = null, ai = true, training = false, extras = [], matchWear = true }) {
     super();
     this.training = training;
+    this.matchWear = matchWear;
     this.dohyo = dohyo || new Dohyo(1);
     this.player = player;
     this.opponent = opponent;
@@ -252,7 +254,7 @@ export class CombatEngine extends EventEmitter {
     this.phase = 'over';
     for (const bug of this.bugs) for (const p of bug.parts) p.battleFloor = null;
     // Parts that grind themselves down (graphite discs) lose a set share every match.
-    for (const bug of this.training ? [] : this.bugs) {
+    for (const bug of this.training || !this.matchWear ? [] : this.bugs) {
       for (const p of bug.parts) if (p.stats.wearPerMatch) p.hp = Math.max(p.maxHp * 0.01, p.hp - p.maxHp * p.stats.wearPerMatch);
       // A water mister keeps things cool, but the damp wears the drive it's on: its motor and drive train.
       for (let b = 0; b < bug.drives.length; b++) {
