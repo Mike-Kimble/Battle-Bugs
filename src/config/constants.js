@@ -93,6 +93,13 @@ export const HEAT = Object.freeze({
   OVERHEAT_SECONDS: 7,
   IDLE_COOL_BASE: 0.3,       // resting cools you even with no cooling: (base + cooling score) × the full-throttle heat rate
   WEAPON_FRACTION: 0.3,      // a weapon shot: 30% of its stamina cost
+  // Running gear load: the harder the gear is to push along (grip, rolling resistance),
+  // the more heat and stamina driving costs. Knobby Treads (μ 1.05) are 1.0.
+  LOAD_REF_MU: 1.05,
+  LOAD_TYRE_BASE: 0.6,       // tyres: base + (1 − base) · μ / ref…
+  LOAD_KIND: { track: 1.2, pads: 1.1, slick: 0.9 }, // …× the tread type
+  LOAD_CASTOR_BASE: 0.5,     // castors: base + roll × this
+  LOAD_CASTOR_ROLL: 2,
   RECOVER_AT: 0.4,           // an overheated motor restarts once it's cooled to 40%
 });
 

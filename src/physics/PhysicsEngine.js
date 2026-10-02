@@ -413,11 +413,22 @@ export class PhysicsEngine {
       reverser: !!dt.reverser,
       tractionLimited: shaftDrive && fGrip < fDrive,
       castor,
+      // How hard the running gear is to push along: more grip and rolling resistance = more heat and stamina.
+      gearLoad: PhysicsEngine.gearLoad(tires),
       pinned: castor && !!tires.stats.pinned,
       // Wheels or tracks nothing is holding: no motor, no working shaft, or a thrust
       // drive on wheels — unless a self-locking gearbox (worm, cycloidal, strain wave) holds them.
       freeRoll: !!tires && !castor && !tires.isBroken && !shaftDrive && !dt.lock,
     };
+  }
+
+  /** Running gear load (1 = Knobby Treads): grippy tyres and tracks work the motor harder, castors glide. */
+  static gearLoad(tires) {
+    if (!tires) return 1;
+    const st = tires.stats;
+    if (tires.type === 'castor') return HEAT.LOAD_CASTOR_BASE + (st.roll || 0) * HEAT.LOAD_CASTOR_ROLL;
+    const base = HEAT.LOAD_TYRE_BASE;
+    return (base + (1 - base) * (st.mu || HEAT.LOAD_REF_MU) / HEAT.LOAD_REF_MU) * (HEAT.LOAD_KIND[st.kind] || 1);
   }
 
   /** Deceleration when not driving: grip-braking (times any drive-train brake), plus reverse thrusters firing. */
@@ -651,9 +662,10 @@ export class PhysicsEngine {
     const effort = bug.lunge || bug.spin ? 1 : throttle;
     const driving = effort > 0 && !bug.stalled;
     if (driving) {
-      bug.heat += heatRate * (effort * s.drainMult - coolScore) * dt;
+      const load = effort * s.drainMult * (s.gearLoad ?? 1); // grip and rolling resistance take more energy
+      bug.heat += heatRate * (load - coolScore) * dt;
       const emptyIn = STAMINA.EMPTY_SECONDS_WORST + (STAMINA.EMPTY_SECONDS_BEST - STAMINA.EMPTY_SECONDS_WORST) * staminaScore ** STAMINA.EMPTY_CURVE;
-      bug.stamina -= (s.staminaMax / emptyIn) * effort * s.drainMult * dt;
+      bug.stamina -= (s.staminaMax / emptyIn) * load * dt;
     } else {
       bug.heat -= heatRate * (HEAT.IDLE_COOL_BASE + coolScore) * dt; // resting cools you
     }
