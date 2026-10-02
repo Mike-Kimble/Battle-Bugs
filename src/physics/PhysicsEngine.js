@@ -203,7 +203,7 @@ export class PhysicsEngine {
       }
       // Electric and fusion torque wears gearing out fast.
       const life = gearWearMatches(p, bug);
-      if (life) interactions.push({ id: `dt_wear_${p.uid}`, good: false, mods: {}, text: `${/^[AEIOU]/.test(driveKind(bug, bay)) ? 'An' : 'A'} ${driveKind(bug, bay)} drive's instant torque chews through your ${p.name}${where} — it'll be worn out in about ${Math.round(life)} matches. Keep it repaired.` });
+      if (life) interactions.push({ id: `dt_wear_${p.uid}`, good: false, mods: {}, text: `${/^[aeiou]/i.test(driveKind(bug, bay)) ? 'An' : 'A'} ${driveKind(bug, bay)} drive's instant torque chews through your ${p.name}${where} — it'll be worn out in about ${Math.round(life)} matches. Keep it repaired.` });
       if (s.vector) fx.vector = true;
       if (s.prop) { fx.prop = s.prop; fx.propRpm = !!s.propRpm; }
       if (s.lsl) fx.lsl = true;
