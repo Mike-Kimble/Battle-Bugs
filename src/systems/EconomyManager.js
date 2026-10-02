@@ -1838,6 +1838,8 @@ export class EconomyManager {
     for (const key of keys) {
       if (!this.affordable(key, budget, opts)) continue;
       if (opts.only && !opts.only(PARTS[key].stats)) continue;
+      // On a twin-bay shell, stick to the motor type already fitted — never suggest mixing in another.
+      if (type === 'engine' && bug.driveSlots > 1 && bug.drives.length && !bug.drives.some((d) => d.stats.kind === PARTS[key].stats.kind)) continue;
       // A standard shaft would snap on a turbine: never the right call.
       if (['std', 'chain'].includes(PARTS[key].stats.shaft) && bug.engine?.stats.kind === 'turbine') continue;
       // …and a chain on heavy running gear would need repairing after every fight.
