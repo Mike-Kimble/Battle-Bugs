@@ -120,9 +120,50 @@ export class EconomyManager {
     return part.isScrap ? 0 : part.value * part.hpRatio * ECONOMY.SELL_RATE;
   }
 
+  /** One buyer's rate per kind of part: like parts share it. */
   partSellPrice(part) {
     if (part.isScrap) return ECONOMY.SCRAP_PRICE;
-    return Math.max(ECONOMY.SCRAP_PRICE, Math.round(this.partSellBase(part) * this.sellQuote(part.uid)));
+    return Math.max(ECONOMY.SCRAP_PRICE, Math.round(this.partSellBase(part) * this.sellQuote(part.key)));
+  }
+
+  /**
+   * Spares stacked like with like (same part; scrap kept apart), best condition
+   * first. Each stack has one going rate per item, at its average condition.
+   * @returns {Array<{key, parts: Part[], best: Part, scrap: boolean}>}
+   */
+  spareGroups(parts = this.state.inventory) {
+    const map = new Map();
+    for (const p of parts) {
+      const id = `${p.key}${p.isScrap ? '|scrap' : ''}`;
+      if (!map.has(id)) map.set(id, []);
+      map.get(id).push(p);
+    }
+    return [...map.values()].map((ps) => {
+      ps.sort((a, b) => b.hpRatio - a.hpRatio);
+      return { key: ps[0].key, parts: ps, best: ps[0], scrap: ps[0].isScrap };
+    });
+  }
+
+  /** The going rate for one item of a stack. */
+  groupUnitPrice(group) {
+    if (group.scrap) return ECONOMY.SCRAP_PRICE;
+    const p = group.best;
+    const avg = group.parts.reduce((t, x) => t + x.hpRatio, 0) / group.parts.length;
+    return Math.max(ECONOMY.SCRAP_PRICE, Math.round(p.value * avg * ECONOMY.SELL_RATE * this.sellQuote(p.key)));
+  }
+
+  /** Sell `count` from a stack at its going rate (the worst-condition ones go first). Returns the total. */
+  sellFromGroup(group, count) {
+    this.assertNotInField();
+    const n = Math.max(1, Math.min(group.parts.length, Math.round(count)));
+    const unit = this.groupUnitPrice(group);
+    const going = [...group.parts].sort((a, b) => a.hpRatio - b.hpRatio).slice(0, n);
+    for (const p of going) {
+      if (!this.state.getPart(p.uid)) throw new Error('Part not in inventory');
+      this.state.removePart(p.uid);
+    }
+    this.state.earn(unit * n);
+    return unit * n;
   }
 
   vehicleSellPrice(bug) {
@@ -404,17 +445,129 @@ export class EconomyManager {
   // ───────────── Staff ─────────────
   /** Staff only come looking for work once you've made a name (or are already on the books). */
   staffAvailable(role) {
-    if (this.state.blacklist > 0 && !this.state.staff[role]) return false;
+    if (this.employed(role)) return true;
+    if (this.state.blacklist > 0) return false;
     const wins = this.state.record.challengerWins;
     const need = role === 'mechanic' ? ECONOMY.MECHANIC_SHOWS_AT_WINS : ECONOMY.MANAGER_SHOWS_AT_WINS;
-    return this.state.staff[role] || wins >= need;
+    return wins >= need;
+  }
+
+  /** On the books: working, or on strike. (`state.staff[role]` is only true while they're working.) */
+  employed(role) {
+    return !!(this.state.staff[role] || this.state.strike[role]);
+  }
+
+  /** Bouts before anyone will take the job (after someone quit or was fired), or 0. */
+  rehireWait(role) {
+    return this.state.rehire[role]?.wait || 0;
+  }
+
+  // ───────────── Wages ─────────────
+  /** Your complete (battle-ready) vehicles: what the mechanic is paid by. */
+  get completeVehicles() {
+    return this.state.vehicles.filter((v) => v.isBattleReady).length;
+  }
+
+  /**
+   * What a fair wage looks like given what you're earning: the mechanic's rate
+   * per complete vehicle (§), or the manager's share of your earnings (0–1).
+   */
+  goingRate(role) {
+    if (role === 'manager') return ECONOMY.MANAGER_PCT;
+    return Math.max(ECONOMY.MECHANIC_WAGE, roundTo(this.state.earnAvg * ECONOMY.MECHANIC_GOING_SHARE, 5));
+  }
+
+  /** The wage a new hire starts on: what the last one was asking, or the going rate. */
+  startingPay(role) {
+    return this.state.rehire[role]?.ask ?? this.goingRate(role);
+  }
+
+  /** The agreed wage (staff with none on record are on the going rate). */
+  payOf(role) {
+    if (this.state.pay[role] == null) this.state.pay[role] = this.goingRate(role);
+    return this.state.pay[role];
+  }
+
+  /** This bout's wage: the mechanic's rate × complete vehicles, the manager's share of `earned`. */
+  wageDue(role, earned = 0) {
+    const rate = this.payOf(role);
+    return Math.round(role === 'manager' ? rate * Math.max(0, earned) : rate * this.completeVehicles);
+  }
+
+  /** How they feel about it: 'content', 'complaining' (with what they want) or 'strike'. */
+  staffMood(role) {
+    const m = this.state.mood[role];
+    if (this.state.strike[role]) return { state: 'strike', ask: m?.ask, bouts: m?.bouts || 0 };
+    if (m?.stage === 1) return { state: 'complaining', ask: m.ask };
+    return { state: 'content', settling: m?.settle || 0 };
+  }
+
+  /** Set a wage in the office. Paying what they asked ends a complaint or a strike on the spot. */
+  setPay(role, value) {
+    const s = this.state;
+    if (!this.employed(role)) throw new Error(`You don't have a ${role}`);
+    s.pay[role] = Math.max(0, role === 'manager' ? Math.min(1, value) : Math.round(value));
+    const m = s.mood[role];
+    if (m?.stage > 0 && s.pay[role] >= m.ask) {
+      const wasStriking = !!s.strike[role];
+      delete s.mood[role];
+      if (wasStriking) { delete s.strike[role]; s.staff[role] = true; }
+      return wasStriking ? 'back' : 'happy';
+    }
+    return null;
+  }
+
+  /**
+   * After each bout: is the pay fair for what you're earning? Underpaid staff
+   * complain first; do nothing before the next bout and they strike; still not
+   * paid what they asked two bouts into the strike and they quit. New hires
+   * settle in for a few bouts first.
+   */
+  reviewPay(role, report) {
+    const s = this.state;
+    const title = role === 'mechanic' ? 'Mechanic' : 'Manager';
+    const fmt = (v) => (role === 'manager' ? `${Math.round(v * 100)}% of your winnings` : `${formatMoney(v)} per vehicle`);
+    const rate = this.payOf(role);
+    const fair = this.goingRate(role);
+    const m = s.mood[role] || { stage: 0 };
+    // New hires give it a few bouts before they start moaning about the wage they agreed to.
+    if (m.settle > 0) { m.settle -= 1; s.mood[role] = m; return; }
+    if (m.stage === 0) {
+      if (rate < fair * ECONOMY.WAGE_CONTENT) {
+        s.mood[role] = { stage: 1, ask: fair, bouts: 0 };
+        report.lines.push(`${title}: You're raking it in and I'm on peanuts. I want ${fmt(fair)} — sort it out in the office before the next bout or I down tools.`);
+      }
+      return;
+    }
+    if (rate >= m.ask) { delete s.mood[role]; return; }
+    if (m.stage === 1) {
+      s.mood[role] = { ...m, stage: 2, bouts: 0 };
+      s.staff[role] = false;
+      s.strike[role] = true;
+      report.lines.push(`${title}: ON STRIKE until I get ${fmt(m.ask)}. Don't expect any work out of me.`);
+      return;
+    }
+    m.bouts += 1;
+    s.mood[role] = m;
+    if (m.bouts >= ECONOMY.STRIKE_QUIT_BOUTS) {
+      this.staffLeaves(role);
+      s.rehire[role] = { wait: ECONOMY.REHIRE_AFTER_QUIT, ask: m.ask };
+      report.lines.push(`Your ${role} quit over pay. Word's out — nobody will take the job for ${ECONOMY.REHIRE_AFTER_QUIT} bouts, and they'll want ${fmt(m.ask)}.`);
+    } else {
+      report.lines.push(`Your ${role} is still on strike — pay ${fmt(m.ask)} in the office or they walk.`);
+    }
   }
 
   hire(role) {
-    if (this.state.staff[role]) return;
+    if (this.employed(role)) return;
     if (this.state.blacklist > 0) throw new Error("You're blacklisted — nobody will work for you right now");
+    const wait = this.rehireWait(role);
+    if (wait > 0) throw new Error(`Nobody will take the job for ${wait} more bout${wait === 1 ? '' : 's'}`);
     const fee = role === 'mechanic' ? ECONOMY.MECHANIC_HIRE : ECONOMY.MANAGER_HIRE;
     this.state.spend(fee);
+    this.state.pay[role] = this.startingPay(role);
+    delete this.state.rehire[role];
+    this.state.mood[role] = { stage: 0, settle: ECONOMY.NEW_HIRE_SETTLE };
     this.state.staff[role] = true;
     if (role === 'manager') {
       this.state.managerBetPct = ECONOMY.MANAGER_BET_DEFAULT;
@@ -428,6 +581,8 @@ export class EconomyManager {
    * with interest, their losses and a bit extra.
    */
   dismiss(role) {
+    // Fire a striker and the next one will start in a couple of bouts — for half what they were asking.
+    const striker = this.state.strike[role] ? this.state.mood[role] : null;
     const owed = this.state.arrears[role];
     if (owed) {
       this.state.blacklist = ECONOMY.BLACKLIST_BOUTS;
@@ -435,6 +590,10 @@ export class EconomyManager {
       this.state.addLog(`Dismissed your ${role} without paying the ${formatMoney(owed.amount)} you owed. Blacklisted for ${ECONOMY.BLACKLIST_BOUTS} bouts.`);
     }
     this.staffLeaves(role);
+    if (striker?.ask != null) {
+      const ask = striker.ask * ECONOMY.REHIRE_FIRED_SHARE;
+      this.state.rehire[role] = { wait: ECONOMY.REHIRE_AFTER_FIRED, ask: role === 'manager' ? Math.round(ask * 100) / 100 : roundTo(ask, 5) };
+    }
   }
 
   /** After a bout: the blacklist wears off, and ex-staff you stiffed may take a part. */
@@ -466,6 +625,8 @@ export class EconomyManager {
   /** A staff member is gone (dismissed, quit or vanished): any back pay goes with them. */
   staffLeaves(role) {
     this.state.staff[role] = false;
+    delete this.state.strike[role];
+    delete this.state.mood[role];
     delete this.state.arrears[role];
   }
 
@@ -1707,6 +1868,7 @@ export class EconomyManager {
    */
   settleMatch({ result, reason, challenger, opponentBug, playerBug, tournament, stake, bet }) {
     const s = this.state;
+    const startMoney = s.money;
     const report = { result, reason, lines: [], bounty: 0, captured: null, lostVehicle: null, champion: false, arrest: false };
     // Beating an established rival (not the win that makes them one) earns a fresh excuse by DM.
     const beatRival = !tournament && result === 'win' && !!s.rivalId && challenger.id === s.rivalId;
@@ -1831,7 +1993,10 @@ export class EconomyManager {
     }
     this.settleManagerBet(bet, result, report, { tournament });
 
-    this.payStaff(report);
+    // What this bout earned you: purse, prizes, wagers and the manager's bet (its stake went in before the fight).
+    const earned = Math.max(0, s.money - startMoney - (bet && bet.fate !== 'refused' ? bet.stake : 0));
+    s.earnAvg = Math.round(s.earnAvg + (earned - s.earnAvg) * ECONOMY.EARN_AVG);
+    this.payStaff(report, earned);
     this.collectDebts(report);
     if (s.staff.mechanic) this.runMechanic(report);
     if (s.staff.manager) this.runManager(report);
@@ -1877,32 +2042,49 @@ export class EconomyManager {
   }
 
   /**
-   * Wages after every bout. A missed wage is owed until you pay it in the
+   * Wages after every bout (the mechanic's rate × your complete vehicles, the
+   * manager's share of what the bout earned), then each checks their pay
+   * against the going rate. A missed wage is owed until you pay it in the
    * Admin tab. Go STAFF_GRACE bouts in a row after that without paying and
    * they quit — four bouts' grace in all, counting the one you missed.
    * Wages missed in the meantime are added to what you owe.
    */
-  payStaff(report) {
+  payStaff(report, earned = 0) {
     const s = this.state;
-    for (const [role, wage] of [['mechanic', ECONOMY.MECHANIC_WAGE], ['manager', ECONOMY.MANAGER_WAGE]]) {
-      if (!s.staff[role]) continue;
-      const owed = s.arrears[role];
-      if (owed && ++owed.bouts >= ECONOMY.STAFF_GRACE) {
-        this.staffLeaves(role);
-        report.lines.push(`Your ${role} quit — you never paid the ${formatMoney(owed.amount)} you owed.`);
+    for (const role of ['mechanic', 'manager']) {
+      // Nobody's taking the job yet: one bout closer.
+      if (!this.employed(role)) {
+        const r = s.rehire[role];
+        if (r?.wait > 0 && --r.wait === 0) report.lines.push(`Word's gone quiet — ${role === 'mechanic' ? 'mechanics' : 'managers'} are taking calls again (see the Admin tab).`);
         continue;
       }
-      if (s.canAfford(wage)) {
-        s.spend(wage);
-        report.lines.push(`Paid ${role} wage: ${formatMoney(wage)}`);
-      } else if (owed) {
-        owed.amount += wage;
-        const left = ECONOMY.STAFF_GRACE - owed.bouts;
-        report.lines.push(`Missed your ${role}'s wage again — you now owe ${formatMoney(owed.amount)}. Pay it in the Admin tab within ${left} bout${left === 1 ? '' : 's'} or they'll quit.`);
-      } else {
-        s.arrears[role] = { amount: wage, bouts: 0 };
-        report.lines.push(`Missed your ${role}'s wage (${formatMoney(wage)}). Pay it in the Admin tab within ${ECONOMY.STAFF_GRACE} bouts or they'll quit.`);
-      }
+      if (!s.strike[role]) this.payWage(role, earned, report); // strikers don't get paid
+      if (this.employed(role)) this.reviewPay(role, report);
+    }
+  }
+
+  payWage(role, earned, report) {
+    const s = this.state;
+    const owed = s.arrears[role];
+    if (owed && ++owed.bouts >= ECONOMY.STAFF_GRACE) {
+      this.staffLeaves(role);
+      report.lines.push(`Your ${role} quit — you never paid the ${formatMoney(owed.amount)} you owed.`);
+      return;
+    }
+    const wage = this.wageDue(role, earned);
+    if (wage <= 0) return;
+    if (s.canAfford(wage)) {
+      s.spend(wage);
+      report.lines.push(role === 'manager'
+        ? `Paid your manager ${formatMoney(wage)} (${Math.round(s.pay.manager * 100)}% of ${formatMoney(earned)})`
+        : `Paid your mechanic ${formatMoney(wage)} (${formatMoney(s.pay.mechanic)} × ${this.completeVehicles} complete vehicle${this.completeVehicles === 1 ? '' : 's'})`);
+    } else if (owed) {
+      owed.amount += wage;
+      const left = ECONOMY.STAFF_GRACE - owed.bouts;
+      report.lines.push(`Missed your ${role}'s wage again — you now owe ${formatMoney(owed.amount)}. Pay it in the Admin tab within ${left} bout${left === 1 ? '' : 's'} or they'll quit.`);
+    } else {
+      s.arrears[role] = { amount: wage, bouts: 0 };
+      report.lines.push(`Missed your ${role}'s wage (${formatMoney(wage)}). Pay it in the Admin tab within ${ECONOMY.STAFF_GRACE} bouts or they'll quit.`);
     }
   }
 

@@ -43,6 +43,12 @@ export class GameState extends EventEmitter {
     this.fine = null; // { amount, battlesLeft }
     this.rivalId = null; // the first alien you beat in a title match: they follow you to the Grand Final
     this.arrears = {};
+    // Staff pay: the mechanic's rate per complete vehicle (§), the manager's share of your earnings (0–1).
+    this.pay = { mechanic: null, manager: null };
+    this.strike = {}; // role → true while they're on strike (on the books, not working)
+    this.mood = {}; // role → { stage: 0 content | 1 complaining | 2 on strike, ask, bouts }
+    this.rehire = {}; // role → { wait, ask }: bouts until anyone will take the job, and the wage they'll want
+    this.earnAvg = 0; // your average earnings per bout (what staff measure their pay against)
     this.managerHunt = {}; // part key → the manager's chance of finding one to match your other drive next time
     this.blacklist = 0; // bouts left that nobody will work for you (you stiffed your staff)
     this.collectors = []; // [{ role, owed, taken }] ex-staff helping themselves to your parts // { mechanic|manager: { amount, bouts } } — a missed wage, to pay in the Admin tab
@@ -132,6 +138,14 @@ export class GameState extends EventEmitter {
     s.elitesOut = !!d.elitesOut;
     s.roamerId = d.roamerId || null;
     s.arrears = d.arrears || {};
+    s.pay = { mechanic: null, manager: null, ...d.pay };
+    // Saves from before wages were set in the office: they're on the going rate.
+    if (s.staff.mechanic && s.pay.mechanic == null) s.pay.mechanic = ECONOMY.MECHANIC_WAGE;
+    if (s.staff.manager && s.pay.manager == null) s.pay.manager = ECONOMY.MANAGER_PCT;
+    s.strike = d.strike || {};
+    s.mood = d.mood || {};
+    s.rehire = d.rehire || {};
+    s.earnAvg = d.earnAvg || 0;
     s.managerHunt = d.managerHunt || {};
     s.blacklist = d.blacklist || 0;
     s.collectors = d.collectors || [];
@@ -177,6 +191,11 @@ export class GameState extends EventEmitter {
       elitesOut: this.elitesOut,
       roamerId: this.roamerId,
       arrears: this.arrears,
+      pay: this.pay,
+      strike: this.strike,
+      mood: this.mood,
+      rehire: this.rehire,
+      earnAvg: this.earnAvg,
       managerHunt: this.managerHunt,
       blacklist: this.blacklist,
       collectors: this.collectors,

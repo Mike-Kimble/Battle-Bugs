@@ -182,17 +182,52 @@ function partTypeLabel(part) {
   return part.type;
 }
 
-export function partCard(part, economy, { actions = [], extra = null, compareTo, compareLegend } = {}) {
+/** @param {{group?: {parts: Part[]}}} opts group: a stack of like spares — shown as one card, × n */
+export function partCard(part, economy, { actions = [], extra = null, compareTo, compareLegend, group = null } = {}) {
+  const n = group?.parts.length || 1;
+  const pct = (p) => Math.round(p.hpRatio * 100);
+  const worst = n > 1 ? group.parts.reduce((w, p) => (p.hpRatio < w.hpRatio ? p : w), part) : part;
+  const cond = pct(worst) === pct(part) ? `${pct(part)}%` : `${pct(worst)}–${pct(part)}%`;
   return el('div', { class: `part-card rarity-${part.rarity}${part.isScrap ? ' broken' : ''}` },
     el('div', { class: 'part-head' },
       el('span', { class: `part-type type-${part.type}` }, partTypeLabel(part)),
       el('strong', {}, part.name),
-      part.rarity !== 'common' ? el('span', { class: `rarity-tag rarity-${part.rarity}` }, part.rarity) : null),
+      part.rarity !== 'common' ? el('span', { class: `rarity-tag rarity-${part.rarity}` }, part.rarity) : null,
+      n > 1 ? el('span', { class: 'stack-count', title: `${n} in your spares` }, `× ${n}`) : null),
     el('div', { class: 'part-stats' }, partStatLine(part)),
-    hpBar(part.hpRatio, { label: part.isScrap ? `SCRAP — ${Math.round(part.hpRatio * 100)}%` : `Condition ${Math.round(part.hpRatio * 100)}%` }),
+    hpBar(part.hpRatio, { label: part.isScrap ? `SCRAP — ${cond}` : `Condition ${cond}` }),
     compareTo !== undefined && compareTo !== part ? partCompare(part, compareTo, { legend: compareLegend }) : null,
     extra,
     actions.length ? el('div', { class: 'part-actions' }, actions) : null);
+}
+
+/**
+ * The Sell button for a stack of spares. One item sells straight away; a stack
+ * opens a slider (starting at 1, up to all of them) to pick how many.
+ * @param {(fn: Function, msg: string|Function) => void} act
+ */
+export function sellStackButton(group, economy, act, { disabled = false, title = null } = {}) {
+  const n = group.parts.length;
+  const unit = economy.groupUnitPrice(group);
+  const name = group.best.name;
+  const verb = group.scrap ? 'Scrap' : 'Sell';
+  const sold = (count) => (v) => `Sold ${count > 1 ? `${count} × ` : ''}${name} for ${formatMoney(v)}`;
+  return el('button', {
+    class: 'btn btn-small', disabled, title,
+    onclick: () => {
+      if (n === 1) { act(() => economy.sellFromGroup(group, 1), sold(1)); return; }
+      const label = el('strong', {});
+      const show = (k) => { label.textContent = `${k} × ${name} for ${formatMoney(unit * k)}`; };
+      const slider = el('input', { type: 'range', min: 1, max: n, step: 1, value: 1, 'aria-label': 'How many to sell', oninput: (e) => show(Number(e.target.value)) });
+      show(1);
+      openModal(`${verb} ${name}`, el('div', { class: 'sell-slider' },
+        el('p', { class: 'small muted' }, `You have ${n}. The going rate is ${formatMoney(unit)} each${group.scrap ? '' : ' — the worst-condition ones go first'}.`),
+        slider, label,
+        el('div', { class: 'part-actions' },
+          el('button', { class: 'btn btn-primary', onclick: () => { const k = Number(slider.value); closeModal(); act(() => economy.sellFromGroup(group, k), sold(k)); } }, verb),
+          el('button', { class: 'btn', onclick: closeModal }, 'Cancel'))));
+    },
+  }, `${verb} ${formatMoney(unit)}${n > 1 ? ' each' : ''}`);
 }
 
 /** Stats with every part at full HP — used to show damage penalties. */
@@ -708,7 +743,9 @@ export class WorkshopUI {
 
     if (inv.length) {
       const list = el('div', { class: 'replace-list' }, el('h4', {}, type === 'weapon' ? 'Spares — mount or sell' : 'Spares — fit or sell'));
-      for (const part of inv) {
+      // Like spares stack (× n); fitting takes the best of the stack.
+      for (const group of this.economy.spareGroups(inv)) {
+        const part = group.best;
         const actions = [];
         if (twinAddOn) {
           // Pick the drive: fit into a free slot, or swap one out.
@@ -736,13 +773,11 @@ export class WorkshopUI {
         } else {
           actions.push(el('button', { class: 'btn btn-small btn-primary', disabled: locked || part.isScrap, onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid), `Fitted ${part.name}`) }, 'Fit'));
         }
-        actions.push(el('button', {
-          class: 'btn btn-small',
+        actions.push(sellStackButton(group, this.economy, (fn, msg) => this.act(fn, msg), {
           disabled: this.economy.inField,
           title: this.economy.inField ? "No selling while you're in the tournament" : null,
-          onclick: () => this.act(() => this.economy.sellPart(part.uid), (v) => `Sold ${part.name} for ${formatMoney(v)}`),
-        }, `${part.isScrap ? 'Scrap' : 'Sell'} ${formatMoney(this.economy.partSellPrice(part))}`));
-        list.append(partCard(part, this.economy, { actions, compareTo: counterpart(bug, part) }));
+        }));
+        list.append(partCard(part, this.economy, { actions, compareTo: counterpart(bug, part), group }));
       }
       section.append(list);
     } else {

@@ -2,7 +2,7 @@ import { DOHYO_KINDS } from '../systems/Dohyo.js';
 import { ECONOMY, WEAPON_CLASSES } from '../config/constants.js';
 import { formatMoney } from '../systems/EconomyManager.js';
 import { PARTS, RARITY } from '../config/partsData.js';
-import { el, toast, hpBar, partCard, openModal, closeModal, counterpart, vehicleCompare } from './WorkshopUI.js';
+import { el, toast, hpBar, partCard, openModal, closeModal, counterpart, vehicleCompare, sellStackButton } from './WorkshopUI.js';
 
 const TABS = [
   ['hangar', 'Garage'],
@@ -419,11 +419,13 @@ export class TerminalUI {
     return el('div', {});
   }
 
-  sellPartCard(p) {
+  /** A stack of like spares (× n) with its Sell button. */
+  sellPartCard(group) {
+    const p = group.best;
     return partCard(p, this.economy, {
+      group,
       compareTo: p.type === 'chassis' ? undefined : counterpart(this.state.activeBug, p),
-      actions: [el('button', { class: 'btn btn-small', onclick: () => this.act(() => this.economy.sellPart(p.uid), (v) => `Sold ${p.name} for ${formatMoney(v)}`) },
-        `${p.isScrap ? 'Scrap' : 'Sell'} ${formatMoney(this.economy.partSellPrice(p))}`)],
+      actions: [sellStackButton(group, this.economy, (fn, msg) => this.act(fn, msg))],
     });
   }
 
@@ -538,7 +540,7 @@ export class TerminalUI {
             onclick: () => this.confirm(`Sell ${bug.name}?`, this.economy.sellWarning(bug),
               () => this.act(() => this.economy.sellVehicle(bug.id), (v) => `Sold for ${formatMoney(v)}`)),
           }, `Sell ${formatMoney(this.economy.vehicleSellPrice(bug))}`))))
-      : spares.map((p) => this.sellPartCard(p));
+      : this.economy.spareGroups(spares).map((g) => this.sellPartCard(g));
 
     if (cat === 'sell') {
       const groups = PART_GROUPS.map(([type, label]) => [label, s.inventory.filter((p) => aisleOf(p) === type)]).filter(([, ps]) => ps.length);
@@ -547,7 +549,7 @@ export class TerminalUI {
         el('p', { class: 'muted' }, catBlurb, ` Buyers pay ${Math.round(ECONOMY.SELL_RATE * 100)}% of value × condition; broken parts fetch scrap only.`),
         this.economy.hotStreak ? el('div', { class: 'notice notice-gold' }, `🔥 You're on a ${s.record.streak}-win streak — buyers want some of your secret sauce and are paying 10–20% extra.`) : null,
         groups.length
-          ? groups.map(([label, ps]) => [el('h3', {}, `${label} (${ps.length})`), el('div', { class: 'card-grid parts' }, ps.map((p) => this.sellPartCard(p)))])
+          ? groups.map(([label, ps]) => [el('h3', {}, `${label} (${ps.length})`), el('div', { class: 'card-grid parts' }, this.economy.spareGroups(ps).map((g) => this.sellPartCard(g)))])
           : el('p', { class: 'muted' }, 'No spare components. Remove parts on the hoist or strip a vehicle to sell them here.'));
     }
 
@@ -583,28 +585,41 @@ export class TerminalUI {
 
   renderStaff() {
     const s = this.state;
-    const staffCard = (role, title, hire, wage, desc, icon) => el('article', { class: `card staff${s.staff[role] ? ' active' : ''}` },
-      el('div', { class: 'staff-icon' }, icon),
-      el('h3', {}, title),
-      el('p', {}, desc),
-      el('div', { class: 'small muted' }, `Hire fee ${formatMoney(hire)} · wage ${formatMoney(wage)} per bout`),
-      s.staff[role] && s.arrears[role] ? this.renderArrears(role, title) : null,
-      s.staff[role]
-        ? el('button', {
-          class: 'btn btn-small',
-          onclick: () => (s.arrears[role]
-            ? this.confirm(`Dismiss your ${title.toLowerCase()}?`, `You still owe them ${formatMoney(s.arrears[role].amount)}. Walk away without paying and word gets round: nobody will work for you for ${ECONOMY.BLACKLIST_BOUTS} bouts. And they'll want their money back, one way or another.`,
-              () => this.act(() => this.economy.dismiss(role), `${title} dismissed`))
-            : this.act(() => this.economy.dismiss(role), `${title} dismissed`)),
-        }, 'Dismiss')
-        : el('button', { class: 'btn btn-small btn-primary', disabled: s.money < hire, onclick: () => this.act(() => this.economy.hire(role), `${title} hired`) }, `Hire ${formatMoney(hire)}`));
-
     const eco = this.economy;
+    const staffCard = (role, title, hire, desc, icon) => {
+      const employed = eco.employed(role);
+      const mood = eco.staffMood(role);
+      const wait = eco.rehireWait(role);
+      const start = eco.startingPay(role);
+      const startText = role === 'manager' ? `${Math.round(start * 100)}% of your winnings` : `${formatMoney(start)} per complete vehicle`;
+      return el('article', { class: `card staff${employed ? ' active' : ''}${mood.state === 'strike' ? ' striking' : ''}` },
+        el('div', { class: 'staff-icon' }, icon),
+        el('h3', {}, title, mood.state === 'strike' ? el('span', { class: 'badge badge-warn' }, 'ON STRIKE') : null),
+        el('p', {}, desc),
+        employed ? this.renderWage(role, title, mood) : el('div', { class: 'small muted' }, `Hire fee ${formatMoney(hire)} · wants ${startText}`),
+        employed && s.arrears[role] ? this.renderArrears(role, title) : null,
+        employed
+          ? el('button', {
+            class: 'btn btn-small',
+            onclick: () => (s.arrears[role]
+              ? this.confirm(`Dismiss your ${title.toLowerCase()}?`, `You still owe them ${formatMoney(s.arrears[role].amount)}. Walk away without paying and word gets round: nobody will work for you for ${ECONOMY.BLACKLIST_BOUTS} bouts. And they'll want their money back, one way or another.`,
+                () => this.act(() => eco.dismiss(role), `${title} dismissed`))
+              : mood.state === 'strike'
+                ? this.confirm(`Fire your striking ${title.toLowerCase()}?`, `A replacement will take the job in ${ECONOMY.REHIRE_AFTER_FIRED} bouts — for half what this one is asking.`,
+                  () => this.act(() => eco.dismiss(role), `${title} fired`))
+                : this.act(() => eco.dismiss(role), `${title} dismissed`)),
+          }, mood.state === 'strike' ? 'Fire' : 'Dismiss')
+          : wait > 0
+            ? el('div', { class: 'notice notice-warn small' }, `Nobody will take the job for ${wait} more bout${wait === 1 ? '' : 's'}.`)
+            : el('button', { class: 'btn btn-small btn-primary', disabled: s.money < hire, onclick: () => this.act(() => eco.hire(role), `${title} hired`) }, `Hire ${formatMoney(hire)}`));
+    };
+
+    const show = (role) => eco.staffAvailable(role) || eco.rehireWait(role) > 0;
     const cards = [
-      eco.staffAvailable('mechanic') ? staffCard('mechanic', 'Mechanic', ECONOMY.MECHANIC_HIRE, ECONOMY.MECHANIC_WAGE,
-        'Repairs your active vehicle after each bout, can save parts too far gone for anyone else (right down to 1%), gets you 10% off parts and repairs, and tells you the one upgrade that would help most.', '🔧') : null,
-      eco.staffAvailable('manager') ? staffCard('manager', 'Manager', ECONOMY.MANAGER_HIRE, ECONOMY.MANAGER_WAGE,
-        'Bets on your fights, clears your scrap pile, flags rare deals — and usually tracks down the part your mechanic wants.', '📈') : null,
+      show('mechanic') ? staffCard('mechanic', 'Mechanic', ECONOMY.MECHANIC_HIRE,
+        'Repairs your active vehicle after each bout, can save parts too far gone for anyone else (right down to 1%), gets you 10% off parts and repairs, and tells you the one upgrade that would help most. Paid per complete vehicle.', '🔧') : null,
+      show('manager') ? staffCard('manager', 'Manager', ECONOMY.MANAGER_HIRE,
+        'Bets on your fights, clears your scrap pile, flags rare deals — and usually tracks down the part your mechanic wants. Takes a cut of your winnings.', '📈') : null,
     ].filter(Boolean);
     return el('div', {},
       s.blacklist > 0 ? el('div', { class: 'notice notice-warn' }, el('strong', {}, 'Blacklisted. '),
@@ -613,7 +628,7 @@ export class TerminalUI {
       cards.length
         ? el('div', { class: 'card-grid' }, cards)
         : s.blacklist > 0 ? null : el('p', { class: 'muted' }, "Nobody wants to work for an unknown from the junkyard. Win some fights and people will come looking."),
-      s.staff.manager ? this.renderBetting() : null,
+      eco.employed('manager') ? this.renderBetting() : null,
       s.fine ? this.renderFine() : null,
       this.renderCodex(),
       el('h3', {}, 'Log'),
@@ -648,6 +663,44 @@ export class TerminalUI {
           })),
         ];
       }));
+  }
+
+  /** The wage you pay, set in the office, against the going rate — and how they feel about it. */
+  renderWage(role, title, mood) {
+    const s = this.state;
+    const eco = this.economy;
+    const manager = role === 'manager';
+    const rate = eco.payOf(role);
+    const going = eco.goingRate(role);
+    const fmt = (v) => (manager ? `${Math.round(v * 100)}%` : formatMoney(v));
+    const perBout = (v) => (manager
+      ? `≈ ${formatMoney(v * s.earnAvg)} a bout at your average winnings`
+      : `${formatMoney(v * eco.completeVehicles)} a bout for ${eco.completeVehicles} complete vehicle${eco.completeVehicles === 1 ? '' : 's'}`);
+    const label = el('strong', {}, `${fmt(rate)}${manager ? ' of winnings' : ' per complete vehicle'}`);
+    const note = el('div', { class: 'small muted' }, perBout(rate));
+    // Mechanic's slider runs to three times the going rate; the manager's to 30%.
+    const max = manager ? 30 : Math.max(100, Math.ceil((Math.max(going, rate) * 3) / 50) * 50);
+    const step = manager ? 1 : Math.max(5, Math.round(max / 200 / 5) * 5);
+    const toValue = (v) => (manager ? Number(v) / 100 : Number(v));
+    const slider = el('input', {
+      type: 'range', min: 0, max, step, value: manager ? Math.round(rate * 100) : rate, 'aria-label': `${title} wage`,
+      oninput: (e) => { const v = toValue(e.target.value); label.textContent = `${fmt(v)}${manager ? ' of winnings' : ' per complete vehicle'}`; note.textContent = perBout(v); },
+      onchange: (e) => this.act(() => eco.setPay(role, toValue(e.target.value)), (r) => (r === 'back' ? `${title} is back to work` : r === 'happy' ? `${title} is happy with that` : `${title}'s wage set`)),
+    });
+    const moodLine = mood.state === 'strike'
+      ? el('div', { class: 'notice notice-warn small' }, `On strike for ${fmt(mood.ask)}. ${mood.bouts ? 'Last chance — one more bout and they quit.' : `Pay up within ${ECONOMY.STRIKE_QUIT_BOUTS} bouts or they quit.`}`)
+      : mood.state === 'complaining'
+        ? el('div', { class: 'notice notice-warn small' }, `Complaining: wants ${fmt(mood.ask)}. Do nothing before your next bout and they strike.`)
+        : el('div', { class: 'small good-text' }, 'Content.');
+    return el('div', { class: 'wage' },
+      el('div', { class: 'small' }, 'Wage: ', label),
+      el('div', { class: 'slider-row' }, slider),
+      note,
+      el('div', { class: 'small muted' }, `Going rate: ${fmt(going)}${manager ? ' of winnings' : ' per complete vehicle'}`),
+      moodLine,
+      mood.state !== 'content'
+        ? el('button', { class: 'btn btn-small btn-primary', onclick: () => this.act(() => eco.setPay(role, mood.ask), (r) => (r === 'back' ? `${title} is back to work` : `${title} is happy with that`)) }, `Pay what they ask: ${fmt(mood.ask)}`)
+        : null);
   }
 
   renderBetting() {

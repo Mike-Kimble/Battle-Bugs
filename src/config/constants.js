@@ -156,9 +156,18 @@ export const ECONOMY = Object.freeze({
   MECHANIC_SHOWS_AT_WINS: 3,  // staff only appear on the Admin tab once you've made a name
   MANAGER_SHOWS_AT_WINS: 5,
   MECHANIC_HIRE: 150,
-  MECHANIC_WAGE: 35,
+  MECHANIC_WAGE: 35,         // starting going rate: the mechanic's wage per complete vehicle, per bout
   MANAGER_HIRE: 200,
   MANAGER_WAGE: 30,
+  MANAGER_PCT: 0.1,          // the manager's going rate: a share of what you earn each bout
+  MECHANIC_GOING_SHARE: 0.03, // as you earn more, a mechanic expects this share of your average bout earnings per vehicle
+  EARN_AVG: 0.3,             // how fast the average bout earnings follow the latest bout
+  WAGE_CONTENT: 0.85,        // staff are content on at least this share of the going rate
+  NEW_HIRE_SETTLE: 3,        // bouts a new hire takes their agreed wage without complaint
+  STRIKE_QUIT_BOUTS: 2,      // still not paid what they asked this many bouts into a strike → they quit
+  REHIRE_AFTER_QUIT: 3,      // bouts before anyone will take a job that someone quit
+  REHIRE_AFTER_FIRED: 2,     // fire a striker: bouts before a replacement will start…
+  REHIRE_FIRED_SHARE: 0.5,   // …for this share of what the striker was asking
   STAFF_GRACE: 3,
   BLACKLIST_BOUTS: 5,        // dismiss staff you owe → nobody will work for you for this many bouts
   DEBT_RECOVERY: 1.5,        // …and they take parts until they've recovered the debt × this (interest and losses)

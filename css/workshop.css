@@ -355,3 +355,11 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .region-tabs { margin: 6px 0 10px; }
 .log-time { color: var(--muted); font-size: 13px; }
 .log-lines { margin: 2px 0 6px 14px; padding: 0; list-style: '– '; color: #cfc6e0; font-size: 14px; }
+.badge-warn { border-color: var(--warn); color: var(--warn); margin-left: 6px; }
+.good-text { color: var(--good); }
+.card.staff.striking { border-color: var(--warn); }
+.wage { display: grid; gap: 4px; margin: 6px 0; }
+.wage .slider-row input { width: 100%; }
+.stack-count { margin-left: auto; font-weight: bold; color: var(--gold); }
+.sell-slider { display: grid; gap: 10px; }
+.sell-slider input { width: 100%; }
