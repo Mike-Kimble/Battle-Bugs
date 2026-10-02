@@ -387,12 +387,21 @@ export class CombatEngine extends EventEmitter {
     bug.control.target = route ? this.dohyo.route(bug.pos, p, bug.radius * 1.5, this.time) : p;
     bug.control.cruise = null;
     bug.control.backing = backing;
+    bug.control.brake = false;
   }
 
   stop(bug) {
     bug.control.target = null;
     bug.control.cruise = null;
     bug.control.backing = false;
+    bug.control.brake = false;
+  }
+
+  /** Brake hard: drive (or thrust) against the way you're moving, until told otherwise. */
+  brake(bug) {
+    if (!this.live || bug.out) return;
+    this.stop(bug);
+    bug.control.brake = true;
   }
 
   /**
@@ -841,7 +850,8 @@ export class RaceAI {
     const turnAt = (d) => { const t = track.tangentAt(s + dir * d); return Math.abs(Math.atan2(here.cross(t), here.dot(t))); };
     // How fast this bug can take a hairpin on its grip (castors hardly at all), and how far it needs to slow down.
     const st = me.stats;
-    const aLat = st.mass > 0 ? (st.fGrip / st.mass) * PHYSICS.LATERAL_GRIP * (st.lateralMult ?? 1) : 0;
+    // Tyres corner on grip; a thrust bug on castors corners on its thrust, pointed into the bend.
+    const aLat = (st.mass > 0 ? (st.fGrip / st.mass) * PHYSICS.LATERAL_GRIP * (st.lateralMult ?? 1) : 0) + (st.castor ? st.accel * PHYSICS.THRUST_CORNER : 0);
     const vCurve = Math.sqrt(aLat * 130) * (0.55 + 0.35 * difficulty);
     // Brake whichever way stops harder: lift off and let the grip (and any reverse thrusters) slow you, or drive backwards.
     const aCoast = PhysicsEngine.idleBrake(st);
@@ -850,16 +860,37 @@ export class RaceAI {
     const brakeDist = Math.max(0, (v * v - vCurve * vCurve) / (2 * Math.max(1, aBrake))) + 60 + v * this.think;
     let bendAhead = false;
     for (let d = 40; d <= brakeDist; d += 40) if (turnAt(d) > 0.5) { bendAhead = true; break; }
+    if (st.castor && st.fUsable > 0 && !st.vector) {
+      // A thrust bug on castors, flown properly: work out the velocity you want (flat out down
+      // the straights, what the bend allows round it, edging back to the racing line) and
+      // point the thrust at the difference — into the corner, or against the slide.
+      const inBend = bendAhead || turnAt(60) > 0.3;
+      const vWant = inBend ? Math.min(vCurve, st.vMax) : st.vMax;
+      const ahead = track.tangentAt(s + dir * (20 + v * 0.15)).scale(dir);
+      const toLine = track.nearest(me.pos).point.sub(me.pos);
+      const want = ahead.scale(vWant).add(toLine.scale(2 + 1.5 * difficulty));
+      const need = want.sub(me.vel);
+      if (need.length() < 12) engine.moveTo(me, me.pos.add(ahead.scale(120)));
+      else if (v > vWant + 25 && need.dot(me.vel) < -0.8 * need.length() * v) engine.brake(me); // straight-line braking
+      else engine.moveTo(me, me.pos.add(need.normalize().scale(120)));
+      this.rammer(engine);
+      return;
+    }
     if (bendAhead && v > vCurve) {
       // Too hot for the bend: scrub off speed.
       if (aCoast >= aReverse) engine.stop(me);
-      else engine.moveTo(me, me.pos.sub(me.vel.normalize().scale(120)));
+      else engine.brake(me);
       return;
     }
     // Look further ahead on the straights, closer (slower) into a hairpin.
     const look = turnAt(140) > 0.5 ? 55 + 45 * difficulty : 120 + 60 * difficulty;
     engine.moveTo(me, track.pointAt(s + dir * look));
-    // The other racer in the lane ahead: shove them off (or out of the way).
+    this.rammer(engine);
+  }
+
+  /** The other racer in the lane ahead: shove them off (or out of the way). */
+  rammer(engine) {
+    const { me, foe, difficulty } = this;
     const toFoe = foe.pos.sub(me.pos);
     const dist = toFoe.length();
     const facing = Math.abs(Math.atan2(Vector2D.fromAngle(me.angle).cross(toFoe), Vector2D.fromAngle(me.angle).dot(toFoe))) < 0.5;

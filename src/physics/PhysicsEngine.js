@@ -367,7 +367,12 @@ export class PhysicsEngine {
 
     const wear = PHYSICS.TIRE_WEAR_FLOOR + (1 - PHYSICS.TIRE_WEAR_FLOOR) * tireRatio;
     const slickSpeed = castor ? 1 + (1 - slick) * PHYSICS.SLICK_CASTOR_SPEED : 1; // less rolling resistance, more top speed
-    const vMax = engine && tires ? rpmAvg * tires.stats.radius * PHYSICS.RPM_TO_SPEED * wear * m.vMax * slickSpeed : 0;
+    // Driven wheels: revs × wheel size. Thrust on castors isn't geared to anything — it goes as fast as
+    // the thrust can push against drag (bigger bugs catch more air), so more thrust is more speed.
+    const drag = PHYSICS.CASTOR_DRAG * (chassis.stats.radius / 27);
+    const vMax = !engine || !tires ? 0
+      : castor ? (thrust ? Math.sqrt(Math.max(0, fUsable) / drag) * m.vMax : 0)
+        : rpmAvg * tires.stats.radius * PHYSICS.RPM_TO_SPEED * wear * m.vMax * slickSpeed;
 
     // Twin drives: what each one contributes, so you can see which side needs work.
     // Push is shared out in proportion to what each drive actually puts down.
@@ -536,6 +541,11 @@ export class PhysicsEngine {
       steer(diff, s.turnRate * (turning ? PHYSICS.SWERVE_TURN_MULT : 1));
       if (turning) lateralGrip = PHYSICS.SWERVE_LATERAL_GRIP;
       throttle = 1;
+    } else if (canDrive && ctl.brake) {
+      // Braking: power against the way you're moving (reverse thrust, on castors), until you've stopped.
+      const along = bug.vel.dot(Vector2D.fromAngle(bug.angle));
+      if (Math.abs(along) < 15) { ctl.brake = false; ctl.reverse = false; }
+      else { ctl.reverse = along > 0; throttle = 1; }
     } else if (canDrive && ctl.target) {
       const to = ctl.target.sub(bug.pos);
       const dist = to.length();
@@ -624,6 +634,18 @@ export class PhysicsEngine {
       const next = n <= step ? want : rel.add(diff.scale(step / n));
       fwd = next.dot(heading);
       lat = next.dot(side);
+    } else if (throttle > 0 && s.castor && s.fUsable > 0) {
+      // Thrust on castors: a force along the nose (or the tail, in reverse) that never
+      // switches off at top speed — drag caps the overall speed, so thrust keeps swinging
+      // the velocity round to where the nose points. Point into the corner and she turns.
+      const along = ctl.reverse ? heading.negate() : heading;
+      const a = (ctl.reverse ? (s.accelRev ?? s.accel) : s.accel) * throttle;
+      const before = rel.length();
+      let v = rel.add(along.scale(a * dt));
+      const cap = Math.max(ctl.reverse ? vCapRev : vCap, before - PHYSICS.OVERSPEED_DECEL * dt);
+      if (v.length() > cap) v = v.scale(cap / v.length());
+      fwd = v.dot(heading);
+      lat = v.dot(side);
     } else if (throttle > 0 && !ctl.reverse) {
       if (fwd < vCap) fwd = Math.min(vCap, fwd + s.accel * throttle * dt);
     } else if (throttle > 0) {

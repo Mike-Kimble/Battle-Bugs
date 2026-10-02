@@ -1798,7 +1798,8 @@ export class EconomyManager {
     if (!(st.vMax > 0) || !(st.accel > 0) || !(st.mass > 0)) return 99;
     const a = st.accel;
     const b = Math.max(PhysicsEngine.idleBrake(st), st.accelRev ?? st.accel) * 0.85;
-    const aLat = (st.fGrip / st.mass) * PHYSICS.LATERAL_GRIP * (st.lateralMult ?? 1);
+    // Tyres corner on grip; thrust on castors corners on its thrust, pointed into the bend.
+    const aLat = (st.fGrip / st.mass) * PHYSICS.LATERAL_GRIP * (st.lateralMult ?? 1) + (st.castor ? st.accel * PHYSICS.THRUST_CORNER : 0);
     const vc = Math.max(1, Math.min(st.vMax, Math.sqrt(aLat * 130) * 0.865));
     // A straight of length L from v0, braking down to v1 at its end.
     const straight = (L, v0, v1) => {
@@ -1823,16 +1824,16 @@ export class EconomyManager {
   /**
    * A Race Bug: built for the S-track, not the ring. The pilot's crew tries a
    * few builds of the tier, strips out the weapons and plating (dead weight
-   * on a race track), never glides on castors, and keeps the quickest.
+   * on a race track), and keeps the quickest — a good thrust build on castors
+   * is usually it.
    */
   generateRaceBug(tier, { condition = () => rand(0.8, 1) } = {}) {
     let best = null;
     let bestT = Infinity;
-    for (let i = 0; i < 12 || !best; i++) {
+    for (let i = 0; i < 16; i++) {
       const bug = this.generateBug(tier, { condition });
       for (const w of [...bug.weapons]) bug.unequip(w);
       if (bug.armor) bug.unequip(bug.armor);
-      if (bug.tires?.type === 'castor' && i < 30) continue;
       const t = this.raceTime(bug);
       if (t < bestT) { best = bug; bestT = t; }
     }

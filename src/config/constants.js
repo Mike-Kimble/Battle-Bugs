@@ -46,6 +46,8 @@ export const PHYSICS = Object.freeze({
   ROLL_RESIST: 18,          // px/s² that free-rolling wheels lose to rolling resistance
   SLOPE_SKEW: 0.9,          // rad the nose is pulled towards downhill (at full slope) when moving across one
   SLOPE_SLEW: 3,            // rad/s a free-rolling bug turns to roll downhill (at full slope)
+  THRUST_CORNER: 0.9,       // share of a castor bug's thrust a good pilot can point into a bend (on top of the castors' hold)
+  CASTOR_DRAG: 0.33,        // thrust on castors: top speed is where thrust (less rolling resistance) meets drag, F = c · v²
   CASTOR_THRUST: 1,         // a thrust drive on castors: its thrust, less the rolling resistance (no bonus — thrust is thrust)
   VECTOR_FACE_RATE: 9,      // rad/s: a thrust-vectoring bug swings round to keep facing its opponent
   SLICK_CASTOR_SPEED: 0.5,  // castors in a slick: top speed + this × the grip lost (a 0.2-grip patch → +40%)
