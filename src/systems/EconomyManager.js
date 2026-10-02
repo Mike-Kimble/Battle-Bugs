@@ -2,6 +2,7 @@ import { ECONOMY, PILOT_SKILL, winRate } from '../config/constants.js';
 import {
   PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, RIVAL_EXCUSES, CHALLENGER_ROSTER, RARITY, worksWith, THRUST_DRIVES, heavyGear, turbineLine, turbineComplete,
 } from '../config/partsData.js';
+import { STAFF_ROSTER } from '../config/staff.js';
 import { BattleBug } from '../entities/BattleBug.js';
 import { Part, makeId } from '../entities/Part.js';
 
@@ -128,7 +129,8 @@ export class EconomyManager {
 
   /**
    * Spares stacked like with like (same part; scrap kept apart), best condition
-   * first. Each stack has one going rate per item, at its average condition.
+   * first. A stack shares one going rate — for one at 100% — and each part
+   * fetches its share of it by condition.
    * @returns {Array<{key, parts: Part[], best: Part, scrap: boolean}>}
    */
   spareGroups(parts = this.state.inventory) {
@@ -144,26 +146,27 @@ export class EconomyManager {
     });
   }
 
-  /** The going rate for one item of a stack. */
-  groupUnitPrice(group) {
-    if (group.scrap) return ECONOMY.SCRAP_PRICE;
-    const p = group.best;
-    const avg = group.parts.reduce((t, x) => t + x.hpRatio, 0) / group.parts.length;
-    return Math.max(ECONOMY.SCRAP_PRICE, Math.round(p.value * avg * ECONOMY.SELL_RATE * this.sellQuote(p.key)));
+  /** What selling `count` from a stack would fetch (the worst-condition ones go first). */
+  groupSellTotal(group, count) {
+    return this.sellOrder(group).slice(0, count).reduce((t, p) => t + this.partSellPrice(p), 0);
   }
 
-  /** Sell `count` from a stack at its going rate (the worst-condition ones go first). Returns the total. */
+  sellOrder(group) {
+    return [...group.parts].sort((a, b) => a.hpRatio - b.hpRatio);
+  }
+
+  /** Sell `count` from a stack, worst condition first. Returns the total. */
   sellFromGroup(group, count) {
     this.assertNotInField();
     const n = Math.max(1, Math.min(group.parts.length, Math.round(count)));
-    const unit = this.groupUnitPrice(group);
-    const going = [...group.parts].sort((a, b) => a.hpRatio - b.hpRatio).slice(0, n);
-    for (const p of going) {
+    let total = 0;
+    for (const p of this.sellOrder(group).slice(0, n)) {
       if (!this.state.getPart(p.uid)) throw new Error('Part not in inventory');
+      total += this.partSellPrice(p);
       this.state.removePart(p.uid);
     }
-    this.state.earn(unit * n);
-    return unit * n;
+    this.state.earn(total);
+    return total;
   }
 
   vehicleSellPrice(bug) {
@@ -299,7 +302,8 @@ export class EconomyManager {
    */
   huntForMatch(key) {
     const hunt = this.state.managerHunt || (this.state.managerHunt = {});
-    const odds = hunt[key] ?? ECONOMY.MATCH_FIND_FIRST;
+    // Some managers just pick up the phone and get it (or nearly always do).
+    const odds = this.person('manager')?.find ?? hunt[key] ?? ECONOMY.MATCH_FIND_FIRST;
     if (chance(odds) && this.stockPick(key)) {
       delete hunt[key];
       return { found: true };
@@ -477,9 +481,69 @@ export class EconomyManager {
     return Math.max(ECONOMY.MECHANIC_WAGE, roundTo(this.state.earnAvg * ECONOMY.MECHANIC_GOING_SHARE, 5));
   }
 
-  /** The wage a new hire starts on: what the last one was asking, or the going rate. */
+  /** Who you've got in a role (their roster entry), or null. */
+  person(role) {
+    const id = this.state.staffId[role];
+    return id ? { id, ...STAFF_ROSTER[role][id] } : null;
+  }
+
+  /** Who's applying for the job (rolled if nobody is yet). */
+  candidate(role) {
+    const s = this.state;
+    if (!s.candidate[role] || !STAFF_ROSTER[role][s.candidate[role]]) this.rollCandidate(role);
+    const id = s.candidate[role];
+    return { id, ...STAFF_ROSTER[role][id] };
+  }
+
+  /** Someone new turns up for the job (never the one who just left). */
+  rollCandidate(role, exclude = null) {
+    const ids = Object.keys(STAFF_ROSTER[role]).filter((k) => k !== exclude && k !== this.state.staffId[role]);
+    this.state.candidate[role] = pick(ids);
+  }
+
+  /** What someone expects to be paid: the going rate, give or take their own idea of their worth. */
+  expectedPay(role, id = this.state.staffId[role]) {
+    const going = this.goingRate(role);
+    if (role === 'manager') return going;
+    return roundTo(going * (STAFF_ROSTER.mechanic[id]?.pay ?? 1), 5);
+  }
+
+  /** The wage a new hire starts on: what the last one was asking, or what this one expects. */
   startingPay(role) {
-    return this.state.rehire[role]?.ask ?? this.goingRate(role);
+    return this.state.rehire[role]?.ask ?? this.expectedPay(role, this.candidate(role).id);
+  }
+
+  /** Let the manager set the wages after each bout (you can still override them before the next). */
+  setManagerWages(on) {
+    this.state.managerWages = !!on;
+    if (on) this.managerSetsWages();
+  }
+
+  /**
+   * Your manager sets the wages — each in their own way: some short the
+   * mechanic, some look after themselves first. Only while they're working.
+   */
+  managerSetsWages() {
+    const s = this.state;
+    if (!s.managerWages || !s.staff.manager) return;
+    const m = this.person('manager');
+    if (!m) return;
+    if (this.employed('mechanic')) this.setPay('mechanic', roundTo(this.expectedPay('mechanic') * m.mechPay, 5));
+    this.setPay('manager', Math.round(ECONOMY.MANAGER_PCT * m.selfPay * 1000) / 1000);
+  }
+
+  /** Does your mechanic know about this kind of part (on this vehicle)? */
+  mechanicKnows(type, bug, stats = null) {
+    const m = this.person('mechanic');
+    if (!m) return true;
+    if (type === 'weapon' && m.weapons === false) return false;
+    if (m.blindTo) {
+      // Nothing to do with the drive when you're running the one they don't know…
+      if (bug?.engine?.stats.kind === m.blindTo && ['engine', 'cooling', 'enhancement', 'drivetrain'].includes(type)) return false;
+      // …and they'll never put you in one.
+      if (type === 'engine' && stats?.kind === m.blindTo) return false;
+    }
+    return true;
   }
 
   /** The agreed wage (staff with none on record are on the going rate). */
@@ -525,10 +589,10 @@ export class EconomyManager {
    */
   reviewPay(role, report) {
     const s = this.state;
-    const title = role === 'mechanic' ? 'Mechanic' : 'Manager';
+    const title = this.person(role)?.name || (role === 'mechanic' ? 'Mechanic' : 'Manager');
     const fmt = (v) => (role === 'manager' ? `${Math.round(v * 100)}% of your winnings` : `${formatMoney(v)} per vehicle`);
     const rate = this.payOf(role);
-    const fair = this.goingRate(role);
+    const fair = this.expectedPay(role);
     const m = s.mood[role] || { stage: 0 };
     // New hires give it a few bouts before they start moaning about the wage they agreed to.
     if (m.settle > 0) { m.settle -= 1; s.mood[role] = m; return; }
@@ -552,9 +616,9 @@ export class EconomyManager {
     if (m.bouts >= ECONOMY.STRIKE_QUIT_BOUTS) {
       this.staffLeaves(role);
       s.rehire[role] = { wait: ECONOMY.REHIRE_AFTER_QUIT, ask: m.ask };
-      report.lines.push(`Your ${role} quit over pay. Word's out — nobody will take the job for ${ECONOMY.REHIRE_AFTER_QUIT} bouts, and they'll want ${fmt(m.ask)}.`);
+      report.lines.push(`${title} quit over pay. Word's out — nobody will take the job for ${ECONOMY.REHIRE_AFTER_QUIT} bouts, and they'll want ${fmt(m.ask)}.`);
     } else {
-      report.lines.push(`Your ${role} is still on strike — pay ${fmt(m.ask)} in the office or they walk.`);
+      report.lines.push(`${title} is still on strike — pay ${fmt(m.ask)} in the office or they walk.`);
     }
   }
 
@@ -566,9 +630,12 @@ export class EconomyManager {
     const fee = role === 'mechanic' ? ECONOMY.MECHANIC_HIRE : ECONOMY.MANAGER_HIRE;
     this.state.spend(fee);
     this.state.pay[role] = this.startingPay(role);
+    this.state.staffId[role] = this.candidate(role).id;
+    delete this.state.candidate[role];
     delete this.state.rehire[role];
     this.state.mood[role] = { stage: 0, settle: ECONOMY.NEW_HIRE_SETTLE };
     this.state.staff[role] = true;
+    if (role === 'manager') this.state.forgetIn = randInt(5, 8);
     if (role === 'manager') {
       this.state.managerBetPct = ECONOMY.MANAGER_BET_DEFAULT;
       this.state.fixStreak = 0;
@@ -624,6 +691,9 @@ export class EconomyManager {
 
   /** A staff member is gone (dismissed, quit or vanished): any back pay goes with them. */
   staffLeaves(role) {
+    const gone = this.state.staffId[role];
+    delete this.state.staffId[role];
+    this.rollCandidate(role, gone);
     this.state.staff[role] = false;
     delete this.state.strike[role];
     delete this.state.mood[role];
@@ -1770,7 +1840,10 @@ export class EconomyManager {
       return out;
     }
 
-    const needs = this.diagnose(bug).map((n) => [n.type, n.reason, n.only]);
+    // Only what your mechanic actually knows about.
+    const needs = this.diagnose(bug)
+      .filter((n) => this.mechanicKnows(n.type, bug))
+      .map((n) => [n.type, n.reason, (st) => (!n.only || n.only(st)) && this.mechanicKnows(n.type, bug, st)]);
 
     // Stay within budget: the best part you could actually pay for (or already own).
     const budget = this.state.money;
@@ -2005,8 +2078,9 @@ export class EconomyManager {
     // The mechanic's pick is judged on the bug you'll fight with next.
     const mechPick = s.staff.mechanic ? this.mechanicAdvice(s.activeBug).pick : null;
     this.generateMarket();
-    if (mechPick && s.staff.manager && !this.inField && chance(ECONOMY.MANAGER_FINDS_PICK)) {
-      if (this.stockPick(mechPick.key)) report.lines.push(`Manager: tracked down the ${PARTS[mechPick.key].name} your mechanic wanted — it's on the Marketplace.`);
+    // The part your mechanic wants: the usual hunt (better odds each bout), unless your manager just gets it.
+    if (mechPick && s.staff.manager && !this.inField && !this.matchSource(mechPick.key) && this.huntForMatch(mechPick.key).found) {
+      report.lines.push(`Manager: tracked down the ${PARTS[mechPick.key].name} your mechanic wanted — it's on the Marketplace.`);
     }
     // Twin drives out of step: your manager goes hunting for the parts to match them up
     // (and gets likelier to turn one up with every bout they keep looking).
@@ -2018,7 +2092,9 @@ export class EconomyManager {
         else report.lines.push(`Manager: still hunting for a ${PARTS[k].name} to match your other drive (${Math.round(r.next * 100)}% next time).`);
       }
     }
-    for (const k of Object.keys(s.managerHunt || {})) if (!s.activeBug?.unmatched({ cooling: true }).some((u) => u.part.key === k)) delete s.managerHunt[k];
+    for (const k of Object.keys(s.managerHunt || {})) {
+      if (k !== mechPick?.key && !s.activeBug?.unmatched({ cooling: true }).some((u) => u.part.key === k)) delete s.managerHunt[k];
+    }
     this.ensureReplacementListing();
     // In the tournament your manager isn't out shopping: no finds, no deals, no whispers.
     if (s.staff.manager && !this.inField) {
@@ -2056,11 +2132,14 @@ export class EconomyManager {
       if (!this.employed(role)) {
         const r = s.rehire[role];
         if (r?.wait > 0 && --r.wait === 0) report.lines.push(`Word's gone quiet — ${role === 'mechanic' ? 'mechanics' : 'managers'} are taking calls again (see the Admin tab).`);
+        this.rollCandidate(role); // someone else turns up looking for the job
         continue;
       }
       if (!s.strike[role]) this.payWage(role, earned, report); // strikers don't get paid
       if (this.employed(role)) this.reviewPay(role, report);
     }
+    // Your manager sets next bout's wages (override them in the Admin tab before the bout).
+    this.managerSetsWages();
   }
 
   payWage(role, earned, report) {
@@ -2073,6 +2152,14 @@ export class EconomyManager {
     }
     const wage = this.wageDue(role, earned);
     if (wage <= 0) return;
+    // A scatter-brained manager handling the wages forgets the mechanic every so often.
+    const forgot = role === 'mechanic' && s.managerWages && s.staff.manager && this.person('manager')?.forgets && --s.forgetIn <= 0;
+    if (forgot) {
+      s.forgetIn = randInt(5, 8);
+      if (owed) owed.amount += wage; else s.arrears[role] = { amount: wage, bouts: 0 };
+      report.lines.push(`Your mechanic wasn't paid this bout (${formatMoney(wage)}) — it's owed in the Admin tab.`);
+      return;
+    }
     if (s.canAfford(wage)) {
       s.spend(wage);
       report.lines.push(role === 'manager'

@@ -363,3 +363,5 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .stack-count { margin-left: auto; font-weight: bold; color: var(--gold); }
 .sell-slider { display: grid; gap: 10px; }
 .sell-slider input { width: 100%; }
+.staff-name { font-weight: bold; color: var(--gold); margin: 2px 0 4px; }
+.check-row { display: flex; align-items: center; gap: 6px; margin: 6px 0; cursor: pointer; }

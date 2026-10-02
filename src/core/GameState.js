@@ -1,5 +1,6 @@
 import { ECONOMY, EVENTS, SAVE_KEY } from '../config/constants.js';
 import { STARTER_BUG, FIGHTING_STYLES, currentKey } from '../config/partsData.js';
+import { DEFAULT_STAFF } from '../config/staff.js';
 import { EventEmitter } from './EventEmitter.js';
 import { Storage } from './Storage.js';
 import { BattleBug } from '../entities/BattleBug.js';
@@ -49,6 +50,10 @@ export class GameState extends EventEmitter {
     this.mood = {}; // role → { stage: 0 content | 1 complaining | 2 on strike, ask, bouts }
     this.rehire = {}; // role → { wait, ask }: bouts until anyone will take the job, and the wage they'll want
     this.earnAvg = 0; // your average earnings per bout (what staff measure their pay against)
+    this.staffId = {}; // role → who you've hired (a STAFF_ROSTER key)
+    this.candidate = {}; // role → who's applying for the job right now
+    this.managerWages = false; // your manager sets the wages after each bout
+    this.forgetIn = 0; // bouts until a scatter-brained manager next forgets the mechanic's wage
     this.managerHunt = {}; // part key → the manager's chance of finding one to match your other drive next time
     this.blacklist = 0; // bouts left that nobody will work for you (you stiffed your staff)
     this.collectors = []; // [{ role, owed, taken }] ex-staff helping themselves to your parts // { mechanic|manager: { amount, bouts } } — a missed wage, to pay in the Admin tab
@@ -146,6 +151,14 @@ export class GameState extends EventEmitter {
     s.mood = d.mood || {};
     s.rehire = d.rehire || {};
     s.earnAvg = d.earnAvg || 0;
+    s.staffId = d.staffId || {};
+    // Saves from before staff had names: they turn out to be the ones who do it straight.
+    for (const role of ['mechanic', 'manager']) {
+      if ((s.staff[role] || s.strike[role]) && !s.staffId[role]) s.staffId[role] = DEFAULT_STAFF[role];
+    }
+    s.candidate = d.candidate || {};
+    s.managerWages = !!d.managerWages;
+    s.forgetIn = d.forgetIn || 0;
     s.managerHunt = d.managerHunt || {};
     s.blacklist = d.blacklist || 0;
     s.collectors = d.collectors || [];
@@ -196,6 +209,10 @@ export class GameState extends EventEmitter {
       mood: this.mood,
       rehire: this.rehire,
       earnAvg: this.earnAvg,
+      staffId: this.staffId,
+      candidate: this.candidate,
+      managerWages: this.managerWages,
+      forgetIn: this.forgetIn,
       managerHunt: this.managerHunt,
       blacklist: this.blacklist,
       collectors: this.collectors,

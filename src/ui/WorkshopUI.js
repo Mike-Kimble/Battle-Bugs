@@ -208,7 +208,6 @@ export function partCard(part, economy, { actions = [], extra = null, compareTo,
  */
 export function sellStackButton(group, economy, act, { disabled = false, title = null } = {}) {
   const n = group.parts.length;
-  const unit = economy.groupUnitPrice(group);
   const name = group.best.name;
   const verb = group.scrap ? 'Scrap' : 'Sell';
   const sold = (count) => (v) => `Sold ${count > 1 ? `${count} × ` : ''}${name} for ${formatMoney(v)}`;
@@ -217,17 +216,17 @@ export function sellStackButton(group, economy, act, { disabled = false, title =
     onclick: () => {
       if (n === 1) { act(() => economy.sellFromGroup(group, 1), sold(1)); return; }
       const label = el('strong', {});
-      const show = (k) => { label.textContent = `${k} × ${name} for ${formatMoney(unit * k)}`; };
+      const show = (k) => { label.textContent = `${k} × ${name} for ${formatMoney(economy.groupSellTotal(group, k))}`; };
       const slider = el('input', { type: 'range', min: 1, max: n, step: 1, value: 1, 'aria-label': 'How many to sell', oninput: (e) => show(Number(e.target.value)) });
       show(1);
       openModal(`${verb} ${name}`, el('div', { class: 'sell-slider' },
-        el('p', { class: 'small muted' }, `You have ${n}. The going rate is ${formatMoney(unit)} each${group.scrap ? '' : ' — the worst-condition ones go first'}.`),
+        el('p', { class: 'small muted' }, `You have ${n}.${group.scrap ? '' : ' The worst-condition ones go first.'}`),
         slider, label,
         el('div', { class: 'part-actions' },
           el('button', { class: 'btn btn-primary', onclick: () => { const k = Number(slider.value); closeModal(); act(() => economy.sellFromGroup(group, k), sold(k)); } }, verb),
           el('button', { class: 'btn', onclick: closeModal }, 'Cancel'))));
     },
-  }, `${verb} ${formatMoney(unit)}${n > 1 ? ' each' : ''}`);
+  }, n === 1 ? `${verb} ${formatMoney(economy.partSellPrice(group.best))}` : `${verb}…`);
 }
 
 /** Stats with every part at full HP — used to show damage penalties. */
@@ -420,7 +419,7 @@ export class WorkshopUI {
       }
     }
     if (!lines.length) return null;
-    return el('div', { class: 'advice' }, el('div', { class: 'advice-head' }, '🔧 Mechanic'), lines);
+    return el('div', { class: 'advice' }, el('div', { class: 'advice-head' }, `🔧 ${this.economy.person('mechanic')?.name || 'Mechanic'}`), lines);
   }
 
   /** Put the next/previous garage vehicle on the hoist. */

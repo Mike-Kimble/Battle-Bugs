@@ -592,11 +592,19 @@ export class TerminalUI {
       const wait = eco.rehireWait(role);
       const start = eco.startingPay(role);
       const startText = role === 'manager' ? `${Math.round(start * 100)}% of your winnings` : `${formatMoney(start)} per complete vehicle`;
+      // Who they are: the one you've got, or whoever's applying. (What they're like, you find out.)
+      const who = employed ? eco.person(role) : wait > 0 ? null : eco.candidate(role);
       return el('article', { class: `card staff${employed ? ' active' : ''}${mood.state === 'strike' ? ' striking' : ''}` },
         el('div', { class: 'staff-icon' }, icon),
         el('h3', {}, title, mood.state === 'strike' ? el('span', { class: 'badge badge-warn' }, 'ON STRIKE') : null),
+        who ? el('div', { class: 'staff-name' }, employed ? who.name : `Applying: ${who.name}`) : null,
         el('p', {}, desc),
-        employed ? this.renderWage(role, title, mood) : el('div', { class: 'small muted' }, `Hire fee ${formatMoney(hire)} · wants ${startText}`),
+        employed ? this.renderWage(role, who?.name || title, mood) : wait > 0 ? null : el('div', { class: 'small muted' }, `Hire fee ${formatMoney(hire)} · wants ${startText}`),
+        employed && role === 'manager' ? el('label', { class: 'check-row small' },
+          el('input', {
+            type: 'checkbox', checked: s.managerWages || null,
+            onchange: (e) => this.act(() => eco.setManagerWages(e.target.checked), e.target.checked ? `${who?.name || 'Your manager'} is handling the wages` : "You're setting the wages"),
+          }), ' Let my manager handle wages') : null,
         employed && s.arrears[role] ? this.renderArrears(role, title) : null,
         employed
           ? el('button', {
@@ -693,6 +701,7 @@ export class TerminalUI {
         ? el('div', { class: 'notice notice-warn small' }, `Complaining: wants ${fmt(mood.ask)}. Do nothing before your next bout and they strike.`)
         : el('div', { class: 'small good-text' }, 'Content.');
     return el('div', { class: 'wage' },
+      s.managerWages && s.staff.manager ? el('div', { class: 'small muted' }, 'Your manager sets this after every bout — move the slider to override it for the next one.') : null,
       el('div', { class: 'small' }, 'Wage: ', label),
       el('div', { class: 'slider-row' }, slider),
       note,

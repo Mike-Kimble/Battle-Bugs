@@ -218,7 +218,6 @@ export const ECONOMY = Object.freeze({
   FINE_BATTLES: 3,           // battles allowed to pay the fine
 
   MECHANIC_DISCOUNT: 0.9,    // mechanic gets 10% off parts & repairs
-  MANAGER_FINDS_PICK: 0.8,   // chance the manager stocks the mechanic's pick after a fight
   MATCH_FIND_FIRST: 0.4,     // manager's chance of finding a part to match your other drive at the first try…
   MATCH_FIND_STEP: 0.2,      // …and how much likelier after each bout they keep looking
   MIN_VEHICLE_PRICE: 100,
