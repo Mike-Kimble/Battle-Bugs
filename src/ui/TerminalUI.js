@@ -5,7 +5,7 @@ import { PARTS, RARITY } from '../config/partsData.js';
 import { el, toast, hpBar, partCard, openModal, closeModal, counterpart, vehicleCompare } from './WorkshopUI.js';
 
 const TABS = [
-  ['hangar', 'Hangar'],
+  ['hangar', 'Garage'],
   ['market', 'Marketplace'],
   ['challengers', 'Challengers'],
   ['staff', 'Admin'],
@@ -44,7 +44,7 @@ function streakText(n = 0) {
 }
 
 /**
- * The Terminal: hangar, marketplace, challenger board, staff office and
+ * The Terminal: garage, marketplace, challengers, staff office and
  * tournament desk. Also renders the top status bar.
  */
 export class TerminalUI {
@@ -94,7 +94,7 @@ export class TerminalUI {
         onclick: () => this.setTab(key),
       }, label, key === 'hangar' && newCount ? el('span', { class: 'tab-count' }, `${newCount} NEW`) : null))));
     this.root.replaceChildren(el('div', { class: 'terminal-body' }, body));
-    // The Hangar tab is the hoist alone (swipe between vehicles); every other tab is the terminal alone.
+    // The Garage tab is the hoist alone (swipe between vehicles); every other tab is the terminal alone.
     const ws = this.root.closest('#workshop-screen');
     ws?.classList.toggle('no-hoist', this.tab !== 'hangar');
     ws?.classList.toggle('hangar-mode', this.tab === 'hangar');
@@ -160,7 +160,7 @@ export class TerminalUI {
         el('ul', { class: 'issues' }, active.battleIssues().map((i) => el('li', {}, i))),
         el('div', { class: 'part-actions' },
           !active.engine ? el('button', { class: 'btn btn-primary', onclick: () => { this.marketCat = 'engine'; this.setTab('market'); } }, 'Buy a motor') : null,
-          el('button', { class: 'btn', onclick: () => this.setTab('hangar') }, 'Open the Hangar'))) : null,
+          el('button', { class: 'btn', onclick: () => this.setTab('hangar') }, 'Open the Garage'))) : null,
       el('p', { class: 'small muted' }, this.economy.nextIsHome
         ? '🏠 Next bout is at HOME — your Dohyo 1 (Classic). After that, away at theirs.'
         : '✈ Next bout is AWAY — on your opponent\'s home dohyo. Then back home.'),
@@ -413,8 +413,8 @@ export class TerminalUI {
     logEl.scrollTop = logEl.scrollHeight;
   }
 
-  // ───────────── Hangar ─────────────
-  /** The Hangar is the hoist panel (WorkshopUI); the terminal column is hidden. */
+  // ───────────── Garage ─────────────
+  /** The Garage is the hoist panel (WorkshopUI); the terminal column is hidden. */
   renderHangar() {
     return el('div', {});
   }
@@ -562,7 +562,7 @@ export class TerminalUI {
         el('h3', {}, `Sell your vehicles (${spares.length})`),
         spares.length
           ? el('div', { class: 'card-grid' }, sellCards)
-          : el('p', { class: 'muted small' }, 'Your hangar is empty.'),
+          : el('p', { class: 'muted small' }, 'Your garage is empty.'),
       ] : []),
     );
   }

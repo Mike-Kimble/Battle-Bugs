@@ -8,7 +8,7 @@ import { Part } from '../entities/Part.js';
 const SAVE_VERSION = 2; // v2: the fixed 20-pilot roster
 
 /**
- * Persistent campaign state: money, hangar, inventory, boards, staff and tournament.
+ * Persistent campaign state: money, garage, inventory, boards, staff and tournament.
  * Holds live entity instances; serialises them on save.
  */
 export class GameState extends EventEmitter {

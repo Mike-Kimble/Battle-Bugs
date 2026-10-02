@@ -388,7 +388,7 @@ export class WorkshopUI {
     return el('div', { class: 'advice' }, el('div', { class: 'advice-head' }, '🔧 Mechanic'), lines);
   }
 
-  /** Put the next/previous hangar vehicle on the hoist. */
+  /** Put the next/previous garage vehicle on the hoist. */
   cycle(dir) {
     const vs = this.state.vehicles;
     if (vs.length < 2) return;
@@ -486,7 +486,7 @@ export class WorkshopUI {
     cancelAnimationFrame(this.raf);
     const tick = () => {
       if (!this.canvas?.isConnected) return;
-      if (this.canvas.offsetParent !== null) this.drawHoist(); // skip while the Hangar is hidden
+      if (this.canvas.offsetParent !== null) this.drawHoist(); // skip while the Garage is hidden
       this.raf = requestAnimationFrame(tick);
     };
     this.raf = requestAnimationFrame(tick);
