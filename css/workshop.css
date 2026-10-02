@@ -365,3 +365,5 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .sell-slider input { width: 100%; }
 .staff-name { font-weight: bold; color: var(--gold); margin: 2px 0 4px; }
 .check-row { display: flex; align-items: center; gap: 6px; margin: 6px 0; cursor: pointer; }
+.components { margin-top: 12px; }
+.component-list { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 3px; font-size: 0.85em; }
