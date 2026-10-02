@@ -46,6 +46,7 @@ export const PHYSICS = Object.freeze({
   SLOPE_SLEW: 3,            // rad/s a free-rolling bug turns to roll downhill (at full slope)
   CASTOR_THRUST: 1.3,       // a thrust drive on castors pushes this much harder than through wheels (before rolling resistance)
   VECTOR_FACE_RATE: 9,      // rad/s: a thrust-vectoring bug swings round to keep facing its opponent
+  SLICK_CASTOR_SPEED: 0.5,  // castors in a slick: top speed + this × the grip lost (a 0.2-grip patch → +40%)
   WHEELSPIN: 0.5,           // turbine into the wheels with no gearbox: share of grip and control left
   MATCHED_COOLING: 1.1,     // twin drives running the same cooling: add-on cooling bonus
   UNMATCHED_PULL: 0.06,     // twin drives: pull (as imbalance) for each part one drive has and the other hasn't

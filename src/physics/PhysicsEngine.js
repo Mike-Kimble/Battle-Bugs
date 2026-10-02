@@ -183,10 +183,12 @@ export class PhysicsEngine {
   /**
    * Derive live stats for a bug from its equipped parts.
    * @param {import('../entities/BattleBug.js').BattleBug} bug
-   * @param {{gripMod?: number}} mods
+   * @param {{gripMod?: number, slick?: number}} mods slick: the grip left in an oil/grease/ice
+   *   patch the bug is sitting in (1 = dry) — on castors it cuts rolling resistance too
    */
   static deriveStats(bug, mods = {}) {
     const gripMod = mods.gripMod ?? 1;
+    const slick = mods.slick ?? 1;
     const chassis = bug.chassis;
     const engine = bug.engine;
     const tires = bug.tires;
@@ -230,7 +232,9 @@ export class PhysicsEngine {
     // limit), less the rolling resistance. What holds the line and brakes is
     // `hold` — as slippery as the rolling resistance on most castors.
     const thrustDrive = THRUST_DRIVES.includes(engine?.stats.kind);
-    const rollForce = castor ? tires.stats.roll * (2 - tireRatio) * mass * PHYSICS.GRAVITY : 0; // damage adds drag
+    // Damage adds drag; oil, grease or ice under castors takes it away (they lose hold, not speed).
+    const dryRoll = castor ? tires.stats.roll * (2 - tireRatio) * mass * PHYSICS.GRAVITY : 0;
+    const rollForce = dryRoll * slick;
     const gripMu = castor ? (tires.stats.hold ?? tires.stats.roll) : tires?.stats.mu || 0;
     const fGripBase = tires ? gripMu * mass * PHYSICS.GRAVITY * (castor ? 1 : tireRatio) * m.grip : 0;
     const fGrip = fGripBase * gripMod;
@@ -254,15 +258,17 @@ export class PhysicsEngine {
       return { f, mode, eff };
     });
     const fDrive = per.reduce((t, d) => t + d.f, 0);
-    const push = (scale) => {
+    const push = (scale, roll = rollForce) => {
       const sum = (mode) => per.filter((d) => d.mode === mode).reduce((t, d) => t + d.f * scale * d.eff, 0);
-      if (castor) return Math.max(0, sum('thrust') - rollForce);
+      if (castor) return Math.max(0, sum('thrust') - roll);
       return Math.min(sum('shaft'), fGrip) + sum('wheelThrust');
     };
     const shaftDrive = per.some((d) => d.mode === 'shaft');
     const thrust = per.some((d) => d.mode === 'thrust');
     const fUsable = push(1);
     const accel = mass > 0 ? (fUsable / mass) * m.accel : 0;
+    // Reverse thrusters push on the air, not the floor: a slick doesn't change how hard they brake.
+    const accelDry = mass > 0 ? (push(1, dryRoll) / mass) * m.accel : 0;
     // Back-to-front shells: the forward penalty is undone and then some in reverse.
     const back = chassis.stats.backwards;
     const accelRev = mass > 0 ? (push(back ? back.rev / back.fwd : 1) / mass) * m.accel : 0;
@@ -291,7 +297,8 @@ export class PhysicsEngine {
     if (dt.lsl) twinBias = 0; // a Limited-Slip Link shares torque: no pulling to one side
 
     const wear = PHYSICS.TIRE_WEAR_FLOOR + (1 - PHYSICS.TIRE_WEAR_FLOOR) * tireRatio;
-    const vMax = engine && tires ? rpmAvg * tires.stats.radius * PHYSICS.RPM_TO_SPEED * wear * m.vMax : 0;
+    const slickSpeed = castor ? 1 + (1 - slick) * PHYSICS.SLICK_CASTOR_SPEED : 1; // less rolling resistance, more top speed
+    const vMax = engine && tires ? rpmAvg * tires.stats.radius * PHYSICS.RPM_TO_SPEED * wear * m.vMax * slickSpeed : 0;
 
     return {
       mass,
@@ -301,6 +308,7 @@ export class PhysicsEngine {
       fUsable,
       accel,
       accelRev,
+      accelDry,
       vMax,
       engineRatio,
       tireRatio,
@@ -330,10 +338,19 @@ export class PhysicsEngine {
   static idleBrake(s) {
     if (!(s.mass > 0)) return 0;
     const grip = (s.fGrip / s.mass) * PHYSICS.IDLE_BRAKE * (s.brakeMult ?? 1);
-    return grip + (s.reverser ? s.accel * PHYSICS.REVERSER_BRAKE : 0);
+    return grip + (s.reverser ? (s.accelDry ?? s.accel) * PHYSICS.REVERSER_BRAKE : 0);
   }
 
   /** Current grip modifier from status effects and the environment (slick puddles). */
+  /** Grip left by the slickest oil, grease or ice patch under the bug (1 = dry floor). */
+  slickness(bug, env) {
+    let slick = 1;
+    for (const puddle of env.puddles || []) {
+      if (bug.pos.distanceTo(puddle.pos) < puddle.radius + bug.radius * 0.4) slick = Math.min(slick, puddle.gripMod);
+    }
+    return slick;
+  }
+
   gripModifier(bug, env) {
     let mod = 1;
     if (bug.effects.lifted > 0) mod = Math.min(mod, bug.effects.liftGrip ?? 0.1);
@@ -366,7 +383,7 @@ export class PhysicsEngine {
   }
 
   integrate(bug, dt, env) {
-    const s = PhysicsEngine.deriveStats(bug, { gripMod: this.gripModifier(bug, env) });
+    const s = PhysicsEngine.deriveStats(bug, { gripMod: this.gripModifier(bug, env), slick: this.slickness(bug, env) });
     bug.stats = s;
     bug.tickTimers(dt);
 
