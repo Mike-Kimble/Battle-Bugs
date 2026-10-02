@@ -79,6 +79,9 @@ export const STAMINA = Object.freeze({
   EMPTY_SECONDS_WORST: 10,
   EMPTY_SECONDS_BEST: 60,
   EMPTY_CURVE: 2.32,
+  // …for a 250kg bug. Heavier takes more energy to move: drain × √(mass / 250).
+  MASS_REF: 250,
+  MASS_EXP: 0.5,
   REST_SHARE: 0.35,          // resting brings stamina back too, but only at this share of the regen rate
 });
 

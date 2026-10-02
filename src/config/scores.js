@@ -20,7 +20,7 @@ export const REF = Object.freeze({
   // armour
   absorb: 0.75,
   // chassis
-  stamina: 150, turn: 5.5, regen: 100,
+  stamina: 200, turn: 5.5, regen: 100,
   // weapons, by effect
   drain: 48, ram: 40, spikes: 41, lift: 2.1, slick: 336, range: 230,
   // durability (max HP) and weight (kg) per part type

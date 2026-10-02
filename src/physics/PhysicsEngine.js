@@ -674,7 +674,8 @@ export class PhysicsEngine {
       // Cooling takes away its share of whatever heat you make: at 100% it all goes, however lossy the drive.
       bug.heat += heatRate * load * (1 - coolScore) * dt;
       const emptyIn = STAMINA.EMPTY_SECONDS_WORST + (STAMINA.EMPTY_SECONDS_BEST - STAMINA.EMPTY_SECONDS_WORST) * staminaScore ** STAMINA.EMPTY_CURVE;
-      bug.stamina -= (s.staminaMax / emptyIn) * load * dt;
+      const weight = (Math.max(1, s.mass) / STAMINA.MASS_REF) ** STAMINA.MASS_EXP; // heavier bugs burn more
+      bug.stamina -= (s.staminaMax / emptyIn) * load * weight * dt;
     } else {
       bug.heat -= heatRate * (HEAT.IDLE_COOL_BASE + coolScore) * dt; // resting cools you
     }
