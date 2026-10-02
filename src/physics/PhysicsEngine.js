@@ -1,6 +1,6 @@
 import { PHYSICS, STAMINA, EVENTS } from '../config/constants.js';
 import { Vector2D, clamp, approach, wrapAngle } from './Vector2D.js';
-import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES, pushesThrust, hasShaft, hasDriveTrain, turbineLine, driveKind, linkActive } from '../config/partsData.js';
+import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES, pushesThrust, hasShaft, hasDriveTrain, turbineLine, driveKind, linkActive, gearWearMatches } from '../config/partsData.js';
 
 /** Drive-train parts that live between the drive shaft and the wheels (useless without a shaft). */
 const SHAFT_PARTS = ['gearbox', 'lockgear', 'transfer', 'diff', 'coupling', 'converter'];
@@ -201,6 +201,9 @@ export class PhysicsEngine {
         else if (s.kind === 'diff' && twin) m[k] *= s[k] ** bug.drives.length;
         else m[k] *= s[k];
       }
+      // Electric and fusion torque wears gearing out fast.
+      const life = gearWearMatches(p, bug);
+      if (life) interactions.push({ id: `dt_wear_${p.uid}`, good: false, mods: {}, text: `${/^[AEIOU]/.test(driveKind(bug, bay)) ? 'An' : 'A'} ${driveKind(bug, bay)} drive's instant torque chews through your ${p.name}${where} — it'll be worn out in about ${Math.round(life)} matches. Keep it repaired.` });
       if (s.vector) fx.vector = true;
       if (s.prop) { fx.prop = s.prop; fx.propRpm = !!s.propRpm; }
       if (s.lsl) fx.lsl = true;

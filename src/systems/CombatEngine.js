@@ -1,5 +1,5 @@
 import { ARENA, MATCH, PHYSICS, ACTIONS, EVENTS, PILOT_SKILL } from '../config/constants.js';
-import { PILOT_STYLES, heavyGear, turbineLine, driveKind } from '../config/partsData.js';
+import { PILOT_STYLES, heavyGear, turbineLine, driveKind, gearWearMatches } from '../config/partsData.js';
 import { EventEmitter } from '../core/EventEmitter.js';
 import { Dohyo } from './Dohyo.js';
 import { PhysicsEngine } from '../physics/PhysicsEngine.js';
@@ -232,6 +232,14 @@ export class CombatEngine extends EventEmitter {
     // Parts that grind themselves down (graphite discs) lose a set share every match.
     for (const bug of this.training ? [] : this.bugs) {
       for (const p of bug.parts) if (p.stats.wearPerMatch) p.hp = Math.max(p.maxHp * 0.01, p.hp - p.maxHp * p.stats.wearPerMatch);
+      // Electric and fusion torque chews through gearing: worn out in 2 matches (cheap) to 5 (dear).
+      for (const p of bug.drivetrain) {
+        const life = gearWearMatches(p, bug);
+        if (!life || p.isBroken) continue;
+        const floor = p.maxHp * MATCH.WORN_FLOOR;
+        p.hp = Math.max(floor, p.hp - (p.maxHp - floor) / life); // full → worn out over its life
+        if (p.hp <= floor + 0.01) { p.failed = true; this.emit(EVENTS.PART_BROKEN, { bug, part: p, breakdown: true }); }
+      }
     }
     let reason = REASONS[reasonKey] || reasonKey;
     const crit = this.critical;

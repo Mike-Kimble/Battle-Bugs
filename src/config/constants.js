@@ -12,6 +12,7 @@ export const ARENA = Object.freeze({
 });
 
 export const MATCH = Object.freeze({
+  WORN_FLOOR: 0.21,     // a worn-out part is left just above the scrap line (repairable) and stops working
   COUNTDOWN: 3,
   DURATION: 120,        // clock hits 2:00 → tie
   TIE_WINDOW_MS: 250,   // both eliminated within this window → tie
