@@ -174,9 +174,6 @@ export class TerminalUI {
         el('div', { class: 'part-actions' },
           !active.engine ? el('button', { class: 'btn btn-primary', onclick: () => { this.marketCat = 'engine'; this.setTab('market'); } }, 'Buy a motor') : null,
           el('button', { class: 'btn', onclick: () => this.setTab('hangar') }, 'Open the Garage'))) : null,
-      el('p', { class: 'small muted' }, this.economy.nextIsHome
-        ? '🏠 Next bout is at HOME — your Dohyo 1 (Classic). After that, away at theirs.'
-        : '✈ Next bout is AWAY — on your opponent\'s home dohyo. Then back home.'),
       s.board.tierShift ? el('p', { class: 'small warn-text' }, `▲ The board has scrolled up ${s.board.tierShift} difficulty level${s.board.tierShift > 1 ? 's' : ''} after everyone walked off.`) : null,
       walked.length ? el('p', { class: 'small muted' }, `Walked off (back after your next fight): ${walked.map((c) => this.pilotName(c)).join(', ')}`) : null,
       el('div', { class: 'card-grid' }, s.challengers.map((c) => this.challengerCard(c, { ready }))));
@@ -228,13 +225,12 @@ export class TerminalUI {
     return bug.isBattleReady ? 'complete' : 'semi-complete';
   }
 
-  /** Home dohyo, and where the next bout against them would be. */
+  /** A pilot's home dohyo. */
   venueLine(c) {
     if (this.economy.isRoamer(c)) return el('div', { class: 'small muted venue' }, 'No home dohyo · the ring is picked at random');
+    // Their home ring only — where the next bout will be is for you to work out.
     const home = c.home || 1;
-    const venue = this.economy.venueFor(c);
-    const at = this.economy.nextIsHome ? 'home' : 'away';
-    return el('div', { class: 'small muted venue' }, `Home: Dohyo ${home} ${DOHYO_KINDS[home].name} · next bout ${at}: Dohyo ${venue} ${DOHYO_KINDS[venue].name}`);
+    return el('div', { class: 'small muted venue' }, `Home: Dohyo ${home} ${DOHYO_KINDS[home].name}`);
   }
 
   /** With a manager, a word in your ear when a bug hides something special. */
