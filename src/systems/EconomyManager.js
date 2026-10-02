@@ -1618,8 +1618,30 @@ export class EconomyManager {
     this.state.addLog(`Entered the Inter-Planetary Tournament with ${bug.name}`);
   }
 
-  withdrawTournament() {
+  /** The tournament is over for you (won, knocked out or withdrawn): staff get the wages they ran up. */
+  withdrawTournament(report = null) {
     Object.assign(this.state.tournament, { entered: false, vehicleId: null, round: 0, opponent: null, field: null });
+    this.payTournamentWages(report);
+  }
+
+  payTournamentWages(report) {
+    const s = this.state;
+    const lines = [];
+    for (const [role, amount] of Object.entries(s.pendingWages || {})) {
+      if (!(amount > 0) || !this.employed(role)) continue;
+      const who = this.person(role)?.name || `Your ${role}`;
+      if (s.canAfford(amount)) {
+        s.spend(amount);
+        lines.push(`Tournament over: paid ${who} the ${formatMoney(amount)} in wages they ran up.`);
+      } else {
+        const owed = s.arrears[role];
+        if (owed) owed.amount += amount; else s.arrears[role] = { amount, bouts: 0 };
+        lines.push(`Tournament over: you can't cover the ${formatMoney(amount)} ${who} is owed for it — pay it in the Admin tab within ${ECONOMY.STAFF_GRACE} bouts.`);
+      }
+    }
+    s.pendingWages = {};
+    if (report) report.lines.push(...lines);
+    else for (const l of lines) s.addLog(l);
   }
 
   /**
@@ -1980,14 +2002,14 @@ export class EconomyManager {
           report.champion = true;
           s.gameComplete = true;
           s.tournament.champion = true;
-          this.withdrawTournament();
+          this.withdrawTournament(report);
         } else {
           s.tournament.opponent = this.tournamentOpponentJSON(s.tournament.round);
           report.lines.push(`Advanced to tournament round ${s.tournament.round + 1} of ${ECONOMY.TOURNAMENT_ROUNDS}`);
         }
       } else if (result === 'loss') {
         s.tournament.eliminated = true;
-        this.withdrawTournament();
+        this.withdrawTournament(report);
         report.lines.push('Eliminated from the tournament. The Marketplace is open again — regroup and re-enter.');
       } else {
         report.lines.push('Draw — tournament rules: the round will be re-fought.');
@@ -2127,6 +2149,15 @@ export class EconomyManager {
    */
   payStaff(report, earned = 0) {
     const s = this.state;
+    // In the tournament nobody takes their pay (or gripes about it) until it's over: it builds up.
+    if (this.inField) {
+      for (const role of ['mechanic', 'manager']) {
+        if (!s.staff[role]) continue;
+        const wage = this.wageDue(role, earned);
+        if (wage > 0) s.pendingWages[role] = (s.pendingWages[role] || 0) + wage;
+      }
+      return;
+    }
     for (const role of ['mechanic', 'manager']) {
       // Nobody's taking the job yet: one bout closer.
       if (!this.employed(role)) {

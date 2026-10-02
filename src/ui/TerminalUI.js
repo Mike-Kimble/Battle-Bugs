@@ -73,7 +73,13 @@ export class TerminalUI {
     }
   }
 
+  /** The tabs you can use: in the tournament, only the Garage and the Tournaments. */
+  get visibleTabs() {
+    return this.economy.inField ? TABS.filter(([k]) => k === 'hangar' || k === 'tournament') : TABS;
+  }
+
   render() {
+    if (!this.visibleTabs.some(([k]) => k === this.tab)) this.tab = 'tournament';
     this.renderHeader();
     const body = {
       challengers: () => this.renderChallengers(),
@@ -87,7 +93,7 @@ export class TerminalUI {
     const scroll = this.root.querySelector('.terminal-body')?.scrollTop ?? 0;
     const newCount = this.state.newVehicleIds.size;
     this.tabbar.replaceChildren(el('div', { class: 'tabs', role: 'tablist' },
-      TABS.map(([key, label]) => el('button', {
+      this.visibleTabs.map(([key, label]) => el('button', {
         class: `tab${this.tab === key ? ' active' : ''}${(key === 'tournament' && this.economy.tournamentUnlocked) || (key === 'staff' && Object.keys(this.state.arrears).length) ? ' glow' : ''}`,
         role: 'tab',
         'aria-selected': this.tab === key ? 'true' : 'false',

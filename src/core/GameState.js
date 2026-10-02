@@ -52,6 +52,7 @@ export class GameState extends EventEmitter {
     this.earnAvg = 0; // your average earnings per bout (what staff measure their pay against)
     this.staffId = {}; // role → who you've hired (a STAFF_ROSTER key)
     this.candidate = {}; // role → who's applying for the job right now
+    this.pendingWages = {}; // role → wages built up during the tournament, paid when it's over
     this.managerWages = false; // your manager sets the wages after each bout
     this.forgetIn = 0; // bouts until a scatter-brained manager next forgets the mechanic's wage
     this.managerHunt = {}; // part key → the manager's chance of finding one to match your other drive next time
@@ -158,6 +159,7 @@ export class GameState extends EventEmitter {
     }
     s.candidate = d.candidate || {};
     s.managerWages = !!d.managerWages;
+    s.pendingWages = d.pendingWages || {};
     s.forgetIn = d.forgetIn || 0;
     s.managerHunt = d.managerHunt || {};
     s.blacklist = d.blacklist || 0;
@@ -212,6 +214,7 @@ export class GameState extends EventEmitter {
       staffId: this.staffId,
       candidate: this.candidate,
       managerWages: this.managerWages,
+      pendingWages: this.pendingWages,
       forgetIn: this.forgetIn,
       managerHunt: this.managerHunt,
       blacklist: this.blacklist,
