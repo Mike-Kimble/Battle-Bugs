@@ -551,16 +551,20 @@ export class TerminalUI {
     const s = this.state;
     const eco = this.economy;
     const byType = PART_GROUPS.map(([type, label]) => [label, eco.spareGroups(s.inventory.filter((p) => aisleOf(p) === type))]).filter(([, gs]) => gs.length);
-    const all = byType.flatMap(([, gs]) => gs);
-    // Ticked stacks (forget any that have since gone).
+    const stacks = byType.flatMap(([, gs]) => gs);
+    // Bare chassis can be ticked too (one with parts fitted is sold on its own, with its warning).
+    const bare = myVehicles.filter((v) => v.parts.length === 1);
+    const all = [...stacks.map((g) => ({ id: g.id, name: g.best.name, count: g.parts.length, price: eco.groupSellTotal(g, g.parts.length), sell: () => eco.sellFromGroup(g, g.parts.length) })),
+      ...bare.map((v) => ({ id: `vehicle:${v.id}`, name: v.name, count: 1, price: eco.vehicleSellPrice(v), sell: () => eco.sellVehicle(v.id) }))];
+    // Ticked items (forget any that have since gone).
     const picked = this.sellPicked || (this.sellPicked = new Set());
     for (const id of [...picked]) if (!all.some((g) => g.id === id)) picked.delete(id);
     const chosen = all.filter((g) => picked.has(g.id));
-    const total = chosen.reduce((t, g) => t + eco.groupSellTotal(g, g.parts.length), 0);
-    const items = chosen.reduce((t, g) => t + g.parts.length, 0);
+    const total = chosen.reduce((t, g) => t + g.price, 0);
+    const items = chosen.reduce((t, g) => t + g.count, 0);
     const toggle = (id, on) => { if (on) picked.add(id); else picked.delete(id); this.render(); };
-    const tick = (g) => el('label', { class: 'check-row small sell-tick' },
-      el('input', { type: 'checkbox', checked: picked.has(g.id) || null, 'aria-label': `Select ${g.best.name}`, onchange: (e) => toggle(g.id, e.target.checked) }), 'Select');
+    const tick = (id, name) => el('label', { class: 'check-row small sell-tick' },
+      el('input', { type: 'checkbox', checked: picked.has(id) || null, 'aria-label': `Select ${name}`, onchange: (e) => toggle(id, e.target.checked) }), 'Select');
     const bar = all.length ? el('div', { class: 'sell-bar' },
       el('label', { class: 'check-row' },
         el('input', {
@@ -569,25 +573,25 @@ export class TerminalUI {
         }), 'Select all'),
       el('button', {
         class: 'btn btn-small btn-primary', disabled: !chosen.length,
-        onclick: () => this.confirm(`Sell ${items} part${items === 1 ? '' : 's'}?`, `Every part in the ${chosen.length} selected stack${chosen.length === 1 ? '' : 's'} goes, for ${formatMoney(total)} in all.`,
-          () => this.act(() => { const v = eco.sellGroups(chosen); picked.clear(); return v; }, (v) => `Sold ${items} part${items === 1 ? '' : 's'} for ${formatMoney(v)}`)),
+        onclick: () => this.confirm(`Sell ${items} item${items === 1 ? '' : 's'}?`, `Everything you've selected goes, for ${formatMoney(total)} in all.`,
+          () => this.act(() => { eco.assertNotInField(); const v = chosen.reduce((t, g) => t + g.sell(), 0); picked.clear(); return v; }, (v) => `Sold ${items} item${items === 1 ? '' : 's'} for ${formatMoney(v)}`)),
       }, chosen.length ? `Sell all selected (${formatMoney(total)})` : 'Sell all selected')) : null;
     return el('div', { class: 'market' },
       subnav,
       el('p', { class: 'muted' }, catBlurb, ` Buyers pay ${Math.round(ECONOMY.SELL_RATE * 100)}% of value × condition; broken parts fetch scrap only.`),
       eco.hotStreak ? el('div', { class: 'notice notice-gold' }, `🔥 You're on a ${s.record.streak}-win streak — buyers want some of your secret sauce and are paying 10–20% extra.`) : null,
-      el('h3', {}, `Spare parts (${s.inventory.length})`),
       bar,
+      el('h3', {}, `Spare parts (${s.inventory.length})`),
       byType.length
-        ? byType.map(([label, gs]) => [el('h4', {}, `${label} (${gs.reduce((t, g) => t + g.parts.length, 0)})`), el('div', { class: 'card-grid parts' }, gs.map((g) => this.sellPartCard(g, tick(g))))])
+        ? byType.map(([label, gs]) => [el('h4', {}, `${label} (${gs.reduce((t, g) => t + g.parts.length, 0)})`), el('div', { class: 'card-grid parts' }, gs.map((g) => this.sellPartCard(g, tick(g.id, g.best.name))))])
         : el('p', { class: 'muted' }, 'No spare components. Remove parts on the hoist or strip a vehicle to sell them here.'),
       el('h3', {}, `Your vehicles (${myVehicles.length})`),
       myVehicles.length
-        ? el('div', { class: 'card-grid' }, myVehicles.map((bug) => this.vehicleSellCard(bug)))
+        ? el('div', { class: 'card-grid' }, myVehicles.map((bug) => this.vehicleSellCard(bug, bug.parts.length === 1 ? tick(`vehicle:${bug.id}`, bug.name) : null)))
         : el('p', { class: 'muted small' }, 'Your garage is empty.'));
   }
 
-  vehicleSellCard(bug) {
+  vehicleSellCard(bug, extra = null) {
     const s = this.state;
     return el('article', { class: 'card vehicle' },
       el('div', { class: 'card-row' },
@@ -596,6 +600,7 @@ export class TerminalUI {
           el('h3', {}, bug.name),
           el('div', { class: 'small muted' }, `${bug.chassis.name} · ${this.vehicleKind(bug)}${bug.id === s.activeVehicleId ? ' · on the hoist' : ''}`),
           hpBar(bug.condition, { label: `Condition ${Math.round(bug.condition * 100)}%` }))),
+      extra,
       el('div', { class: 'part-actions' },
         el('button', {
           class: 'btn btn-small btn-danger',
