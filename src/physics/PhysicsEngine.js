@@ -647,11 +647,13 @@ export class PhysicsEngine {
     const coolScore = Math.min(1, s.cooling / REF.cooling);
     const staminaScore = Math.min(1, s.staminaMax / REF.stamina);
     const heatRate = HEAT.MAX / HEAT.OVERHEAT_SECONDS; // flat out with no cooling at all
-    const driving = throttle > 0 && !bug.stalled;
+    // A ram, shove or spin is the motor flat out too — not a rest.
+    const effort = bug.lunge || bug.spin ? 1 : throttle;
+    const driving = effort > 0 && !bug.stalled;
     if (driving) {
-      bug.heat += heatRate * (throttle * s.drainMult - coolScore) * dt;
-      const emptyIn = STAMINA.EMPTY_SECONDS_WORST + (STAMINA.EMPTY_SECONDS_BEST - STAMINA.EMPTY_SECONDS_WORST) * staminaScore;
-      bug.stamina -= (s.staminaMax / emptyIn) * throttle * s.drainMult * dt;
+      bug.heat += heatRate * (effort * s.drainMult - coolScore) * dt;
+      const emptyIn = STAMINA.EMPTY_SECONDS_WORST + (STAMINA.EMPTY_SECONDS_BEST - STAMINA.EMPTY_SECONDS_WORST) * staminaScore ** STAMINA.EMPTY_CURVE;
+      bug.stamina -= (s.staminaMax / emptyIn) * effort * s.drainMult * dt;
     } else {
       bug.heat -= heatRate * (HEAT.IDLE_COOL_BASE + coolScore) * dt; // resting cools you
     }

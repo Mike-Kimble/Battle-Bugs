@@ -366,7 +366,7 @@ export class CombatEngine extends EventEmitter {
 
   /** A move or weapon: its stamina cost, and the heat it puts into the motor. */
   spend(bug, cost, heatShare = HEAT.ACTION_FRACTION) {
-    this.spend(bug, cost);
+    bug.stamina -= cost;
     bug.heat = Math.min(HEAT.MAX, (bug.heat || 0) + cost * heatShare);
   }
 
@@ -427,7 +427,7 @@ export class CombatEngine extends EventEmitter {
     bug.control.cruise = null;
     bug.control.reverse = reverse;
     bug.control.backing = false;
-    bug.stamina -= cost;
+    this.spend(bug, cost);
     bug.actionCooldown = ACTIONS.ACTION_COOLDOWN;
     this.emit(EVENTS.ACTION, { bug, type: power ? 'shove' : 'ram', dir });
     return true;

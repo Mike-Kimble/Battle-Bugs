@@ -74,9 +74,11 @@ export const STAMINA = Object.freeze({
   REGEN_DELAY_BEST: 3,
   REGEN_RATE_WORST: 4,       // stamina/s at regen 0
   REGEN_RATE_BEST: 20,       // …at regen 100
-  // Flat out, a Stamina score of 0 runs dry in 10s, a score of 100 lasts 25s.
+  // Normal driving, flat out: a Stamina score of 0 runs dry in 10s, 50 in 20s, 100 in 60s
+  // (10 + 50 · score^2.32 — big tanks are worth a lot more than middling ones).
   EMPTY_SECONDS_WORST: 10,
-  EMPTY_SECONDS_BEST: 25,
+  EMPTY_SECONDS_BEST: 60,
+  EMPTY_CURVE: 2.32,
   REST_SHARE: 0.35,          // resting brings stamina back too, but only at this share of the regen rate
 });
 
