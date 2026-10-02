@@ -6,7 +6,10 @@ import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES, pushesThrust, has
 const SHAFT_PARTS = ['gearbox', 'lockgear', 'transfer', 'diff', 'coupling', 'converter'];
 
 /** Coolers a fan can blow on to boost. */
-const FAN_BOOSTS = ['water', 'oil', 'exchanger'];
+const FAN_BOOSTS = ['water', 'oil', 'exchanger', 'heatsink'];
+
+/** What a water mister soaks to make it work harder: water radiators, oil coolers and heat sinks (and fans). */
+const misted = (c) => (c.stats.kind === 'water' && c.stats.jacket === 'water') || c.stats.kind === 'oil' || c.stats.kind === 'heatsink';
 
 /**
  * Physics & derived-stats engine.
@@ -55,20 +58,27 @@ export class PhysicsEngine {
     const live = (p) => !p.spent && !p.isBroken && worksWith(p, bug);
     const coolers = (bug.coolers || []).filter(on).filter(live);
     const fans = coolers.filter((c) => c.stats.kind === 'fan');
-    const boost = fans.reduce((b, f) => Math.max(b, f.stats.boost || 1), 1);
+    // A water mister soaks the radiators, oil coolers, heat sinks and fans on its drive: they all work harder.
+    const mist = coolers.reduce((x, c) => Math.max(x, c.stats.mist || 0), 0);
+    const boost = 1 + (fans.reduce((b, f) => Math.max(b, f.stats.boost || 1), 1) - 1) * (1 + mist);
     for (const c of coolers) {
-      cool += c.stats.cool;
-      // A fan blowing on water cooling or a heat exchanger makes it far better.
-      if (boost > 1 && FAN_BOOSTS.includes(c.stats.kind)) cool += c.stats.cool * (boost - 1);
+      const base = c.stats.cool * (mist && misted(c) ? 1 + mist : 1);
+      cool += base;
+      // A fan blowing on liquid cooling, a heat sink or a heat exchanger makes it far better.
+      if (boost > 1 && FAN_BOOSTS.includes(c.stats.kind)) cool += base * (boost - 1);
       if (c.stats.staminaMax) m.staminaMax *= scaled(c.stats.staminaMax);
     }
     const vented = (bug.armor?.stats.heat || 0) < 0 && !bug.armor.isBroken;
-    for (const f of fans) if (vented) cool += f.stats.ventBonus || 0;
+    for (const f of fans) if (vented) cool += (f.stats.ventBonus || 0) * (1 + mist);
+    if (mist) {
+      const wear = coolers.reduce((x, c) => Math.max(x, c.stats.mistWear || 0), 0);
+      interactions.push({ id: `mist${bay}`, good: true, mods: {}, text: `Your mister soaks the radiators, oil coolers, heat sinks and fans${where} — they all work harder. But the damp wears that drive faster (about ${Math.round(wear * 100)}% a match).` });
+    }
     const partner = coolers.some((c) => FAN_BOOSTS.includes(c.stats.kind));
-    if (fans.length && partner) interactions.push({ id: `fan_boost${bay}`, good: true, mods: {}, text: `Your fan is blowing on the liquid cooling / heat exchanger${where} — a big boost to cooling.` });
+    if (fans.length && partner) interactions.push({ id: `fan_boost${bay}`, good: true, mods: {}, text: `Your fan is blowing on the liquid cooling / heat sink${where} — a big boost to cooling.` });
     // Vented armour is the whole shell, not one drive: any fan can blow through it (one note will do).
     else if (fans.length && vented) { if (!interactions.some((i) => i.id === 'fan_vent')) interactions.push({ id: 'fan_vent', good: true, mods: {}, text: 'Your fan pushes air through the vented armour. Nice.' }); }
-    else if (fans.length) interactions.push({ id: `fan_alone${bay}`, good: false, mods: {}, text: `A fan on its own${where} does almost nothing — pair it with water or oil cooling or a heat exchanger${where ? ' on the same drive' : ''}, or fit vented armour.` });
+    else if (fans.length) interactions.push({ id: `fan_alone${bay}`, good: false, mods: {}, text: `A fan on its own${where} does almost nothing — pair it with a radiator, an oil cooler or a heat sink${where ? ' on the same drive' : ''}, or fit vented armour.` });
 
     for (const e of (bug.mods || []).filter(on).filter(live)) {
       const s = e.stats;

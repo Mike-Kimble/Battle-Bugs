@@ -112,6 +112,8 @@ export function driveKind(bug, bay = 0) {
 // Drive types a part works with (omit `works` for "any").
 const HOT = ['combustion', 'torque'];
 const NOT_ELECTRIC = ['combustion', 'torque', 'turbine', 'plasma', 'fusion'];
+/** Water misters: anything with electrics in it (electric, fusion, plasma) would short out. */
+export const MIST_DRIVES = ['combustion', 'torque', 'turbine'];
 
 export const PARTS = Object.freeze({
   // ───────────── CHASSIS (frames) ─────────────
@@ -241,17 +243,18 @@ export const PARTS = Object.freeze({
   flipper_wedge: weapon('Flipper Wedge', 4, R, 1000, 38, 100, { class: 'grip', effect: 'lift', cost: 13, range: 50, arc: 90, cooldown: 2.8, liftTime: 2.2, gripMod: 0.05, exposeTime: 1.1 }, 'wedge_lifter', 'Gets under them and keeps them there.'),
   // ───────────── COOLING (propulsion add-ons, 3 slots) ─────────────
   // stats: cool (+stamina/s recovered), kind, works?, uses? (battles), boost? (fans), ventBonus?, staminaMax?
-  tin_heat_sink: cooler('Tin Heat Sink', 1, C, 40, 4, { cool: 1.5, kind: 'fins' }, 'A slab of tin with ambitions.'),
+  tin_heat_sink: cooler('Aluminium Heat Sink', 1, C, 40, 4, { cool: 1.5, kind: 'heatsink' }, 'A finned aluminium block bolted to the motor. A fan or a mister makes it work much harder.'),
   radiator_fins: cooler('Radiator Fins', 1, C, 70, 6, { cool: 2.5, kind: 'fins' }, 'Thin fins, big surface, honest work.'),
   desk_fan: cooler('Fan', 1, C, 30, 3, { cool: 0.5, kind: 'fan', boost: 1.5, ventBonus: 3 }, 'Pretty useless on its own. Point it at water cooling, an oil cooler, a heat exchanger or vented armour and it earns its keep.'),
-  water_mister: cooler('Water Mister', 1, U, 90, 8, { cool: 3, kind: 'mister', works: NOT_ELECTRIC }, 'Sprays the motor like a sweaty athlete. Shorts out electric motors.'),
-  heat_exchanger: cooler('Heat Exchanger', 2, C, 220, 12, { cool: 4, kind: 'exchanger' }, 'Swaps hot for cold like a very small, very dull magician.'),
+  water_mister: cooler('Water Mister', 1, U, 90, 8, { cool: 3, kind: 'mister', works: MIST_DRIVES, mist: 0.25, mistWear: 0.04 }, 'Sprays the motor like a sweaty athlete. Makes radiators, oil coolers, heat sinks and fans on its drive work harder — but the damp wears the drive faster. Combustion, torque and turbine only.'),
+  heat_exchanger: cooler('Copper Heat Sink', 2, C, 220, 12, { cool: 4, kind: 'heatsink' }, 'A heavy copper block that drinks heat. A fan or a mister makes it work much harder.'),
   oil_cooler: cooler('Oil Cooler', 2, C, 200, 10, { cool: 4.5, kind: 'oil', jacket: 'oil' }, 'Keeps the oil from turning into soup. Plugs straight into combustion and torque motors; anything else needs an Oil Jacket fitted first.'),
-  water_cooling: cooler('Water Cooling Loop', 2, U, 300, 16, { cool: 5, kind: 'water', jacket: 'water' }, 'Pipes, pump, reservoir. Plumbs straight into combustion and torque motors; anything else needs a Water Jacket fitted first.'),
+  water_cooling: cooler('Pewter Radiator', 2, U, 300, 16, { cool: 5, kind: 'water', jacket: 'water' }, 'A dull grey water radiator that does the job. Plumbs straight into combustion and torque motors; anything else needs a Water Jacket fitted first.'),
   expansion_nozzle: cooler('Expansion Nozzle', 2, U, 280, 6, { cool: 7, kind: 'nozzle', works: ['turbine'] }, 'Bleeds turbine exhaust through a cold throat. Only works on turbines, and works very well.'),
   twin_fans: cooler('Twin Fans', 2, R, 180, 5, { cool: 0.8, kind: 'fan', boost: 1.7, ventBonus: 4 }, 'Two fans, twice the draught. Still wants something to blow on.'),
-  mist_curtain: cooler('Mist Curtain', 3, U, 520, 10, { cool: 6, kind: 'mister', works: NOT_ELECTRIC }, 'A whole wall of spray. Electric motors hate it.'),
-  big_rig_radiator: cooler('Big Rig Radiator', 3, C, 480, 22, { cool: 6.5, kind: 'water', jacket: 'water' }, 'Off a hauler: an enormous water-filled radiator. Heavy and very effective. Plumbs straight into combustion and torque motors; anything else needs a Water Jacket fitted first.'),
+  mist_curtain: cooler('Mist Curtain', 3, U, 520, 10, { cool: 6, kind: 'mister', works: MIST_DRIVES, mist: 0.35, mistWear: 0.06 }, 'A whole wall of spray. Radiators, oil coolers, heat sinks and fans on its drive work much harder — but the drive wears faster in the wet. Combustion, torque and turbine only.'),
+  big_rig_radiator: cooler('Aluminium Radiator', 3, C, 480, 22, { cool: 6.5, kind: 'water', jacket: 'water' }, 'A big aluminium water radiator. Heavy and very effective. Plumbs straight into combustion and torque motors; anything else needs a Water Jacket fitted first.'),
+  silver_radiator: cooler('Silver Radiator', 3, R, 950, 14, { cool: 8.5, kind: 'water', jacket: 'water' }, 'A solid-silver water radiator: lighter and far better than aluminium. Plumbs straight into combustion and torque motors; anything else needs a Water Jacket fitted first.'),
   peltier_plates: cooler('Peltier Plates', 3, R, 700, 8, { cool: 5, kind: 'peltier', works: ['electric', 'fusion'], staminaMax: 1.05 }, 'Solid-state chillers. Need a proper power supply — electric or fusion only.'),
   vapour_chamber: cooler('Vapour Chamber', 3, R, 650, 7, { cool: 6.5, kind: 'exchanger' }, 'A sealed chamber that boils heat away and condenses it back. Works on anything; a fan makes it sing.'),
   ram_air_scoop: cooler('Ram-Air Scoop', 3, U, 560, 7, { cool: 5.5, kind: 'fins' }, 'Scoops air as you drive. Better than it looks.'),
@@ -261,10 +264,11 @@ export const PARTS = Object.freeze({
   cryo_block: cooler('Cryo Block', 4, E, 1300, 12, { cool: 18, kind: 'cryo', uses: 10 }, 'A slab of impossible cold. Unbeatable cooling — but it melts away after 10 battles.'),
   void_radiator: cooler('Void Radiator', 5, L, 2400, 8, { cool: 14, kind: 'exchanger' }, 'Radiates heat into another dimension. They haven\'t complained yet.'),
   // Encasement jackets: let liquid cooling run on drives without their own (not combustion or torque). Useless on their own.
-  water_jacket: cooler('Water Jacket', 2, C, 150, 8, { cool: 1, kind: 'jacket', jacketFor: 'water' }, 'A sealed sleeve around the drive so water cooling — a Water Cooling Loop or a Big Rig Radiator — can hook up to any drive, not just combustion and torque motors.'),
-  oil_jacket: cooler('Oil Jacket', 2, C, 140, 8, { cool: 1, kind: 'jacket', jacketFor: 'oil' }, 'A sealed sleeve so an Oil Cooler can hook up to any drive.'),
+  water_jacket: cooler('Water Jacket', 2, C, 150, 8, { cool: 1, kind: 'jacket', jacketFor: 'water' }, 'A sealed sleeve around the drive so a water radiator (pewter, aluminium or silver) can hook up to any drive, not just combustion and torque motors.'),
+  oil_jacket: cooler('Oil Jacket', 2, C, 140, 8, { cool: 1, kind: 'jacket', jacketFor: 'oil' }, 'A sealed sleeve so an oil cooler (standard or gold) can hook up to any drive.'),
   cryo_jacket: cooler('Cryo Jacket', 4, R, 600, 10, { cool: 1.5, kind: 'jacket', jacketFor: 'nitrogen' }, 'An insulated casing rated for liquid nitrogen. Lets a Liquid-Nitrogen Loop run on any drive.'),
-  glacier_heart: cooler('Glacier Heart', 5, L, 2600, 14, { cool: 12, kind: 'cryo', staminaMax: 1.1 }, 'The frozen core of a comet. It never melts.'),
+  glacier_heart: cooler('Regenerative Cryo', 5, L, 2600, 14, { cool: 12, kind: 'cryo', staminaMax: 1.1 }, 'A cryo unit that recondenses its own coolant. It never runs out.'),
+  gold_oil_cooler: cooler('Gold Oil Cooler', 5, L, 2500, 9, { cool: 13, kind: 'oil', jacket: 'oil' }, 'A gold oil cooler: the best there is at shifting heat out of the oil. Plugs straight into combustion and torque motors; anything else needs an Oil Jacket fitted first.'),
 
   // ───────────── ENHANCEMENTS (propulsion add-ons, 1 slot) ─────────────
   // stats multipliers: force (power), accel, vMax (top speed), staminaMax, drain (<1 = sustain);

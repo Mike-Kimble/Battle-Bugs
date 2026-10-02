@@ -1,5 +1,5 @@
 import { ARENA, MATCH, PHYSICS, ACTIONS, EVENTS, PILOT_SKILL } from '../config/constants.js';
-import { PILOT_STYLES, heavyGear, turbineLine, driveKind, gearWearMatches } from '../config/partsData.js';
+import { PILOT_STYLES, heavyGear, turbineLine, driveKind, gearWearMatches, worksWith } from '../config/partsData.js';
 import { EventEmitter } from '../core/EventEmitter.js';
 import { Dohyo } from './Dohyo.js';
 import { PhysicsEngine } from '../physics/PhysicsEngine.js';
@@ -232,6 +232,15 @@ export class CombatEngine extends EventEmitter {
     // Parts that grind themselves down (graphite discs) lose a set share every match.
     for (const bug of this.training ? [] : this.bugs) {
       for (const p of bug.parts) if (p.stats.wearPerMatch) p.hp = Math.max(p.maxHp * 0.01, p.hp - p.maxHp * p.stats.wearPerMatch);
+      // A water mister keeps things cool, but the damp wears the drive it's on: its motor and drive train.
+      for (let b = 0; b < bug.drives.length; b++) {
+        const wear = bug.coolers.filter((c) => (c.bay || 0) === b && !c.isBroken && worksWith(c, bug)).reduce((x, c) => Math.max(x, c.stats.mistWear || 0), 0);
+        if (!wear) continue;
+        for (const p of [bug.drives[b], ...bug.drivetrain.filter((q) => (q.bay || 0) === b)]) {
+          const floor = p.maxHp * MATCH.WORN_FLOOR;
+          if (p.hp > floor) p.hp = Math.max(floor, p.hp - p.maxHp * wear);
+        }
+      }
       // Electric and fusion torque chews through gearing: worn out in 2 matches (cheap) to 5 (dear).
       for (const p of bug.drivetrain) {
         const life = gearWearMatches(p, bug);
