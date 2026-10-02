@@ -243,8 +243,8 @@ export const PARTS = Object.freeze({
   flipper_wedge: weapon('Flipper Wedge', 4, R, 1000, 38, 100, { class: 'grip', effect: 'lift', cost: 13, range: 50, arc: 90, cooldown: 2.8, liftTime: 2.2, gripMod: 0.05, exposeTime: 1.1 }, 'wedge_lifter', 'Gets under them and keeps them there.'),
   // ───────────── COOLING (propulsion add-ons, 3 slots) ─────────────
   // stats: cool (+stamina/s recovered), kind, works?, uses? (battles), boost? (fans), ventBonus?, staminaMax?
-  tin_heat_sink: cooler('Aluminium Heat Sink', 1, C, 40, 4, { cool: 1.5, kind: 'heatsink' }, 'A finned aluminium block bolted to the motor. A fan or a mister makes it work much harder.'),
-  radiator_fins: cooler('Radiator Fins', 1, C, 70, 6, { cool: 2.5, kind: 'fins' }, 'Thin fins, big surface, honest work.'),
+  tin_heat_sink: cooler('Tin Heat Sink', 1, C, 40, 4, { cool: 1.5, kind: 'heatsink' }, 'A slab of tin with ambitions. A fan or a mister makes it work harder.'),
+  radiator_fins: cooler('Aluminium Heat Sink', 1, C, 70, 6, { cool: 2.5, kind: 'heatsink' }, 'Thin aluminium fins, big surface, honest work. A fan or a mister makes it work much harder.'),
   desk_fan: cooler('Fan', 1, C, 30, 3, { cool: 0.5, kind: 'fan', boost: 1.5, ventBonus: 3 }, 'Pretty useless on its own. Point it at water cooling, an oil cooler, a heat exchanger or vented armour and it earns its keep.'),
   water_mister: cooler('Water Mister', 1, U, 90, 8, { cool: 3, kind: 'mister', works: MIST_DRIVES, mist: 0.25, mistWear: 0.04 }, 'Sprays the motor like a sweaty athlete. Makes radiators, oil coolers, heat sinks and fans on its drive work harder — but the damp wears the drive faster. Combustion, torque and turbine only.'),
   heat_exchanger: cooler('Copper Heat Sink', 2, C, 220, 12, { cool: 4, kind: 'heatsink' }, 'A heavy copper block that drinks heat. A fan or a mister makes it work much harder.'),
