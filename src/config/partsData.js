@@ -29,7 +29,7 @@ export const THRUST_DRIVES = Object.freeze(['turbine', 'plasma']);
 const castor = (name, tier, rarity, value, mass, maxHp, stats, description) => ({ type: 'castor', name, tier, rarity, value, mass, maxHp, stats: { ...stats, kind: 'castor' }, description });
 const drivetrain = (name, tier, rarity, value, mass, maxHp, stats, description) => ({ type: 'drivetrain', name, tier, rarity, value, mass, maxHp, stats, description });
 /** Drives that turn a shaft (everything but turbine and plasma). */
-const NON_THRUST = ['combustion', 'torque', 'electric', 'fusion'];
+const NON_THRUST = ['combustion', 'torque', 'electric'];
 /** Drives that can turn a drive shaft (plasma can't drive wheels or tracks at all). */
 const SHAFT_DRIVES = [...NON_THRUST, 'turbine'];
 /** Gearboxes suit any shaft drive (on a turbine they only count with a High-Speed Shaft). */
@@ -85,11 +85,11 @@ export function pushesThrust(bug, bay = null) {
 }
 
 /** Motors that are hard on gearing: their instant torque chews through gearboxes. */
-export const GEAR_EATERS = ['electric', 'fusion'];
+export const GEAR_EATERS = ['electric'];
 
 /**
  * How many matches a gearbox (or torque converter) lasts on an electric or
- * fusion drive before it's worn out: 2 for the cheapest, up to 5 for the
+ * drive before it's worn out: 2 for the cheapest, up to 5 for the
  * dearest. Null if it doesn't wear (another drive, or not gearing).
  */
 export function gearWearMatches(part, bug) {
@@ -111,8 +111,8 @@ export function driveKind(bug, bay = 0) {
 }
 // Drive types a part works with (omit `works` for "any").
 const HOT = ['combustion', 'torque'];
-const NOT_ELECTRIC = ['combustion', 'torque', 'turbine', 'plasma', 'fusion'];
-/** Water misters: anything with electrics in it (electric, fusion, plasma) would short out. */
+const NOT_ELECTRIC = ['combustion', 'torque', 'turbine', 'plasma'];
+/** Water misters: anything with electrics in it (electric, plasma) would short out. */
 export const MIST_DRIVES = ['combustion', 'torque', 'turbine'];
 
 export const PARTS = Object.freeze({
@@ -144,21 +144,21 @@ export const PARTS = Object.freeze({
   sputter_single: engine('Sputter Single', 1, U, 140, 32, 62, { force: 28500, rpm: 3900, cooling: 9, kind: 'combustion' }, '#ff7a2d', 'Coughs like a smoker, pulls like a mule.'),
   torque_block: engine('Torque Block V4', 2, C, 320, 45, 90, { force: 46000, rpm: 3400, cooling: 9, kind: 'torque' }, '#ffb03d', 'Low-revving shove monster.'),
   spinner_x: engine('Spinner-X Turbine', 2, C, 380, 28, 55, { force: 30000, rpm: 5600, cooling: 12, kind: 'turbine' }, '#ffe14a', 'Screams to high RPM. Fast but fragile.'),
-  volt_hub: engine('Volt-Hub Electric', 2, U, 420, 34, 70, { force: 36000, rpm: 4400, cooling: 14, kind: 'electric' }, '#5ad8ff', 'Silent, cool and very good at sharing its battery.'),
+  volt_hub: engine('DC Electric Motor', 2, U, 420, 34, 70, { force: 36000, rpm: 4400, cooling: 14, kind: 'electric' }, '#5ad8ff', 'A plain brushed DC motor. Silent, cool and very good at sharing its battery.'),
   grub_diesel: engine('Grub-Diesel Twin', 2, R, 520, 52, 100, { force: 46000, rpm: 3500, cooling: 8, kind: 'torque' }, '#ffc03d', 'Runs on larva oil. Pushes like it means it.'),
   hive_v6: engine('Hive V6', 3, C, 620, 44, 95, { force: 46000, rpm: 4300, cooling: 11, kind: 'combustion' }, '#ff9a3d', 'The workhorse of the outer rings.'),
   whine_turbine: engine('Whine-Jet Turbine', 3, U, 720, 32, 65, { force: 36000, rpm: 6200, cooling: 13, kind: 'turbine' }, '#fff06a', 'You\'ll hear it two arenas away.'),
-  magnetar_hub: engine('Magnetar Hub-Motor', 3, R, 880, 38, 85, { force: 44000, rpm: 4900, cooling: 16, kind: 'electric' }, '#6ae8ff', 'Magnets from a dead star. Runs cold as space.'),
+  magnetar_hub: engine('AC Induction Motor', 3, R, 880, 38, 85, { force: 44000, rpm: 4900, cooling: 16, kind: 'electric' }, '#6ae8ff', 'A rugged AC induction motor: no brushes to wear, runs cold.'),
   thorax_bigblock: engine('Thorax Big-Block', 3, E, 1100, 60, 120, { force: 56000, rpm: 3900, cooling: 9, kind: 'torque' }, '#ffcf3d', 'Illegal in four systems. Makes the ring shake.'),
-  fusion_core: engine('Fusion Micro-Core', 4, R, 1200, 40, 110, { force: 52000, rpm: 5000, cooling: 15, kind: 'fusion' }, '#7dfcff', 'Contained star in a tin can.'),
+  fusion_core: engine('Axial Flux Motor', 4, R, 1200, 40, 110, { force: 52000, rpm: 5000, cooling: 15, kind: 'electric' }, '#7dfcff', 'A flat pancake of an electric motor with huge torque for its size.'),
   ion_screamer: engine('Ion Screamer', 4, U, 1050, 34, 75, { force: 44000, rpm: 6400, cooling: 14, kind: 'turbine' }, '#e8ff7a', 'Ion-fed turbine. The top speed is frankly irresponsible.'),
   tectonic_v12: engine('Tectonic V12', 4, R, 1300, 64, 130, { force: 60000, rpm: 4000, cooling: 10, kind: 'torque' }, '#ffb85d', 'Twelve cylinders of continental drift.'),
-  nebula_cell: engine('Nebula Cell', 4, E, 1500, 38, 115, { force: 56000, rpm: 5400, cooling: 18, kind: 'electric' }, '#9ad8ff', 'A battery charged by a nebula. Doesn\'t like being asked to share.'),
+  nebula_cell: engine('Brushless DC Motor', 4, E, 1500, 38, 115, { force: 56000, rpm: 5400, cooling: 18, kind: 'electric' }, '#9ad8ff', 'A brushless DC motor: efficient, quick to respond, hard to stall.'),
   plasma_twin: engine('Plasma Twin-Drive', 5, R, 1600, 55, 170, { force: 68000, rpm: 4600, cooling: 13, kind: 'plasma' }, '#c77dff', 'Alien twin-plasma drive. Pushes planets.'),
   quasar_turbine: engine('Quasar Turbine', 5, E, 1800, 36, 90, { force: 54000, rpm: 6600, cooling: 15, kind: 'turbine' }, '#fffaa0', 'Spins at the speed of gossip.'),
   plasma_lance: engine('Plasma Lance', 4, E, 1500, 44, 120, { force: 58000, rpm: 4900, cooling: 14, kind: 'plasma' }, '#a07dff', 'A needle of plasma thrust. Enough to shove a moon — and happy on castors.'),
-  singularity_drive: engine('Singularity Drive', 5, L, 2600, 50, 140, { force: 72000, rpm: 5300, cooling: 16, kind: 'fusion' }, '#ffffff', 'A pinhole of collapsed star. Do not look directly at the exhaust.'),
-  zero_point_core: engine('Zero-Point Core', 5, L, 2800, 42, 160, { force: 70000, rpm: 5600, cooling: 22, kind: 'electric' }, '#aaf0ff', 'Draws power from empty space. Runs colder than the void it feeds on.'),
+  singularity_drive: engine('Maglev Motor', 5, L, 2600, 50, 140, { force: 72000, rpm: 5300, cooling: 16, kind: 'electric' }, '#ffffff', 'A magnetic-levitation motor: the rotor floats, nothing touches, nothing wears. Brutal torque.'),
+  zero_point_core: engine('PM Sync Motor', 5, L, 2800, 42, 160, { force: 70000, rpm: 5600, cooling: 22, kind: 'electric' }, '#aaf0ff', 'A permanent-magnet synchronous motor: the most efficient electric drive there is. Runs very cold.'),
 
   // ───────────── TIRES (running gear) ─────────────
   bald_rollers: tires('Bald Rollers', 1, C, 40, 12, 50, { mu: 0.8, radius: 7, kind: 'wheel' }, { kind: 'wheels', body: '#4a4552', stripe: '#5d5866', gap: 0 }, 'Tread is a distant memory.'),
@@ -255,10 +255,10 @@ export const PARTS = Object.freeze({
   mist_curtain: cooler('Mist Curtain', 3, U, 520, 10, { cool: 6, kind: 'mister', works: MIST_DRIVES, mist: 0.35, mistWear: 0.06 }, 'A whole wall of spray. Radiators, oil coolers, heat sinks and fans on its drive work much harder — but the drive wears faster in the wet. Combustion, torque and turbine only.'),
   big_rig_radiator: cooler('Aluminium Radiator', 3, C, 480, 22, { cool: 6.5, kind: 'water', jacket: 'water' }, 'A big aluminium water radiator. Heavy and very effective. Plumbs straight into combustion and torque motors; anything else needs a Water Jacket fitted first.'),
   silver_radiator: cooler('Silver Radiator', 3, R, 950, 14, { cool: 8.5, kind: 'water', jacket: 'water' }, 'A solid-silver water radiator: lighter and far better than aluminium. Plumbs straight into combustion and torque motors; anything else needs a Water Jacket fitted first.'),
-  peltier_plates: cooler('Peltier Plates', 3, R, 700, 8, { cool: 5, kind: 'peltier', works: ['electric', 'fusion'], staminaMax: 1.05 }, 'Solid-state chillers. Need a proper power supply — electric or fusion only.'),
+  peltier_plates: cooler('Peltier Plates', 3, R, 700, 8, { cool: 5, kind: 'peltier', works: ['electric'], staminaMax: 1.05 }, 'Solid-state chillers. Need a proper power supply — electric only.'),
   vapour_chamber: cooler('Vapour Chamber', 3, R, 650, 7, { cool: 6.5, kind: 'exchanger' }, 'A sealed chamber that boils heat away and condenses it back. Works on anything; a fan makes it sing.'),
   ram_air_scoop: cooler('Ram-Air Scoop', 3, U, 560, 7, { cool: 5.5, kind: 'fins' }, 'Scoops air as you drive. Better than it looks.'),
-  plasma_vent: cooler('Plasma Vent', 4, R, 1100, 10, { cool: 9, kind: 'nozzle', works: ['plasma', 'fusion'] }, 'Dumps heat straight out of a plasma or fusion core.'),
+  plasma_vent: cooler('Plasma Vent', 4, R, 1100, 10, { cool: 9, kind: 'nozzle', works: ['plasma'] }, 'Dumps heat straight out of a plasma core.'),
   nitrogen_loop: cooler('Liquid-Nitrogen Loop', 4, E, 1400, 18, { cool: 11, kind: 'water', jacket: 'nitrogen' }, 'Water cooling, but make it minus two hundred degrees. Drives other than combustion and torque need a Cryo Jacket fitted first.'),
   turbo_fan_array: cooler('Turbo Fan Array', 4, R, 900, 9, { cool: 1.2, kind: 'fan', boost: 2, ventBonus: 6 }, 'A wall of screaming fans. Doubles a good cooler; does little alone.'),
   cryo_block: cooler('Cryo Block', 4, E, 1300, 12, { cool: 18, kind: 'cryo', uses: 10 }, 'A slab of impossible cold. Unbeatable cooling — but it melts away after 10 battles.'),
@@ -284,12 +284,12 @@ export const PARTS = Object.freeze({
   light_flywheel: enhance('Lightweight Flywheel', 2, C, 240, 3, { kind: 'flywheel', accel: 1.12, works: ['combustion', 'torque'] }, 'Less spinning mass, snappier launches. Only piston motors have a flywheel to lighten — combustion and torque drives.'),
   supercharger: enhance('Supercharger', 3, U, 640, 12, { kind: 'turbo', force: 1.2, drain: 1.1, works: HOT }, 'Belt-driven boost. Big power, hotter running.'),
   afterburner: enhance('Afterburner', 3, R, 780, 8, { kind: 'burner', vMax: 1.15, accel: 1.1, drain: 1.18, works: ['turbine'] }, 'Sets the exhaust on fire on purpose. Turbines only.'),
-  regen_brakes: enhance('Regen Brakes', 3, U, 560, 6, { kind: 'regen', cool: 2, drain: 0.93, works: ['electric', 'fusion'] }, 'Turns braking back into charge. Electric or fusion only.'),
+  regen_brakes: enhance('Regen Brakes', 3, U, 560, 6, { kind: 'regen', cool: 2, drain: 0.93, works: ['electric'] }, 'Turns braking back into charge. Electric only.'),
   stamina_governor: enhance('Stamina Governor', 3, C, 500, 4, { kind: 'governor', drain: 0.85, force: 0.95 }, 'Holds the motor back a touch so it lasts much longer.'),
   launch_control: enhance('Launch Control', 3, R, 720, 4, { kind: 'launch', accel: 1.2, cool: 1 }, 'A little box that gets every start perfect. Works with anything.'),
   twin_turbo: enhance('Twin Turbo', 4, R, 1150, 14, { kind: 'turbo', force: 1.25, drain: 1.1, works: HOT }, 'Two turbos. Twice the whistle.'),
   ion_injector: enhance('Ion Injector', 4, R, 1200, 6, { kind: 'injector', force: 1.15, vMax: 1.08, works: ['turbine', 'electric', 'plasma'] }, 'Charged-particle boost for turbine, electric and plasma drives.'),
-  fusion_stabiliser: enhance('Fusion Stabiliser', 4, E, 1500, 8, { kind: 'stabiliser', drain: 0.8, staminaMax: 1.1, works: ['fusion', 'plasma'] }, 'Tames a star in a can. Barely breaks a sweat all bout.'),
+  fusion_stabiliser: enhance('Plasma Stabiliser', 4, E, 1500, 8, { kind: 'stabiliser', drain: 0.8, staminaMax: 1.1, works: ['plasma'] }, 'Tames a star in a can. Barely breaks a sweat all bout.'),
   plasma_overdrive: enhance('Plasma Overdrive', 5, E, 1900, 10, { kind: 'overdrive', force: 1.3, vMax: 1.08, drain: 1.15, works: ['plasma'] }, 'Pushes a plasma drive past the red line. And keeps pushing.'),
   neural_copilot: enhance('Stage 3 Tune', 5, L, 2600, 4, { kind: 'tune', accel: 1.2, cool: 4, drain: 0.9 }, 'The full works: a bespoke remap that feathers every input so you never waste a drop. Works with anything.'),
   time_warp_nitro: enhance('Time-Warp Nitro', 5, L, 2800, 6, { kind: 'nitro', force: 1.4, accel: 1.4, uses: 3, works: null }, 'Nitro from next week. Unbelievable — for 3 battles.'),
@@ -420,8 +420,8 @@ export const INTERACTIONS = Object.freeze([
     when: (b) => b.engine?.stats.kind === 'plasma' && (b.tires?.stats.kind === 'track'),
     text: 'Plasma drive through tracks wastes its top end. −8% top speed.' },
   { id: 'fusion_mag', good: true, mods: { force: 1.06 },
-    when: (b) => b.engine?.stats.kind === 'fusion' && b.tires?.key && ['mag_rollers', 'phase_wheels'].includes(b.tires.key),
-    text: 'Fusion field couples with magnetic rims. +6% drive.' },
+    when: (b) => ['fusion_core', 'singularity_drive'].includes(b.engine?.key) && b.tires?.key && ['mag_rollers', 'phase_wheels'].includes(b.tires.key),
+    text: 'The motor\'s magnetic field couples with magnetic rims. +6% drive.' },
 ]);
 
 export const PART_KEYS_BY_TYPE = Object.freeze(
@@ -646,5 +646,5 @@ export const JACKET_NAMES = Object.freeze({ water: 'Water Jacket', oil: 'Oil Jac
 
 /** Readable drive-type names for "works with" notes. */
 export const DRIVE_KINDS = Object.freeze({
-  combustion: 'Combustion', torque: 'Torque', turbine: 'Turbine', electric: 'Electric', fusion: 'Fusion', plasma: 'Plasma',
+  combustion: 'Combustion', torque: 'Torque', turbine: 'Turbine', electric: 'Electric', plasma: 'Plasma',
 });

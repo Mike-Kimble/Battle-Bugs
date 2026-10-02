@@ -251,7 +251,7 @@ export class EconomyManager {
     // Add-ons go on a particular drive (the one you picked, or the one it'd go on by default).
     const onBay = BattleBug.isAddOn(part.type) && bug.drives.length > 1 ? (bay ?? bug.defaultBay(part)) : null;
     // Water on anything with electrics in it.
-    if (part.stats.kind === 'mister' && ['electric', 'fusion', 'plasma'].includes(driveKind(bug, onBay ?? 0))) return 'Do you want to die today? Maybe not a good idea';
+    if (part.stats.kind === 'mister' && ['electric', 'plasma'].includes(driveKind(bug, onBay ?? 0))) return 'Do you want to die today? Maybe not a good idea';
     // Gearboxes (reducers included): two in a twin-bay shell, one otherwise — wherever they go.
     // Swapping one gearbox for another is fine.
     if (part.stats.group === 'gearbox') {

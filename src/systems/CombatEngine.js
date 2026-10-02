@@ -241,7 +241,7 @@ export class CombatEngine extends EventEmitter {
           if (p.hp > floor) p.hp = Math.max(floor, p.hp - p.maxHp * wear);
         }
       }
-      // Electric and fusion torque chews through gearing: worn out in 2 matches (cheap) to 5 (dear).
+      // Electric torque chews through gearing: worn out in 2 matches (cheap) to 5 (dear).
       for (const p of bug.drivetrain) {
         const life = gearWearMatches(p, bug);
         if (!life || p.isBroken) continue;
