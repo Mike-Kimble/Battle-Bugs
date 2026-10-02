@@ -372,3 +372,4 @@ table.stats td { padding: 3px 6px; white-space: nowrap; }
 .sell-tick { margin: 4px 0 0; }
 .back-btn { margin-bottom: 8px; }
 .card.standoff { margin-bottom: 14px; }
+.stats td.split { white-space: nowrap; }

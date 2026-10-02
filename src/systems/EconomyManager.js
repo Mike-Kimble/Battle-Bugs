@@ -246,7 +246,6 @@ export class EconomyManager {
     if (part.isScrap) return `${part.name} is scrap — sell it for ${formatMoney(ECONOMY.SCRAP_PRICE)}`;
     // Cooling, enhancements and drive train all mount on a drive.
     if (BattleBug.isAddOn(part.type) && !bug.drives.length) return 'Fit a drive first dummy!';
-    if (part.type === 'engine' && bug.drives.length === 2 && !bug.driveFits(part, slot ?? 1)) return `Twin drives must be the same motor type — these are ${bug.engine.stats.kind}`;
     if (part.type === 'weapon' && bug.weaponSlots === 0) return 'This chassis has no hardpoints';
     // Add-ons go on a particular drive (the one you picked, or the one it'd go on by default).
     const onBay = BattleBug.isAddOn(part.type) && bug.drives.length > 1 ? (bay ?? bug.defaultBay(part)) : null;
@@ -371,8 +370,6 @@ export class EconomyManager {
   /** Can this part go on this bug at all? (Some add-ons only suit certain drives.) */
   fits(part, bug, bay = null) {
     if (part.type === 'weapon' && !bug.weaponSlots) return false;
-    // Twin drives both fitted: a second motor type goes in neither bay.
-    if (part.type === 'engine' && bug.drives.length === 2 && !bug.driveFits(part, 0)) return false;
     return worksWith(part, bug, bay);
   }
 

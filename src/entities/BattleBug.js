@@ -23,7 +23,7 @@ export class BattleBug {
     this.alien = alien;
     this.pilot = pilot; // { name, planet } for alien challengers
     this.chassis = chassis;
-    // Drive bays: one, or two on the bigger shells (left and right; same motor type).
+    // Drive bays: one, or two on the bigger shells (Drive 1 and Drive 2; any mix of motor types).
     this.drives = [engine, engine2].filter(Boolean).slice(0, this.driveSlots);
     this.tires = tires;
     this.armor = armor;
@@ -70,6 +70,8 @@ export class BattleBug {
    */
   unmatched({ cooling = false } = {}) {
     if (this.drives.length < 2) return [];
+    // Different motor types need different kit: there's nothing to match — only what each puts down counts.
+    if (this.drives[0].stats.kind !== this.drives[1].stats.kind) return [];
     const out = [];
     for (const list of cooling ? [this.coolers, this.mods, this.drivetrain] : [this.mods, this.drivetrain]) {
       const left = list.filter((p) => this.bayOf(p) === 0 && !p.stats.lsl);
@@ -208,12 +210,9 @@ export class BattleBug {
     return type === 'castor' || type === 'tires' ? this.tires : type === 'engine' ? this.engine : this[type] ?? null;
   }
 
-  /** Twin drives must be the same motor type: can `part` go in drive bay `slot`? */
-  driveFits(part, slot) {
-    if (part.type !== 'engine' || this.driveSlots < 2) return true;
-    const i = slot ?? (this.drives.length < 2 ? this.drives.length : 1);
-    const other = this.drives[1 - i];
-    return !other || other.stats.kind === part.stats.kind;
+  /** Twin drives can be any mix of motor types. */
+  driveFits() {
+    return true;
   }
   get mass() { return this.parts.reduce((s, p) => s + p.mass, 0); }
 

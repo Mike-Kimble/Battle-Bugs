@@ -1,5 +1,5 @@
 import { ARENA, MATCH, PHYSICS, ACTIONS, EVENTS, PILOT_SKILL } from '../config/constants.js';
-import { PILOT_STYLES, heavyGear, turbineLine } from '../config/partsData.js';
+import { PILOT_STYLES, heavyGear, turbineLine, driveKind } from '../config/partsData.js';
 import { EventEmitter } from '../core/EventEmitter.js';
 import { Dohyo } from './Dohyo.js';
 import { PhysicsEngine } from '../physics/PhysicsEngine.js';
@@ -423,9 +423,10 @@ export class CombatEngine extends EventEmitter {
       const r = chain.applyDamage(chain.maxHp * ACTIONS.CHAIN_WEAR * bug.throttle * dt);
       if (r.broke) this.emit(EVENTS.PART_BROKEN, { bug, part: chain });
     }
-    if (this.time < MATCH.DURATION / 2 || bug.engine?.stats.kind !== 'turbine') return;
-    // A plain shaft lasts on the wheel side of the full line (High-Speed Shaft → gearbox → shaft).
-    for (const shaft of bug.drivetrain.filter((p) => (p.stats.shaft === 'std' || p.stats.shaft === 'chain') && !p.isBroken && !turbineLine(bug, p.bay || 0).complete)) {
+    if (this.time < MATCH.DURATION / 2) return;
+    // Only on a turbine's drive. A plain shaft lasts on the wheel side of the full line (High-Speed Shaft → gearbox → shaft).
+    for (const shaft of bug.drivetrain.filter((p) => (p.stats.shaft === 'std' || p.stats.shaft === 'chain') && !p.isBroken
+      && driveKind(bug, p.bay || 0) === 'turbine' && !turbineLine(bug, p.bay || 0).complete)) {
       shaft.hp = Math.min(shaft.hp, shaft.maxHp * 0.3);
       shaft.failed = true;
       this.emit(EVENTS.PART_BROKEN, { bug, part: shaft, breakdown: true });

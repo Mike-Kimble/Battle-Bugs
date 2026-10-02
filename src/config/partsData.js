@@ -77,9 +77,16 @@ export function hasShaft(bug, bay = null) {
  * needs a propeller or ducted fan (on drive bay `bay`, or on any).
  */
 export function pushesThrust(bug, bay = null) {
-  const kind = bug?.engine?.stats.kind;
-  if (!kind) return false;
-  return THRUST_DRIVES.includes(kind) || hasDriveTrain(bug, (s) => !!s.prop, bay);
+  const drives = bug?.drives?.length ? bug.drives : bug?.engine ? [bug.engine] : [];
+  // Twin drives can be different types: each pushes in its own way (or on any, with bay null).
+  const kinds = bay === null ? drives.map((d) => d.stats.kind) : [drives[bay]?.stats.kind].filter(Boolean);
+  if (!kinds.length) return false;
+  return kinds.some((k) => THRUST_DRIVES.includes(k)) || hasDriveTrain(bug, (s) => !!s.prop, bay);
+}
+
+/** The motor type on drive bay `bay` (the first drive's when there's no second). */
+export function driveKind(bug, bay = 0) {
+  return (bug?.drives?.[bay] || bug?.engine)?.stats.kind ?? null;
 }
 // Drive types a part works with (omit `works` for "any").
 const HOT = ['combustion', 'torque'];
@@ -342,7 +349,7 @@ export const INTERACTIONS = Object.freeze([
   // Twin drive bays.
   { id: 'twin_empty', good: false, mods: {},
     when: (b) => (b.chassis?.stats.drives || 1) > 1 && b.drives?.length === 1,
-    text: 'There\'s a second drive bay going begging — fit another motor of the same type and she\'ll spin on the spot (swipe).' },
+    text: 'There\'s a second drive bay going begging — fit another motor and she\'ll spin on the spot (swipe).' },
   { id: 'twin_spin', good: true, mods: {},
     when: (b) => b.drives?.length === 2 && b.drives.every((d) => !d.isBroken),
     text: 'Twin drives: swipe and she spins 360° on the spot — knocks them back further than a ram.' },
@@ -588,7 +595,9 @@ export const FIGHTING_STYLES = Object.freeze(Object.keys(PILOT_STYLES).filter((k
 /** @param {number} [bay] for a part about to be fitted: the drive it's going on */
 export function worksWith(part, bug, bay = null) {
   const s = part.stats;
-  const drive = bug?.engine?.stats.kind;
+  // Add-ons suit the motor on their own drive (twin drives can be different types).
+  const fittedOn = [bug?.coolers, bug?.mods, bug?.drivetrain].some((l) => (l || []).includes(part));
+  const drive = driveKind(bug, fittedOn ? (part.bay || 0) : (bay ?? 0));
   // Castors aren't driven: they need thrust (a thrust drive, or a propeller / ducted fan).
   if (part.type === 'castor') return pushesThrust(bug);
   // Liquid cooling plumbs straight into combustion and torque motors (they're water- and

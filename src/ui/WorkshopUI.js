@@ -229,6 +229,9 @@ export function sellStackButton(group, economy, act, { disabled = false, title =
   }, n === 1 ? `${verb} ${formatMoney(economy.partSellPrice(group.best))}` : `${verb}…`);
 }
 
+/** Derived stats each drive of a twin contributes to (shown Drive 1/Drive 2). */
+const PER_DRIVE = ['fDrive', 'fUsable', 'accel', 'vMax', 'cooling'];
+
 /** Stats with every part at full HP — used to show damage penalties. */
 function pristineStats(bug) {
   const j = bug.toJSON();
@@ -465,9 +468,12 @@ export class WorkshopUI {
       const cur = sc(key, s[key]);
       const full = sc(key, p[key]);
       const refVal = rs ? sc(key, rs[key]) : null;
-      return el('tr', { title: refVal != null ? `${hint} — ${ref.name} (repaired): ${shown(refVal)}` : hint || '' },
+      // Twin drives: each drive's own figure, Drive 1/Drive 2 (the bar shows the whole vehicle).
+      const split = s.perDrive && PER_DRIVE.includes(key) ? s.perDrive.map((d) => shown(sc(key, d[key]))).join('/') : null;
+      const tip = `${hint}${split ? ' — Drive 1/Drive 2' : ''}`;
+      return el('tr', { title: refVal != null ? `${tip} — ${ref.name} (repaired): ${shown(refVal)}` : tip || '' },
         el('th', {}, label),
-        el('td', {}, `${shown(cur)}`),
+        el('td', { class: split ? 'split' : null }, split ?? `${shown(cur)}`),
         el('td', { class: 'stat-bar-cell' }, statBar({ value: cur, potential: full, ref: refVal, max: 100, neutral, cls: 'stat-bar' })));
     };
     return el('div', { class: 'stats-block' },
@@ -765,7 +771,7 @@ export class WorkshopUI {
     if (type === 'engine') {
       section.append(drive ? this.fittedCard(bug, drive, locked) : el('div', { class: 'empty-slot' }, 'Empty drive bay'));
       const other = bug.drives[1 - bay];
-      section.append(el('p', { class: 'muted small' }, `Both drives must be the same motor type${other ? ` (${other.stats.kind})` : ''}. With both working, a swipe spins you 360° on the spot — keep them evenly repaired or she'll pull to one side.`));
+      section.append(el('p', { class: 'muted small' }, `The two drives can be any mix of motor types${other ? ` (the other is ${other.stats.kind})` : ''}. With both working, a swipe spins you 360° on the spot — but the stronger side pulls her off line, so keep them even (Derived stats shows each drive's figures as Drive 1/Drive 2).`));
       if (bay > bug.drives.length) {
         section.append(el('p', { class: 'muted small' }, 'Fit Drive 1 first.'));
       } else {
@@ -831,7 +837,7 @@ export class WorkshopUI {
     if (type === 'weapon') {
       section.append(el('p', { class: 'muted small' }, `${bug.weapons.length}/${bug.weaponSlots} hardpoints used. Weapons add mass and cost stamina per activation.`));
     } else if (type === 'engine' && multi) {
-      section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} drive bays used. Twin drives must be the same motor type — with both working, a swipe spins you 360° on the spot. Keep them evenly repaired or she'll pull to one side.`));
+      section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} drive bays used. Twin drives can be any mix of motor types — with both working, a swipe spins you 360° on the spot. Keep them even or she'll pull to one side.`));
     } else if (multi && !bug.drives.length) {
       section.append(el('p', { class: 'muted small' }, `No drive fitted — ${title.toLowerCase()} mounts on the drive. Fit a drive first dummy!`));
     } else if (type === 'drivetrain') {

@@ -1,6 +1,6 @@
 import { PHYSICS, STAMINA, EVENTS } from '../config/constants.js';
 import { Vector2D, clamp, approach, wrapAngle } from './Vector2D.js';
-import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES, pushesThrust, hasShaft, turbineLine } from '../config/partsData.js';
+import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES, pushesThrust, hasShaft, turbineLine, driveKind } from '../config/partsData.js';
 
 /** Drive-train parts that live between the drive shaft and the wheels (useless without a shaft). */
 const SHAFT_PARTS = ['gearbox', 'lockgear', 'transfer', 'diff', 'coupling', 'converter'];
@@ -108,7 +108,7 @@ export class PhysicsEngine {
   static driveTrain(bug, m, interactions, castor, bay = 0) {
     const fx = { vector: false, prop: 0, propRpm: false, lsl: false, tcu: false, guard: 1 };
     const groups = {};
-    const turbine = bug.engine?.stats.kind === 'turbine';
+    const turbine = driveKind(bug, bay) === 'turbine';
     const line = turbineLine(bug, bay);
     const shaft = hasShaft(bug, bay);
     const tracks = bug.tires?.stats.kind === 'track';
@@ -211,9 +211,11 @@ export class PhysicsEngine {
     const mb = [];
     const fxs = [];
     let addCool = 0;
+    const coolBy = [];
     for (let b = 0; b < bays; b++) {
       const mm = ones();
-      addCool += PhysicsEngine.addOns(bug, mm, interactions, b).cool;
+      coolBy[b] = PhysicsEngine.addOns(bug, mm, interactions, b).cool;
+      addCool += coolBy[b];
       fxs.push(PhysicsEngine.driveTrain(bug, mm, interactions, castor, b));
       mb.push(mm);
     }
@@ -221,6 +223,7 @@ export class PhysicsEngine {
     // Twin drives with the same cooling on both: the two loops work together, +10%.
     if (bug.coolingMatched) {
       addCool *= PHYSICS.MATCHED_COOLING;
+      for (let b = 0; b < coolBy.length; b++) coolBy[b] *= PHYSICS.MATCHED_COOLING;
       interactions.push({ id: 'twin_cool_matched', good: true, mods: {}, text: 'Same cooling on both power plants — they work together. +10% cooling.' });
     }
     const any = (key) => fxs.some((f) => f[key]);
@@ -231,7 +234,8 @@ export class PhysicsEngine {
     // Castors aren't driven: a thrust drive pushes the body straight (no traction
     // limit), less the rolling resistance. What holds the line and brakes is
     // `hold` — as slippery as the rolling resistance on most castors.
-    const thrustDrive = THRUST_DRIVES.includes(engine?.stats.kind);
+    // Twin drives can be different types: each is a thrust drive or not on its own.
+    const isThrust = (d) => THRUST_DRIVES.includes(d?.stats.kind);
     // Damage adds drag; oil, grease or ice under castors takes it away (they lose hold, not speed).
     const dryRoll = castor ? tires.stats.roll * (2 - tireRatio) * mass * PHYSICS.GRAVITY : 0;
     const rollForce = dryRoll * slick;
@@ -244,6 +248,7 @@ export class PhysicsEngine {
     // and tracks need a drive shaft on that drive; without one a turbine pushes on thrust
     // alone (half strength), plasma never drives wheels, any other motor goes nowhere.
     const per = drives.map((d, i) => {
+      const thrustDrive = isThrust(d);
       const f = (d.isBroken ? 0 : d.stats.force * d.hpRatio) * mb[i].force * twinK * m.force; // broken down = no push
       // A propeller or ducted fan turns shaft power into thrust (a ducted fan makes more of high revs).
       const propEff = fxs[i].prop * (fxs[i].propRpm ? 0.7 + 0.5 * (d.stats.rpm / 6400) : 1);
@@ -255,7 +260,7 @@ export class PhysicsEngine {
       const mode = castor ? (thrusts ? 'thrust' : 'none') : shaft ? 'shaft' : thrustDrive ? 'wheelThrust' : 'none';
       const eff = mode === 'thrust' ? (thrustDrive ? PHYSICS.CASTOR_THRUST + propBoost : propEff)
         : mode === 'wheelThrust' ? PHYSICS.THRUST_ON_WHEELS + propBoost : 1;
-      return { f, mode, eff };
+      return { f, mode, eff, cool: 0 };
     });
     const fDrive = per.reduce((t, d) => t + d.f, 0);
     const push = (scale, roll = rollForce) => {
@@ -289,7 +294,7 @@ export class PhysicsEngine {
           text: `Your drives aren't matched: ${PhysicsEngine.side(u.bay)} has ${/^[AEIOU]/.test(u.part.name) ? 'an' : 'a'} ${u.part.name} ${PhysicsEngine.side(u.missingOn)} hasn't${odd.length > 1 ? ` (and ${odd.length - 1} more odd part${odd.length > 2 ? 's' : ''})` : ''}. She'll pull to one side — fit the same to both.` });
       }
       per.forEach((d, i) => {
-        if (d.mode === 'none' && per[1 - i].mode !== 'none' && !drives[i].isBroken && tires && !castor && !thrustDrive) {
+        if (d.mode === 'none' && per[1 - i].mode !== 'none' && !drives[i].isBroken && tires && !castor && !isThrust(drives[i])) {
           interactions.push({ id: `twin_noshaft${i}`, good: false, mods: {}, text: `${PhysicsEngine.side(i)} has no drive shaft — it isn't turning the wheels at all.` });
         }
       });
@@ -299,6 +304,21 @@ export class PhysicsEngine {
     const wear = PHYSICS.TIRE_WEAR_FLOOR + (1 - PHYSICS.TIRE_WEAR_FLOOR) * tireRatio;
     const slickSpeed = castor ? 1 + (1 - slick) * PHYSICS.SLICK_CASTOR_SPEED : 1; // less rolling resistance, more top speed
     const vMax = engine && tires ? rpmAvg * tires.stats.radius * PHYSICS.RPM_TO_SPEED * wear * m.vMax * slickSpeed : 0;
+
+    // Twin drives: what each one contributes, so you can see which side needs work.
+    // Push is shared out in proportion to what each drive actually puts down.
+    const put = per.map((d) => (d.mode === 'none' ? 0 : d.f * d.eff));
+    const putSum = put.reduce((a, b) => a + b, 0);
+    const perDrive = drives.length > 1 ? drives.map((d, i) => {
+      const pushI = putSum > 0 ? fUsable * (put[i] / putSum) : 0;
+      return {
+        fDrive: per[i].f,
+        fUsable: pushI,
+        accel: mass > 0 ? (pushI / mass) * m.accel : 0,
+        vMax: rpmAvg > 0 ? vMax * (d.stats.rpm / rpmAvg) : 0,
+        cooling: d.stats.cooling * twinK * m.cooling + (coolBy[i] || 0),
+      };
+    }) : null;
 
     return {
       mass,
@@ -315,6 +335,7 @@ export class PhysicsEngine {
       gripMod,
       radius: chassis.stats.radius * PHYSICS.BUG_SCALE,
       staminaMax: Math.round(chassis.stats.staminaMax * m.staminaMax),
+      perDrive,
       cooling: engine ? Math.round((drives.reduce((t, d) => t + d.stats.cooling, 0) * twinK * m.cooling + addCool) * 10) / 10 : 0,
       twinBias,
       drainMult: m.drain,
