@@ -598,6 +598,14 @@ export class WorkshopUI {
     }
   }
 
+  /** Reopen an area of the hoist on the tab you left it on (coming back from the Marketplace). */
+  reopen({ region, tab }) {
+    if (!region || !this.bug) return;
+    this.openRegionKey = region;
+    this.regionTab = tab;
+    this.openRegion(region);
+  }
+
   // ───────────── Region modal ─────────────
   openRegion(key, refresh = false) {
     const region = HOIST_REGIONS[key];
@@ -801,7 +809,11 @@ export class WorkshopUI {
       const label = { engine: 'Power Plant', cooling: 'Cooling', enhancement: 'Enhancements', drivetrain: 'Drive Train', tires: 'Running Gear', castor: 'Running Gear', armor: 'Armour', weapon: 'Weapons' }[type];
       section.append(el('button', {
         class: 'btn btn-small shop-link',
-        onclick: () => { closeModal(); this.onShop(type); },
+        onclick: () => {
+          const back = { region: this.openRegionKey, tab: this.regionTab };
+          closeModal();
+          this.onShop(type, back);
+        },
       }, `Shop ${label} on the Marketplace →`));
     }
     return section;

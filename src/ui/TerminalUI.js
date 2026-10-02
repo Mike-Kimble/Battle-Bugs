@@ -48,7 +48,7 @@ function streakText(n = 0) {
  * tournament desk. Also renders the top status bar.
  */
 export class TerminalUI {
-  constructor(root, header, tabbar, { state, economy, sprite, onFight, onTrain, onNewGame }) {
+  constructor(root, header, tabbar, { state, economy, sprite, onFight, onTrain, onNewGame, onBack }) {
     this.root = root;
     this.header = header;
     this.tabbar = tabbar;
@@ -58,6 +58,7 @@ export class TerminalUI {
     this.sprite = sprite;
     this.onFight = onFight;
     this.onTrain = onTrain;
+    this.onBack = onBack; // (back) => reopen the Garage area you came from
     this.trainingDohyo = 0; // 0 = random
     this.onNewGame = onNewGame;
     this.tab = 'hangar';
@@ -110,9 +111,17 @@ export class TerminalUI {
   }
 
   setTab(key) {
+    if (key !== 'market') this.backTo = null; // the way back only lasts while you're shopping
     this.tab = key;
     this.keepScroll = false;
     this.render();
+  }
+
+  /** Back to the Garage, with the area (and tab) you came from open again. */
+  goBack() {
+    const back = this.backTo;
+    this.setTab('hangar');
+    if (back) this.onBack?.(back);
   }
 
   renderHeader() {
@@ -491,6 +500,9 @@ export class TerminalUI {
         onclick: () => { this.marketCat = key; this.keepScroll = false; this.render(); },
       }, label, el('span', { class: 'subtab-count' }, countFor(key))))))
       : topnav;
+    // Came here from a "Shop … on the Marketplace" button in the Garage: one tap takes you back to it.
+    const back = this.backTo ? el('button', { class: 'btn btn-small back-btn', onclick: () => this.goBack() }, '← Back to the Garage') : null;
+    const navWithBack = back ? el('div', {}, back, subnav) : subnav;
 
     let forSale;
     if (cat === 'chassis') {
@@ -530,10 +542,10 @@ export class TerminalUI {
       })));
     }
 
-    if (cat === 'sell') return this.renderSell(subnav, catBlurb, myVehicles);
+    if (cat === 'sell') return this.renderSell(navWithBack, catBlurb, myVehicles);
 
     return el('div', { class: 'market' },
-      subnav,
+      navWithBack,
       el('p', { class: 'muted' }, catBlurb, ' Stock rotates after every bout. ',
         s.staff.mechanic && cat !== 'chassis' ? 'Your mechanic gets 10% off parts. ' : '',
         manager ? 'Your manager is flagging rare deals.' : ''),

@@ -38,7 +38,7 @@ class App {
       state: this.state,
       economy: this.economy,
       sprite: this.sprite,
-      onShop: (type) => { this.terminal.marketCat = type; this.terminal.setTab('market'); },
+      onShop: (type, back) => { this.terminal.marketCat = type; this.terminal.setTab('market'); this.terminal.backTo = back || null; this.terminal.render(); },
     });
     this.terminal = new TerminalUI($('#terminal-panel'), $('#topbar'), $('#tabbar'), {
       state: this.state,
@@ -46,6 +46,7 @@ class App {
       sprite: this.sprite,
       onFight: (challenger, opts) => this.startMatch(challenger, opts),
       onTrain: (mode, dohyo) => this.startTraining(mode, dohyo),
+      onBack: (back) => this.workshop.reopen(back),
       onNewGame: () => this.newGame(),
     });
     this.state.on(EVENTS.STATE_CHANGE, () => {
