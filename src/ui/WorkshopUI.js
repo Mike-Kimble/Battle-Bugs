@@ -599,10 +599,11 @@ export class WorkshopUI {
   }
 
   /** Reopen an area of the hoist on the tab you left it on (coming back from the Marketplace). */
-  reopen({ region, tab }) {
+  reopen({ region, tab, bay }) {
     if (!region || !this.bug) return;
     this.openRegionKey = region;
     this.regionTab = tab;
+    this.regionBay = bay || 0;
     this.openRegion(region);
   }
 
@@ -616,17 +617,30 @@ export class WorkshopUI {
       return;
     }
     // Open on what's fitted (castors, if the running gear is castors).
-    if (this.openRegionKey !== key) this.regionTab = region.types[0];
+    if (this.openRegionKey !== key) { this.regionTab = region.types[0]; this.regionBay = 0; }
     this.openRegionKey = key;
     const locked = this.state.isLocked(bug);
-    // Areas with several part types get a tab each (Inside: Drive · Cooling · Enhancement; Shell: Chassis · Armour).
+    // Twin-bay shells: Inside splits into Drive 1 and Drive 2, each with its own parts.
+    const twinBays = key === 'center' && bug.driveSlots > 1;
+    const bay = twinBays ? Math.min(this.regionBay || 0, 1) : null;
+    const driveTabs = twinBays
+      ? el('div', { class: 'subtabs drive-tabs', role: 'tablist' }, [0, 1].map((b) => el('button', {
+        class: `subtab${b === bay ? ' active' : ''}`,
+        role: 'tab',
+        'aria-selected': b === bay ? 'true' : 'false',
+        onclick: () => { this.regionBay = b; this.openRegion(key); },
+      }, `Drive ${b + 1}`, el('span', { class: 'subtab-count' }, bug.drives[b] ? bug.drives[b].name : 'empty'))))
+      : null;
+    // Areas with several part types get a tab each (Inside: Power Plant · Cooling · Enhancement · Drive Train; Shell: Chassis · Armour).
     const type = region.types.includes(this.regionTab) ? this.regionTab : region.types[0];
     const TAB_LABELS = { engine: 'Power Plant', cooling: 'Cooling', enhancement: 'Enhancement', drivetrain: 'Drive Train', chassis: 'Chassis', armor: 'Armour', tires: 'Tyres', castor: 'Castors' };
     const tabs = region.types.length > 1
       ? el('div', { class: 'subtabs region-tabs', role: 'tablist' }, region.types.map((t) => {
         const list = bug.slotList(t);
         const fitted = t === 'tires' || t === 'castor' ? bug.tires?.type === t : bug.slotPart(t);
-        const count = list ? `${list.length}/${bug.slotCapacity(t) || BattleBug.perDrive(t) || list.length}` : (t === 'chassis' || fitted ? '✓' : '—');
+        const count = twinBays
+          ? (t === 'engine' ? (bug.drives[bay] ? '✓' : '—') : `${bug.addOnsOn(t, bay).length}/${BattleBug.perDrive(t)}`)
+          : list ? `${list.length}/${bug.slotCapacity(t) || BattleBug.perDrive(t) || list.length}` : (t === 'chassis' || fitted ? '✓' : '—');
         return el('button', {
           class: `subtab${t === type ? ' active' : ''}`,
           role: 'tab',
@@ -637,8 +651,9 @@ export class WorkshopUI {
       : null;
     const body = el('div', { class: 'region-modal' },
       el('p', { class: 'muted' }, region.blurb, this.economy.inField ? " — you're in the field: spares from your inventory only." : ''),
+      driveTabs,
       tabs,
-      this.renderSlot(bug, type, false));
+      twinBays ? this.renderBaySlot(bug, type, bay, locked) : this.renderSlot(bug, type, false));
     openModal(`${region.label} · ${bug.name}`, body, { onClose: () => { this.openRegionKey = null; } });
   }
 
@@ -652,7 +667,7 @@ export class WorkshopUI {
         el('strong', {}, "Drives don't match"), el('div', { class: 'small' }, "Each drive needs the same kit, or she'll pull to one side."));
     for (const u of odd) {
       const src = eco.matchSource(u.part.key);
-      const side = u.missingOn ? 'right' : 'left';
+      const side = `Drive ${u.missingOn + 1}`;
       let action;
       if (src?.where === 'spares') {
         action = el('button', { class: 'btn btn-small btn-primary', disabled: locked, onclick: () => this.act(() => eco.fitMatching(bug, u.part.uid), `Fitted the matching ${u.part.name} from your spares`) }, 'Fit spare');
@@ -669,7 +684,7 @@ export class WorkshopUI {
       } else {
         action = el('span', { class: 'muted small' }, eco.inField ? 'None in your spares.' : 'None about — a manager could find you one.');
       }
-      box.append(el('div', { class: 'advice-row' }, `${u.part.name} → ${side} drive`, action));
+      box.append(el('div', { class: 'advice-row' }, `${u.part.name} → ${side}`, action));
     }
     return box;
   }
@@ -693,6 +708,100 @@ export class WorkshopUI {
     }, affordable ? `Repair ${formatMoney(cost)}` : `Patch (${formatMoney(this.state.money)})`);
   }
 
+  /** A fitted part's card: repair, and remove (a power plant takes its add-ons with it). */
+  fittedCard(bug, part, locked) {
+    return partCard(part, this.economy, {
+      ...this.refCompare(part),
+      actions: [
+        this.repairButton(part),
+        el('button', {
+          class: 'btn btn-small',
+          disabled: locked,
+          onclick: () => this.act(() => this.economy.unequipToInventory(bug, part.uid),
+            (off) => (off.length > 1 ? `${part.name} moved to inventory — its cooling, enhancements and drive train came off too` : `${part.name} moved to inventory`)),
+        }, 'Remove'),
+      ].filter(Boolean),
+    });
+  }
+
+  /** The Marketplace aisle link for a part type (remembers where to come back to). */
+  shopLink(type) {
+    if (!this.onShop || this.economy.inField) return null;
+    const label = { engine: 'Power Plant', cooling: 'Cooling', enhancement: 'Enhancements', drivetrain: 'Drive Train', tires: 'Running Gear', castor: 'Running Gear', armor: 'Armour', weapon: 'Weapons' }[type];
+    return el('button', {
+      class: 'btn btn-small shop-link',
+      onclick: () => {
+        const back = { region: this.openRegionKey, tab: this.regionTab, bay: this.regionBay };
+        closeModal();
+        this.onShop(type, back);
+      },
+    }, `Shop ${label} on the Marketplace →`);
+  }
+
+  /**
+   * One drive of a twin-bay shell: its power plant, or the cooling,
+   * enhancements or drive train fitted to it. Spares fit straight onto this drive.
+   */
+  renderBaySlot(bug, type, bay, locked) {
+    const eco = this.economy;
+    const title = { engine: 'Power Plant', cooling: 'Cooling', enhancement: 'Enhancement', drivetrain: 'Drive Train' }[type];
+    const name = `Drive ${bay + 1}`;
+    const section = el('section', { class: 'slot-section' }, el('h3', {}, `${name} · ${title}`));
+    const drive = bug.drives[bay];
+    const inv = this.state.inventory.filter((p) => p.type === type);
+    const spares = (actionsFor) => {
+      if (!inv.length) return el('p', { class: 'muted small' }, 'No spare parts of this type — visit the Marketplace or strip a captured vehicle.');
+      const list = el('div', { class: 'replace-list' }, el('h4', {}, `Spares — fit to ${name} or sell`));
+      for (const group of eco.spareGroups(inv)) {
+        const part = group.best;
+        const actions = [...actionsFor(part), sellStackButton(group, eco, (fn, msg) => this.act(fn, msg), {
+          disabled: eco.inField, title: eco.inField ? "No selling while you're in the tournament" : null,
+        })];
+        list.append(partCard(part, eco, { actions, compareTo: counterpart(bug, part), group }));
+      }
+      return list;
+    };
+
+    if (type === 'engine') {
+      section.append(drive ? this.fittedCard(bug, drive, locked) : el('div', { class: 'empty-slot' }, 'Empty drive bay'));
+      const other = bug.drives[1 - bay];
+      section.append(el('p', { class: 'muted small' }, `Both drives must be the same motor type${other ? ` (${other.stats.kind})` : ''}. With both working, a swipe spins you 360° on the spot — keep them evenly repaired or she'll pull to one side.`));
+      if (bay > bug.drives.length) {
+        section.append(el('p', { class: 'muted small' }, 'Fit Drive 1 first.'));
+      } else {
+        section.append(spares((part) => [el('button', {
+          class: `btn btn-small${drive ? '' : ' btn-primary'}`, disabled: locked || part.isScrap,
+          onclick: () => this.act(() => eco.equipFromInventory(bug, part.uid, bay), `${drive ? 'Swapped' : 'Fitted'} ${part.name} in ${name}`),
+        }, drive ? 'Swap' : 'Fit')]));
+      }
+    } else if (!drive) {
+      section.append(el('div', { class: 'empty-slot' }, `No power plant in ${name}`));
+      section.append(el('p', { class: 'muted small' }, `${title} mounts on the power plant. Fit a drive first dummy!`));
+      section.append(spares(() => []));
+    } else {
+      const per = BattleBug.perDrive(type);
+      const mine = bug.addOnsOn(type, bay);
+      if (!mine.length) section.append(el('div', { class: 'empty-slot' }, 'Empty'));
+      for (const part of mine) section.append(this.fittedCard(bug, part, locked));
+      section.append(el('p', { class: 'muted small' }, `${mine.length}/${per} ${title.toLowerCase()} slot${per > 1 ? 's' : ''} on ${name}. ${type === 'cooling'
+        ? 'Each power plant cools itself; liquid cooling needs a jacket on this drive (unless it\'s combustion or torque). The same cooling on both drives works together: +10%.'
+        : type === 'drivetrain'
+          ? `One shaft and one prop count per drive, and ${bug.drives.length > 1 ? 'one gearbox' : 'up to two gearboxes while only one drive is fitted'} — a turbine runs High-Speed Shaft → gearbox → drive shaft. Fit the same to both drives or she pulls.`
+          : 'Fit the same to both drives or she pulls to one side.'}`));
+      const odd = bug.unmatched({ cooling: true }).filter((u) => u.part.type === type);
+      if (odd.length) section.append(this.renderMatching(bug, odd, locked, type === 'cooling'));
+      section.append(spares((part) => (mine.length < per
+        ? [el('button', { class: 'btn btn-small btn-primary', disabled: locked || part.isScrap, onclick: () => this.act(() => eco.equipFromInventory(bug, part.uid, undefined, bay), `Fitted ${part.name} to ${name}`) }, 'Fit')]
+        : mine.map((w, i) => el('button', {
+          class: 'btn btn-small', disabled: locked || part.isScrap,
+          onclick: () => this.act(() => eco.equipFromInventory(bug, part.uid, i, bay), `Swapped ${part.name} in on ${name}`),
+        }, `Swap ${i + 1}`)))));
+    }
+    const link = this.shopLink(type);
+    if (link) section.append(link);
+    return section;
+  }
+
   renderSlot(bug, type, locked) {
     const inv = this.state.inventory.filter((p) => p.type === type || (type === 'tires' && p.type === 'castor'));
     const title = { engine: 'Power Plant', cooling: 'Cooling', enhancement: 'Enhancement', drivetrain: 'Drive Train', tires: 'Running Gear', castor: 'Castors', armor: 'Armour', weapon: 'Weapons', chassis: 'Chassis' }[type];
@@ -714,36 +823,10 @@ export class WorkshopUI {
     if (type === 'tires') {
       section.append(el('p', { class: 'muted small' }, "Driven tyres and tracks need a drive shaft. Gliding castors sit under the chassis, out of sight, and need thrust — a turbine or plasma drive, or a propeller or ducted fan. On castors you accelerate hard but slide: to slow down, thrust the other way."));
     }
-    const fittedCard = (part) => partCard(part, this.economy, {
-      ...this.refCompare(part),
-      actions: [
-        this.repairButton(part),
-        el('button', {
-          class: 'btn btn-small',
-          disabled: locked,
-          onclick: () => this.act(() => this.economy.unequipToInventory(bug, part.uid),
-            (off) => (off.length > 1 ? `${part.name} moved to inventory — its cooling, enhancements and drive train came off too` : `${part.name} moved to inventory`)),
-        }, 'Remove'),
-      ].filter(Boolean),
-    });
-    // Twin drives: each drive has its own cooling, enhancements and drive train.
-    const twinAddOn = BattleBug.isAddOn(type) && bug.drives.length > 1;
-    if (twinAddOn) {
-      const per = BattleBug.perDrive(type);
-      [0, 1].forEach((b) => {
-        const mine = bug.addOnsOn(type, b);
-        section.append(el('h4', { class: 'bay-head' }, `${b ? 'Right' : 'Left'} drive · ${bug.drives[b].name}`, el('span', { class: 'muted small' }, ` ${mine.length}/${per}`)));
-        if (!mine.length) section.append(el('div', { class: 'empty-slot' }, 'Empty'));
-        for (const part of mine) section.append(fittedCard(part));
-      });
-      const odd = bug.unmatched({ cooling: true }).filter((u) => u.part.type === type);
-      if (odd.length) section.append(this.renderMatching(bug, odd, locked, type === 'cooling'));
-    } else {
-      if (!equipped.length) {
-        section.append(el('div', { class: 'empty-slot' }, type === 'weapon' && bug.weaponSlots === 0 ? 'No hardpoints on this frame' : 'Empty slot'));
-      }
-      for (const part of equipped) section.append(fittedCard(part));
+    if (!equipped.length) {
+      section.append(el('div', { class: 'empty-slot' }, type === 'weapon' && bug.weaponSlots === 0 ? 'No hardpoints on this frame' : 'Empty slot'));
     }
+    for (const part of equipped) section.append(this.fittedCard(bug, part, locked));
 
     if (type === 'weapon') {
       section.append(el('p', { class: 'muted small' }, `${bug.weapons.length}/${bug.weaponSlots} hardpoints used. Weapons add mass and cost stamina per activation.`));
@@ -751,10 +834,6 @@ export class WorkshopUI {
       section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} drive bays used. Twin drives must be the same motor type — with both working, a swipe spins you 360° on the spot. Keep them evenly repaired or she'll pull to one side.`));
     } else if (multi && !bug.drives.length) {
       section.append(el('p', { class: 'muted small' }, `No drive fitted — ${title.toLowerCase()} mounts on the drive. Fit a drive first dummy!`));
-    } else if (twinAddOn) {
-      section.append(el('p', { class: 'muted small' }, type === 'cooling'
-        ? 'Each power plant has its own cooling and runs it independently. The same cooling on both works together: +10%.'
-        : `Each power plant has its own ${title.toLowerCase()} — nothing is shared. Fit the same to both, or the better-kitted side pulls her off line.${type === 'drivetrain' ? ' One gearbox, one shaft and one prop count per drive (a turbine runs High-Speed Shaft → gearbox → drive shaft).' : ''}`));
     } else if (type === 'drivetrain') {
       const gearboxes = bug.driveSlots > 1 ? 'two gearboxes (a twin-bay shell with one drive has room for both)' : 'one gearbox';
       section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} drive-train slots used. Only ${gearboxes}, one shaft and one prop count — a turbine runs High-Speed Shaft → gearbox → drive shaft. Your mechanic knows which combinations pay off.`));
@@ -768,22 +847,7 @@ export class WorkshopUI {
       for (const group of this.economy.spareGroups(inv)) {
         const part = group.best;
         const actions = [];
-        if (twinAddOn) {
-          // Pick the drive: fit into a free slot, or swap one out.
-          const per = BattleBug.perDrive(type);
-          [0, 1].forEach((b) => {
-            const side = b ? 'right' : 'left';
-            const mine = bug.addOnsOn(type, b);
-            if (mine.length < per) {
-              actions.push(el('button', { class: 'btn btn-small btn-primary', disabled: locked || part.isScrap, onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid, undefined, b), `Fitted ${part.name} to the ${side} drive`) }, `Fit ${side}`));
-            } else {
-              mine.forEach((w, i) => actions.push(el('button', {
-                class: 'btn btn-small', disabled: locked || part.isScrap,
-                onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid, i, b), `Swapped ${part.name} in on the ${side} drive`),
-              }, `Swap ${side} ${i + 1}`)));
-            }
-          });
-        } else if (multi) {
+        if (multi) {
           if (multi.length < cap) {
             actions.push(el('button', { class: 'btn btn-small btn-primary', disabled: locked || part.isScrap, onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid), `Fitted ${part.name}`) }, type === 'weapon' ? 'Mount' : 'Fit'));
           }
@@ -805,17 +869,8 @@ export class WorkshopUI {
       section.append(el('p', { class: 'muted small' }, 'No spare parts of this type — visit the Marketplace or strip a captured vehicle.'));
     }
     // Straight to the right aisle of the Marketplace (closed while you're in the tournament).
-    if (this.onShop && !this.economy.inField) {
-      const label = { engine: 'Power Plant', cooling: 'Cooling', enhancement: 'Enhancements', drivetrain: 'Drive Train', tires: 'Running Gear', castor: 'Running Gear', armor: 'Armour', weapon: 'Weapons' }[type];
-      section.append(el('button', {
-        class: 'btn btn-small shop-link',
-        onclick: () => {
-          const back = { region: this.openRegionKey, tab: this.regionTab };
-          closeModal();
-          this.onShop(type, back);
-        },
-      }, `Shop ${label} on the Marketplace →`));
-    }
+    const link = this.shopLink(type);
+    if (link) section.append(link);
     return section;
   }
 }

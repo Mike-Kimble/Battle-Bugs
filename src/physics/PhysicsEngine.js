@@ -79,7 +79,7 @@ export class PhysicsEngine {
       else if (!worksWith(p, bug)) {
         interactions.push({ id: `nofit_${p.uid}`, good: false, mods: {},
           text: p.stats.jacket
-            ? `Your ${p.name} needs ${/^[AEIOU]/.test(JACKET_NAMES[p.stats.jacket]) ? 'an' : 'a'} ${JACKET_NAMES[p.stats.jacket]} on ${where ? `the ${PhysicsEngine.side(bay)} drive` : 'this drive'} — it's dead weight without one.`
+            ? `Your ${p.name} needs ${/^[AEIOU]/.test(JACKET_NAMES[p.stats.jacket]) ? 'an' : 'a'} ${JACKET_NAMES[p.stats.jacket]} on ${where ? PhysicsEngine.side(bay) : 'this drive'} — it's dead weight without one.`
             : `Your ${p.name} doesn't work with this drive — it's dead weight.` });
       }
     }
@@ -92,11 +92,11 @@ export class PhysicsEngine {
   }
 
   /** "left" / "right" drive bay. */
-  static side(bay) { return bay ? 'right' : 'left'; }
+  static side(bay) { return bay ? 'Drive 2' : 'Drive 1'; }
 
-  /** " on the left drive" on a twin, "" otherwise. */
+  /** " on Drive 1" on a twin, "" otherwise. */
   static bayName(bug, bay) {
-    return (bug.drives?.length || 0) > 1 ? ` on the ${PhysicsEngine.side(bay)} drive` : '';
+    return (bug.drives?.length || 0) > 1 ? ` on ${PhysicsEngine.side(bay)}` : '';
   }
 
   /**
@@ -280,11 +280,11 @@ export class PhysicsEngine {
       if (odd.length) {
         const u = odd[0];
         interactions.push({ id: 'twin_unmatched', good: false, mods: {},
-          text: `Your drives aren't matched: the ${PhysicsEngine.side(u.bay)} drive has ${/^[AEIOU]/.test(u.part.name) ? 'an' : 'a'} ${u.part.name} the ${PhysicsEngine.side(u.missingOn)} one hasn't${odd.length > 1 ? ` (and ${odd.length - 1} more odd part${odd.length > 2 ? 's' : ''})` : ''}. She'll pull to one side — fit the same to both.` });
+          text: `Your drives aren't matched: ${PhysicsEngine.side(u.bay)} has ${/^[AEIOU]/.test(u.part.name) ? 'an' : 'a'} ${u.part.name} ${PhysicsEngine.side(u.missingOn)} hasn't${odd.length > 1 ? ` (and ${odd.length - 1} more odd part${odd.length > 2 ? 's' : ''})` : ''}. She'll pull to one side — fit the same to both.` });
       }
       per.forEach((d, i) => {
         if (d.mode === 'none' && per[1 - i].mode !== 'none' && !drives[i].isBroken && tires && !castor && !thrustDrive) {
-          interactions.push({ id: `twin_noshaft${i}`, good: false, mods: {}, text: `Your ${PhysicsEngine.side(i)} drive has no drive shaft — it isn't turning the wheels at all.` });
+          interactions.push({ id: `twin_noshaft${i}`, good: false, mods: {}, text: `${PhysicsEngine.side(i)} has no drive shaft — it isn't turning the wheels at all.` });
         }
       });
     }

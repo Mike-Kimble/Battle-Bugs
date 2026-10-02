@@ -585,7 +585,8 @@ export const CHALLENGER_ROSTER = Object.freeze([
 export const FIGHTING_STYLES = Object.freeze(Object.keys(PILOT_STYLES).filter((k) => k !== 'hapless'));
 
 /** Does this add-on (cooling / enhancement) work with the bug's drive? */
-export function worksWith(part, bug) {
+/** @param {number} [bay] for a part about to be fitted: the drive it's going on */
+export function worksWith(part, bug, bay = null) {
   const s = part.stats;
   const drive = bug?.engine?.stats.kind;
   // Castors aren't driven: they need thrust (a thrust drive, or a propeller / ducted fan).
@@ -594,8 +595,10 @@ export function worksWith(part, bug) {
   // oil-cooled already); any other drive needs the matching jacket — on the same drive.
   if (s.jacket) {
     if (PLUMBED_DRIVES.includes(drive)) return true;
+    // Each drive needs its own jacket: a jacket on one drive does nothing for the other.
     const fitted = (bug.coolers || []).includes(part);
-    return !!drive && (bug.coolers || []).some((c) => c !== part && c.stats.jacketFor === s.jacket && (!fitted || (c.bay || 0) === (part.bay || 0)));
+    const on = fitted ? (part.bay || 0) : bay;
+    return !!drive && (bug.coolers || []).some((c) => c !== part && c.stats.jacketFor === s.jacket && (on == null || (c.bay || 0) === on));
   }
   if (!s.works) return true;
   return !!drive && s.works.includes(drive);

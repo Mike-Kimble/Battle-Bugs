@@ -1,6 +1,6 @@
 import { ECONOMY, PILOT_SKILL, winRate } from '../config/constants.js';
 import {
-  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, RIVAL_EXCUSES, CHALLENGER_ROSTER, RARITY, worksWith, THRUST_DRIVES, heavyGear, turbineLine, turbineComplete,
+  PARTS, PART_KEYS_BY_TYPE, STARTER_BUG, ALIEN_SYLLABLES, PLANETS, BUG_ADJECTIVES, BUG_NOUNS, PILOT_STYLES, FIGHTING_STYLES, RIVAL_STORIES, RIVAL_DM, RIVAL_EXCUSES, CHALLENGER_ROSTER, RARITY, worksWith, JACKET_NAMES, THRUST_DRIVES, heavyGear, turbineLine, turbineComplete,
 } from '../config/partsData.js';
 import { STAFF_ROSTER } from '../config/staff.js';
 import { BattleBug } from '../entities/BattleBug.js';
@@ -240,7 +240,7 @@ export class EconomyManager {
   }
 
   /** Why `part` can't go on `bug` right now, or null if it can. */
-  fitProblem(part, bug, slot) {
+  fitProblem(part, bug, slot, bay) {
     if (!bug) return 'Nothing on the hoist';
     if (part.type === 'chassis') return 'A chassis is a whole vehicle frame — it cannot be fitted';
     if (part.isScrap) return `${part.name} is scrap — sell it for ${formatMoney(ECONOMY.SCRAP_PRICE)}`;
@@ -248,7 +248,12 @@ export class EconomyManager {
     if (BattleBug.isAddOn(part.type) && !bug.drives.length) return 'Fit a drive first dummy!';
     if (part.type === 'engine' && bug.drives.length === 2 && !bug.driveFits(part, slot ?? 1)) return `Twin drives must be the same motor type — these are ${bug.engine.stats.kind}`;
     if (part.type === 'weapon' && bug.weaponSlots === 0) return 'This chassis has no hardpoints';
-    if (!this.fits(part, bug)) return "Doesn't look like you can fit that here";
+    // Add-ons go on a particular drive (the one you picked, or the one it'd go on by default).
+    const onBay = BattleBug.isAddOn(part.type) && bug.drives.length > 1 ? (bay ?? bug.defaultBay(part)) : null;
+    if (!this.fits(part, bug, onBay)) {
+      if (part.stats.jacket && bug.drives.length > 1) return `That drive needs ${/^[AEIOU]/.test(JACKET_NAMES[part.stats.jacket]) ? 'an' : 'a'} ${JACKET_NAMES[part.stats.jacket]} of its own first`;
+      return "Doesn't look like you can fit that here";
+    }
     return null;
   }
 
@@ -261,7 +266,7 @@ export class EconomyManager {
   equipFromInventory(bug, partUid, slot, bay) {
     const part = this.state.getPart(partUid);
     if (!part) throw new Error('Part not in inventory');
-    const problem = this.fitProblem(part, bug, slot);
+    const problem = this.fitProblem(part, bug, slot, bay);
     if (problem) throw new Error(problem);
     this.state.removePart(partUid);
     for (const displaced of bug.equip(part, slot, bay)) this.state.addPart(displaced);
@@ -364,11 +369,11 @@ export class EconomyManager {
   }
 
   /** Can this part go on this bug at all? (Some add-ons only suit certain drives.) */
-  fits(part, bug) {
+  fits(part, bug, bay = null) {
     if (part.type === 'weapon' && !bug.weaponSlots) return false;
     // Twin drives both fitted: a second motor type goes in neither bay.
     if (part.type === 'engine' && bug.drives.length === 2 && !bug.driveFits(part, 0)) return false;
-    return worksWith(part, bug);
+    return worksWith(part, bug, bay);
   }
 
   /** Buy a part and fit it straight onto `bug` (for an empty slot). */
