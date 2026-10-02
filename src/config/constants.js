@@ -221,7 +221,7 @@ export const ECONOMY = Object.freeze({
   FINE_BATTLES: 3,           // battles allowed to pay the fine
 
   MECHANIC_DISCOUNT: 0.9,    // mechanic gets 10% off parts & repairs
-  STANDOFF_STREAK: 5,        // win this many in a row to open the Scarab Standoff
+  STANDOFF_STREAK: 3,        // win this many in a row to open the Scarab Standoff (while the streak lasts)
   STANDOFF_FEE: 250,
   STANDOFF_PRIZE: 1000,
   STANDOFF_DOHYO: 2,          // fought on the donut
@@ -232,7 +232,7 @@ export const ECONOMY = Object.freeze({
   TEASER_CHANCE: 0.25,       // a restock shows off an epic/legendary part you can't afford
   MARKET_STOCK: { engine: 5, cooling: 4, enhancement: 4, drivetrain: 4, tires: 5, castor: 3, weapon: 6, armor: 5 },
   MARKET_VEHICLES: 4,
-  TOURNAMENT_UNLOCK_WINS: 5,
+  TOURNAMENT_STREAK: 10,     // win this many in a row to qualify for the Inter-Planetary Tournament (while the streak lasts)
   TOURNAMENT_ROUNDS: 5,
   TOURNAMENT_ROUND_NAMES: ['Round One', 'Round Two', 'Quarter-Final', 'Semi-Final', 'Grand Final'],
   TOURNAMENT_PRIZE: 20000,

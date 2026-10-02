@@ -1673,13 +1673,14 @@ export class EconomyManager {
     return this.rating(best) >= this.tourneyBar * ECONOMY.TOURNAMENT_READY;
   }
 
+  /** Open while you're on a 10-win streak (and, once you're in, until you're out). */
   get tournamentUnlocked() {
-    return this.state.record.challengerWins >= ECONOMY.TOURNAMENT_UNLOCK_WINS;
+    return (this.state.record.streak || 0) >= ECONOMY.TOURNAMENT_STREAK || !!this.state.tournament.entered;
   }
 
   enterTournament() {
     const bug = this.state.activeBug;
-    if (!this.tournamentUnlocked) throw new Error(`Win ${ECONOMY.TOURNAMENT_UNLOCK_WINS} challenger bouts to unlock`);
+    if (!this.tournamentUnlocked) throw new Error(`Win ${ECONOMY.TOURNAMENT_STREAK} in a row to qualify`);
     if (!bug?.isBattleReady) throw new Error('Your active vehicle is not battle-ready');
     if (!this.state.canAfford(ECONOMY.TOURNAMENT_FEE)) throw new Error(`The entry fee is ${formatMoney(ECONOMY.TOURNAMENT_FEE)}`);
     this.state.spend(ECONOMY.TOURNAMENT_FEE);
@@ -2092,8 +2093,13 @@ export class EconomyManager {
     if (result === 'loss') s.record.streak = Math.min(0, s.record.streak || 0) - 1;
     if (result === 'win' && s.record.streak === ECONOMY.STANDOFF_STREAK) {
       report.lines.push(`★ ${ECONOMY.STANDOFF_STREAK} wins in a row — the Scarab Standoff is open to you while the streak lasts (Tournaments tab).`);
-    } else if (streakBefore >= ECONOMY.STANDOFF_STREAK && s.record.streak < ECONOMY.STANDOFF_STREAK) {
-      report.lines.push('Your winning streak is over — the Scarab Standoff is closed until you win five in a row again.');
+    }
+    if (result === 'win' && s.record.streak === ECONOMY.TOURNAMENT_STREAK && !s.tournament.entered) {
+      report.lines.push(`★ ${ECONOMY.TOURNAMENT_STREAK} wins in a row — the Inter-Planetary Tournament is OPEN to you while the streak lasts!`);
+    }
+    if (streakBefore >= ECONOMY.STANDOFF_STREAK && s.record.streak < ECONOMY.STANDOFF_STREAK) {
+      const both = streakBefore >= ECONOMY.TOURNAMENT_STREAK && !s.tournament.entered && !tournament;
+      report.lines.push(`Your winning streak is over — the Scarab Standoff${both ? ' and the Tournament are' : ' is'} closed until you win ${ECONOMY.STANDOFF_STREAK} in a row again${both ? ` (${ECONOMY.TOURNAMENT_STREAK} for the Tournament)` : ''}.`);
     }
 
     const capture = () => {
@@ -2207,7 +2213,6 @@ export class EconomyManager {
     }
     if (!tournament && !standoff && result === 'win') {
       s.record.challengerWins++;
-      if (s.record.challengerWins === ECONOMY.TOURNAMENT_UNLOCK_WINS) report.lines.push('★ The Inter-Planetary Tournament is now OPEN to you!');
       if (s.record.challengerWins === ECONOMY.MECHANIC_SHOWS_AT_WINS) report.lines.push('A mechanic has heard about your wins and is looking for work — see the Admin tab.');
       if (s.record.challengerWins === ECONOMY.MANAGER_SHOWS_AT_WINS) report.lines.push('A manager wants to represent you — see the Admin tab.');
     }

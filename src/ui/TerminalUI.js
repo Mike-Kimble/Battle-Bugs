@@ -859,9 +859,9 @@ export class TerminalUI {
 
 
     if (!eco.tournamentUnlocked) {
-      const n = s.record.challengerWins;
-      wrap.append(el('div', { class: 'notice' }, `Locked. Win ${ECONOMY.TOURNAMENT_UNLOCK_WINS} challenger bouts to qualify (${n}/${ECONOMY.TOURNAMENT_UNLOCK_WINS}).`),
-        hpBar(n / ECONOMY.TOURNAMENT_UNLOCK_WINS, { label: `${n}/${ECONOMY.TOURNAMENT_UNLOCK_WINS}` }));
+      const n = Math.max(0, Math.min(s.record.streak || 0, ECONOMY.TOURNAMENT_STREAK));
+      wrap.append(el('div', { class: 'notice' }, `Closed. Open while you're on a ${ECONOMY.TOURNAMENT_STREAK}-win streak (${n}/${ECONOMY.TOURNAMENT_STREAK}).`),
+        hpBar(n / ECONOMY.TOURNAMENT_STREAK, { label: `${n}/${ECONOMY.TOURNAMENT_STREAK}` }));
       return wrap;
     }
 
