@@ -117,6 +117,10 @@ export class CanvasRenderer {
     ctx.fillStyle = warn ? '#ff7a7a' : '#8f86a8';
     const phaseText = engine.dohyo.status(engine.time);
     ctx.fillText(phaseText, W / 2, 48);
+    if (ui.note) {
+      ctx.fillStyle = '#ff9a3c';
+      ctx.fillText(ui.note, W / 2, 64);
+    }
 
     const panelW = Math.min(260, (W - 150) / 2);
     this.drawBugPanel(ctx, engine.player, 10, 8, panelW, 'left');

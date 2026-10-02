@@ -285,7 +285,7 @@ class App {
     });
     engine.on(EVENTS.WEAPON_FIRE, (e) => this.weaponVfx(e));
     engine.on(EVENTS.MATCH_END, (res) => {
-      const text = res.result === 'win' ? 'VICTORY!' : res.result === 'loss' ? 'DEFEAT' : 'DRAW';
+      const text = res.result === 'win' ? 'VICTORY!' : res.result === 'loss' ? (res.winner ? `${res.winner.toUpperCase()} WINS` : 'DEFEAT') : 'DRAW';
       const color = res.result === 'win' ? '#5bd66b' : res.result === 'loss' ? '#ff4a4a' : '#ffd24a';
       this.match.banner = { text, color };
       this.match.endTimer = MATCH.RESULT_DELAY;
@@ -349,6 +349,8 @@ class App {
       menu: this.menu,
       target: engine.player.control.target,
       banner: this.match.banner,
+      // Knocked out of a free-for-all: it plays on to the end so you can see who wins.
+      note: engine.melee && engine.player.out && engine.phase !== 'over' ? "YOU'RE OUT — WATCHING WHO WINS" : null,
     });
   }
 
@@ -374,6 +376,7 @@ class App {
       stake,
       bet,
       standoff,
+      winner: res.winner,
     });
     report.moneyBefore = this.match.moneyBefore;
     this.state.commit();

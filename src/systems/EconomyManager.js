@@ -2013,7 +2013,7 @@ export class EconomyManager {
    *   playerBug:BattleBug, tournament:boolean, stake:{type:'cash'|'titles', amount?:number}|null, bet:object|null}} m
    */
   /** standoff: the Scarab Standoff (three on the donut; the prize if you're the last one standing). */
-  settleMatch({ result, reason, challenger, opponentBug, playerBug, tournament, stake, bet, standoff = false }) {
+  settleMatch({ result, reason, challenger, opponentBug, playerBug, tournament, stake, bet, standoff = false, winner = null }) {
     const s = this.state;
     const startMoney = s.money;
     const report = { result, reason, lines: [], bounty: 0, captured: null, lostVehicle: null, champion: false, arrest: false };
@@ -2055,7 +2055,9 @@ export class EconomyManager {
         report.bounty = ECONOMY.STANDOFF_PRIZE;
         report.lines.push(`Last bug standing in the Scarab Standoff: +${formatMoney(ECONOMY.STANDOFF_PRIZE)}`);
       } else if (result === 'loss') {
-        report.lines.push('Knocked out of the Scarab Standoff — the entry fee is gone.');
+        report.lines.push(winner
+          ? `Knocked out of the Scarab Standoff — ${winner} was the last bug standing. The entry fee is gone.`
+          : 'Knocked out of the Scarab Standoff, and nobody was left standing. The entry fee is gone.');
       } else {
         report.lines.push('Nobody left standing — no prize this time.');
       }

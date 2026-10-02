@@ -42,6 +42,7 @@ export class CombatEngine extends EventEmitter {
     this.result = null;
     this.critRolled = new Set(); // vital parts already rolled for a breakdown this match
     this.critical = null;        // { bug, part }: a frame that broke down (catastrophic damage)
+    this.winner = null;          // free-for-all: the last bug on the ring
 
     if (this.bugs.length > 2) {
       // Free-for-all: spread round the ring, everyone facing the middle.
@@ -92,7 +93,8 @@ export class CombatEngine extends EventEmitter {
   /** Has the bout been settled? (Two on the ring: anyone out. Free-for-all: you're out, or everyone else is.) */
   get decided() {
     if (!this.melee) return this.eliminations.length > 0;
-    return this.player.out || this.bugs.every((b) => b === this.player || b.out);
+    // A free-for-all plays out to the bitter end — even with you out — until one is left.
+    return this.bugs.filter((b) => !b.out).length <= 1;
   }
 
   /** Pull a point back inside the current ring, leaving `margin` px to the edge. */
@@ -165,7 +167,8 @@ export class CombatEngine extends EventEmitter {
     }
 
     if (this.phase === 'fight' && this.time >= MATCH.DURATION) {
-      this.finish('tie', 'time');
+      // Out of a free-for-all when the clock runs down: you still lost.
+      this.finish(this.melee && this.player.out ? 'loss' : 'tie', 'time');
       return;
     }
 
@@ -176,9 +179,11 @@ export class CombatEngine extends EventEmitter {
       if (!allOut && !windowClosed) return;
       const mine = this.eliminations.find((e) => e.bug === this.player);
       const last = this.eliminations[this.eliminations.length - 1];
-      if (allOut && this.player.out && mine && last.time - mine.time <= MATCH.TIE_WINDOW_MS / 1000) this.finish('tie', mine.reason);
-      else if (this.player.out) this.finish('loss', mine.reason);
-      else this.finish('win', last.reason);
+      const survivor = this.bugs.find((b) => !b.out) || null;
+      this.winner = survivor;
+      if (survivor === this.player) this.finish('win', last.reason);
+      else if (!survivor && mine && last.time - mine.time <= MATCH.TIE_WINDOW_MS / 1000) this.finish('tie', mine.reason); // you went down with the last of them
+      else this.finish('loss', mine?.reason || last.reason);
       return;
     }
 
@@ -233,7 +238,7 @@ export class CombatEngine extends EventEmitter {
     if (reasonKey === 'destroyed' && crit) {
       reason = `Catastrophic damage — ${crit.bug.name}'s ${crit.part.name} broke down at ${Math.round(crit.part.hpRatio * 100)}%`;
     }
-    this.result = { result, reason, reasonKey, time: this.time };
+    this.result = { result, reason, reasonKey, time: this.time, winner: this.winner?.name || null, playerOut: this.player.out };
     this.emit(EVENTS.MATCH_END, this.result);
   }
 
