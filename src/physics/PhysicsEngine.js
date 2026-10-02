@@ -1,4 +1,4 @@
-import { PHYSICS, STAMINA, HEAT, EVENTS } from '../config/constants.js';
+import { PHYSICS, STAMINA, HEAT, ACTIONS, EVENTS } from '../config/constants.js';
 import { REF } from '../config/scores.js';
 import { Vector2D, clamp, approach, wrapAngle } from './Vector2D.js';
 import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES, pushesThrust, hasShaft, hasDriveTrain, turbineLine, driveKind, linkActive, gearWearMatches } from '../config/partsData.js';
@@ -524,7 +524,7 @@ export class PhysicsEngine {
         if (arrived && moving < 8) ctl.target = null;
         vecDir = arrived ? new Vector2D() : to.scale(1 / dist);
         // Ease off so it stops on the spot rather than sliding past (v² = 2·a·d).
-        throttle = arrived ? 0.2 : clamp(Math.sqrt(2 * s.accel * dist) / Math.max(1, s.vMax), 0.15, 1);
+        throttle = arrived ? 0.2 : clamp(Math.sqrt(2 * s.accel * (bug.vectorBurst > 0 ? ACTIONS.VECTOR_ACCEL : 1) * dist) / Math.max(1, s.vMax), 0.15, 1);
       } else if (dist < PHYSICS.ARRIVE_RADIUS) {
         ctl.target = null;
       } else if (ctl.backing) {
@@ -596,7 +596,7 @@ export class PhysicsEngine {
       const want = vecDir.scale(vCap * throttle);
       const diff = want.sub(rel);
       const n = diff.length();
-      const step = s.accel * dt;
+      const step = s.accel * (bug.vectorBurst > 0 ? ACTIONS.VECTOR_ACCEL : 1) * dt; // a swiped burst: 75% more
       const next = n <= step ? want : rel.add(diff.scale(step / n));
       fwd = next.dot(heading);
       lat = next.dot(side);

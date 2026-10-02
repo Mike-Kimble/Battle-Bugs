@@ -365,9 +365,9 @@ export class CombatEngine extends EventEmitter {
   }
 
   /** A move or weapon: its stamina cost, and the heat it puts into the motor. */
-  spend(bug, cost, heatShare = HEAT.ACTION_FRACTION) {
+  spend(bug, cost, heat) {
     bug.stamina -= cost;
-    bug.heat = Math.min(HEAT.MAX, (bug.heat || 0) + cost * heatShare);
+    bug.heat = Math.min(HEAT.MAX, (bug.heat || 0) + heat);
   }
 
   canAct(bug, cost) {
@@ -404,6 +404,7 @@ export class CombatEngine extends EventEmitter {
   ram(bug, power = false) {
     const target = this.other(bug);
     const cost = power ? ACTIONS.SHOVE_COST : ACTIONS.RAM_COST;
+    const heat = power ? ACTIONS.SHOVE_HEAT : ACTIONS.RAM_HEAT;
     if (bug.actionCooldown > 0 || target.out) return false;
     if (!this.canAct(bug, cost)) return false;
 
@@ -427,7 +428,7 @@ export class CombatEngine extends EventEmitter {
     bug.control.cruise = null;
     bug.control.reverse = reverse;
     bug.control.backing = false;
-    this.spend(bug, cost);
+    this.spend(bug, cost, heat);
     bug.actionCooldown = ACTIONS.ACTION_COOLDOWN;
     this.emit(EVENTS.ACTION, { bug, type: power ? 'shove' : 'ram', dir });
     return true;
@@ -449,7 +450,7 @@ export class CombatEngine extends EventEmitter {
     bug.control.target = null;
     bug.control.cruise = null;
     bug.control.backing = false;
-    this.spend(bug, ACTIONS.SPIN_COST);
+    this.spend(bug, ACTIONS.SPIN_COST, ACTIONS.SPIN_HEAT);
     bug.actionCooldown = ACTIONS.SPIN_DURATION;
     bug.cooldowns.spin = ACTIONS.SPIN_COOLDOWN;
     this.emit(EVENTS.ACTION, { bug, type: 'spin', dir: heading });
@@ -515,15 +516,18 @@ export class CombatEngine extends EventEmitter {
   dash(bug, dir) {
     if (bug.twinDrive && !bug.stats.vector) return this.spinAttack(bug, dir);
     if (bug.actionCooldown > 0) return false;
-    if (!this.canAct(bug, ACTIONS.DASH_COST)) return false;
+    // Thrust vectoring: a swipe is a quick burst, about a vehicle's length, the way you swiped —
+    // 75% more acceleration, for a fifth of your stamina.
+    const vectorCost = bug.stats.vector ? Math.round(bug.stats.staminaMax * ACTIONS.VECTOR_COST_SHARE) : 0;
+    if (!this.canAct(bug, bug.stats.vector ? vectorCost : ACTIONS.DASH_COST)) return false;
     const d = dir.normalize();
-    // Thrust vectoring: a swipe is just a quick nudge, about a vehicle's length, the way you swiped.
     if (bug.stats.vector) {
       bug.control.target = bug.pos.add(d.scale(bug.radius * ACTIONS.VECTOR_NUDGE));
       bug.control.backing = false;
       bug.control.reverse = false;
       bug.control.cruise = null;
-      this.spend(bug, ACTIONS.DASH_COST);
+      this.spend(bug, vectorCost, ACTIONS.DASH_HEAT);
+      bug.vectorBurst = ACTIONS.VECTOR_BURST;
       bug.actionCooldown = ACTIONS.ACTION_COOLDOWN;
       this.emit(EVENTS.ACTION, { bug, type: 'swerve', dir: d });
       return true;
@@ -546,7 +550,7 @@ export class CombatEngine extends EventEmitter {
     bug.control.reverse = reverse;
     bug.control.backing = false;
     bug.control.cruise = { angle: wrapAngle(angle) };
-    this.spend(bug, ACTIONS.DASH_COST);
+    this.spend(bug, ACTIONS.DASH_COST, ACTIONS.DASH_HEAT);
     bug.actionCooldown = ACTIONS.ACTION_COOLDOWN;
     this.emit(EVENTS.ACTION, { bug, type: 'swerve', dir: travel });
     return true;
@@ -572,7 +576,7 @@ export class CombatEngine extends EventEmitter {
     const st = w.stats;
     if (!this.canAct(bug, st.cost)) return false;
 
-    this.spend(bug, st.cost, HEAT.WEAPON_FRACTION);
+    this.spend(bug, st.cost, st.cost * HEAT.WEAPON_FRACTION);
     bug.cooldowns[w.uid] = st.cooldown;
     const eff = 0.5 + 0.5 * w.hpRatio;
     const chk = this.weaponCheck(bug, w);

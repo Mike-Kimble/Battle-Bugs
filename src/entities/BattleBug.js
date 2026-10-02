@@ -380,6 +380,7 @@ export class BattleBug {
     this.regenWait = 0; // run dry: time until the chassis regen kicks in
     this.regenOn = false; // regen refilling you after you ran dry
     this.heat = 0; // 0–100: overheat at 100 (a thermal stall)
+    this.vectorBurst = 0; // thrust vectoring: a swiped burst of extra acceleration
     this.stallKind = null; // while stalled: 'heat' (overheated) or 'power' (out of stamina)
     this.throttle = 0;
     this.odometer = 0;
@@ -403,6 +404,7 @@ export class BattleBug {
     e.spikeTick = Math.max(0, e.spikeTick - dt);
     e.flash = Math.max(0, e.flash - dt);
     this.actionCooldown = Math.max(0, this.actionCooldown - dt);
+    this.vectorBurst = Math.max(0, (this.vectorBurst || 0) - dt);
     for (const k in this.cooldowns) this.cooldowns[k] = Math.max(0, this.cooldowns[k] - dt);
     if (this.lunge) {
       this.lunge.time -= dt;

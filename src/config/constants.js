@@ -92,25 +92,31 @@ export const HEAT = Object.freeze({
   // Flat out, with a Cooling score of 0 you overheat in 7s; at a score of 100 you never do.
   OVERHEAT_SECONDS: 7,
   IDLE_COOL_BASE: 0.3,       // resting cools you even with no cooling: (base + cooling score) × the full-throttle heat rate
-  ACTION_FRACTION: 0.6,      // a ram, shove, swerve or spin: heat = 60% of its stamina cost
   WEAPON_FRACTION: 0.3,      // a weapon shot: 30% of its stamina cost
   RECOVER_AT: 0.4,           // an overheated motor restarts once it's cooled to 40%
 });
 
 export const ACTIONS = Object.freeze({
-  RAM_COST: 10,
+  RAM_COST: 15,
+  RAM_HEAT: 10,
   RAM_SPEED_MULT: 1.35,
   RAM_IMPACT_MULT: 1.3,
   RAM_DURATION: 0.45,
   SHOVE_COST: 35,
+  SHOVE_HEAT: 21,
   SHOVE_SPEED_MULT: 1.9,
   SHOVE_IMPACT_MULT: 1.8,
   SHOVE_DURATION: 0.55,
   DASH_COST: 8,               // swipe handbrake turn
+  DASH_HEAT: 5,
   CHAIN_WEAR: 0.012,          // share of a chain's max HP lost per second of driving heavy tyres or tracks
   MELEE_SWITCH: 0.7,          // free-for-all: an AI switches target when someone is this much closer
   VECTOR_NUDGE: 2,            // thrust vectoring: a swipe nudges you this many body radii (a vehicle's length)
-  SPIN_COST: 28,              // twin drives: a swipe spins 360° on the spot instead
+  VECTOR_COST_SHARE: 0.2,     // …costs 20% of your stamina (heat as a swerve)
+  VECTOR_ACCEL: 1.75,         // …with 75% more acceleration
+  VECTOR_BURST: 0.6,          // …for this long
+  SPIN_COST: 35,              // twin drives: a swipe spins 360° on the spot instead
+  SPIN_HEAT: 17,
   SPIN_COOLDOWN: 3,           // seconds before you can spin again
   SPIN_DURATION: 0.5,
   SPIN_REACH: 10,             // px beyond touching that the spin still catches the opponent
