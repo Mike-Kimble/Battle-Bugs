@@ -223,6 +223,9 @@ export const ECONOMY = Object.freeze({
   MECHANIC_DISCOUNT: 0.9,    // mechanic gets 10% off parts & repairs
   STANDOFF_STREAK: 3,        // win this many in a row to open the Scarab Standoff (while the streak lasts)
   STANDOFF_FEE: 250,
+  WEAVE_FEE: 500,            // Weevil Weave: a three-round race, unlocked by winning the Scarab Standoff
+  WEAVE_PRIZE: 3000,
+  WEAVE_ROUNDS: 3,
   STANDOFF_PRIZE: 1000,
   STANDOFF_DOHYO: 2,          // fought on the donut
   MATCH_FIND_FIRST: 0.4,     // manager's chance of finding a part to match your other drive at the first try…

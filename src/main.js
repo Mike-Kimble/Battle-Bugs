@@ -3,6 +3,7 @@ import { GameState } from './core/GameState.js';
 import { Vector2D } from './physics/Vector2D.js';
 import { CombatEngine } from './systems/CombatEngine.js';
 import { Dohyo } from './systems/Dohyo.js';
+import { Track } from './systems/Track.js';
 import { EconomyManager, formatMoney } from './systems/EconomyManager.js';
 import { InputManager } from './systems/InputManager.js';
 import { CanvasRenderer } from './render/CanvasRenderer.js';
@@ -48,6 +49,7 @@ class App {
       onTrain: (mode, dohyo) => this.startTraining(mode, dohyo),
       onBack: (back) => this.workshop.reopen(back),
       onStandoff: () => this.startStandoff(),
+      onWeave: () => this.startWeave(),
       onNewGame: () => this.newGame(),
     });
     this.state.on(EVENTS.STATE_CHANGE, () => {
@@ -161,6 +163,21 @@ class App {
     });
   }
 
+  /** A Weevil Weave round: a race on the S-shaped track. */
+  startWeave() {
+    const player = this.state.activeBug;
+    const opp = this.economy.weaveOpponent;
+    if (!opp) { toast('Enter the Weevil Weave first', 'bad'); return; }
+    if (!player?.isBattleReady) { toast(player ? player.battleIssues()[0] : 'No vehicle', 'bad'); return; }
+    this.state.newVehicleIds.clear();
+    this.state.compareRef = null;
+    this.state.save();
+    this.beginBattle(player, opp, {
+      weave: true,
+      engine: new CombatEngine({ player, opponent: opp.bug, difficulty: opp.difficulty, style: opp.style, dohyo: new Track() }),
+    });
+  }
+
   startMatch(challenger, { tournament = false, betPct } = {}) {
     const player = tournament ? this.state.getVehicle(this.state.tournament.vehicleId) : this.state.activeBug;
     if (!player?.isBattleReady) {
@@ -196,11 +213,11 @@ class App {
   }
 
   /** Put a fight on screen and run it (a real bout or a training session). */
-  beginBattle(player, challenger, { engine, tournament = false, stake = null, bet = null, moneyBefore = this.state.money, training = null, standoff = false }) {
+  beginBattle(player, challenger, { engine, tournament = false, stake = null, bet = null, moneyBefore = this.state.money, training = null, standoff = false, weave = false }) {
     closeModal();
     this.workshop.stop();
     this.sprite.clear();
-    this.match = { challenger, tournament, stake, bet, player, moneyBefore, training, standoff, endTimer: null, banner: null };
+    this.match = { challenger, tournament, stake, bet, player, moneyBefore, training, standoff, weave, endTimer: null, banner: null };
     this.engine = engine;
     this.wireEngine(this.engine);
 
@@ -357,7 +374,7 @@ class App {
   finishMatch() {
     cancelAnimationFrame(this.raf);
     const engine = this.engine;
-    const { challenger, tournament, stake, bet, player, training, standoff } = this.match;
+    const { challenger, tournament, stake, bet, player, training, standoff, weave } = this.match;
     const res = engine.result;
     this.engine = null;
     this.input.disable();
@@ -376,6 +393,7 @@ class App {
       stake,
       bet,
       standoff,
+      weave,
       winner: res.winner,
     });
     report.moneyBefore = this.match.moneyBefore;

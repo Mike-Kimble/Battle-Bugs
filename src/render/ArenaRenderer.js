@@ -97,7 +97,67 @@ export class ArenaRenderer {
    * downhill side marked), or the turntable (its floor turning).
    * @param {import('../systems/Dohyo.js').Dohyo} dohyo
    */
+  /** The Weevil Weave: an S of track over the void, with the finish line across the middle. */
+  drawTrack(ctx, track) {
+    const pts = track.points;
+    const path = () => { ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (const p of pts) ctx.lineTo(p.x, p.y); };
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'round';
+    // Shadow, side wall, then the floor.
+    ctx.save();
+    ctx.translate(8, 14);
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = track.width + 10;
+    path(); ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = '#16111f';
+    ctx.lineWidth = track.width + 4;
+    ctx.save(); ctx.translate(0, 8); path(); ctx.stroke(); ctx.restore();
+    ctx.lineWidth = track.width;
+    path();
+    ctx.strokeStyle = '#3a2f4a';
+    ctx.stroke();
+    // A dashed centre line down the S.
+    ctx.setLineDash([18, 22]);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(244,233,201,0.25)';
+    path(); ctx.stroke();
+    ctx.setLineDash([]);
+    // Edge lines.
+    ctx.strokeStyle = '#cdbb8a';
+    ctx.lineWidth = 3;
+    for (const side of [1, -1]) {
+      ctx.beginPath();
+      pts.forEach((p, i) => {
+        const a = pts[Math.max(0, i - 1)];
+        const b = pts[Math.min(pts.length - 1, i + 1)];
+        const n = b.sub(a).normalize().perp().scale(side * track.halfWidth);
+        if (i === 0) ctx.moveTo(p.x + n.x, p.y + n.y); else ctx.lineTo(p.x + n.x, p.y + n.y);
+      });
+      ctx.stroke();
+    }
+    // Start pads and the chequered finish line across the middle lane.
+    const mark = (s, color) => {
+      const p = track.pointAt(s);
+      const n = track.tangentAt(s).perp().scale(track.halfWidth);
+      ctx.strokeStyle = color; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(p.x - n.x, p.y - n.y); ctx.lineTo(p.x + n.x, p.y + n.y); ctx.stroke();
+    };
+    mark(8, '#5bd66b');
+    mark(track.length - 8, '#ff4a4a');
+    const f = track.pointAt(track.finishAt);
+    const sq = 10;
+    for (let i = -track.halfWidth; i < track.halfWidth; i += sq) {
+      for (let j = 0; j < 2; j++) {
+        ctx.fillStyle = (Math.floor(i / sq) + j) % 2 ? '#f4e9c9' : '#141018';
+        ctx.fillRect(f.x - sq + j * sq, f.y + i, sq, sq);
+      }
+    }
+  }
+
   drawRing(ctx, dohyo, time) {
+    if (dohyo.isTrack) { this.drawTrack(ctx, dohyo); return; }
     const R = dohyo.radius(time);
     if (R <= 0.5) return;
     const R0 = ARENA.R0;

@@ -1729,6 +1729,54 @@ export class EconomyManager {
     return this.standoffField(bug);
   }
 
+  // ───────────── Weevil Weave ─────────────
+  /** Unlocked for good by winning the Scarab Standoff. */
+  get weaveOpen() {
+    return !!this.state.weave.open;
+  }
+
+  /**
+   * Three racers for the three rounds: pilots whose rides rate closest to yours
+   * (no elites), getting better round by round. They race copies of their bugs.
+   */
+  weaveField(bug) {
+    const target = this.rating(bug);
+    const pool = this.state.pool.filter((p) => !p.elite && p.bug?.isBattleReady)
+      .sort((a, b) => Math.abs(this.rating(a.bug) - target) - Math.abs(this.rating(b.bug) - target))
+      .slice(0, 6);
+    const picks = [];
+    while (picks.length < ECONOMY.WEAVE_ROUNDS && pool.length) picks.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    while (picks.length < ECONOMY.WEAVE_ROUNDS) { const p = this.sparringPartner(bug); picks.push({ ...p, skill: p.difficulty }); }
+    picks.sort((a, b) => (a.skill ?? a.difficulty) - (b.skill ?? b.difficulty));
+    return picks.map((p) => ({
+      name: p.name, planet: p.planet, style: p.style, difficulty: p.skill ?? p.difficulty,
+      bug: BattleBug.fromJSON({ ...p.bug.toJSON(), pilot: { name: p.name, planet: p.planet } }).toJSON(),
+    }));
+  }
+
+  enterWeave() {
+    const s = this.state;
+    const bug = s.activeBug;
+    if (!this.weaveOpen) throw new Error('Win the Scarab Standoff to get into the Weevil Weave');
+    if (s.weave.entered) throw new Error("You're already in the Weevil Weave");
+    if (!bug?.isBattleReady) throw new Error(bug ? bug.battleIssues()[0] : 'No vehicle');
+    if (!s.canAfford(ECONOMY.WEAVE_FEE)) throw new Error(`The entry fee is ${formatMoney(ECONOMY.WEAVE_FEE)}`);
+    s.spend(ECONOMY.WEAVE_FEE);
+    Object.assign(s.weave, { entered: true, round: 0, field: this.weaveField(bug) });
+    s.addLog(`Entered the Weevil Weave with ${bug.name}`);
+  }
+
+  /** This round's racer (with a live bug), or null. */
+  get weaveOpponent() {
+    const w = this.state.weave;
+    const o = w.entered ? w.field[w.round] : null;
+    return o ? { ...o, bug: BattleBug.fromJSON(o.bug), id: `weave_${w.round}` } : null;
+  }
+
+  withdrawWeave() {
+    Object.assign(this.state.weave, { entered: false, round: 0, field: [] });
+  }
+
   /** The tournament is over for you (won, knocked out or withdrawn): staff get the wages they ran up. */
   withdrawTournament(report = null) {
     Object.assign(this.state.tournament, { entered: false, vehicleId: null, round: 0, opponent: null, field: null });
@@ -2075,7 +2123,7 @@ export class EconomyManager {
    *   playerBug:BattleBug, tournament:boolean, stake:{type:'cash'|'titles', amount?:number}|null, bet:object|null}} m
    */
   /** standoff: the Scarab Standoff (three on the donut; the prize if you're the last one standing). */
-  settleMatch({ result, reason, challenger, opponentBug, playerBug, tournament, stake, bet, standoff = false, winner = null }) {
+  settleMatch({ result, reason, challenger, opponentBug, playerBug, tournament, stake, bet, standoff = false, winner = null, weave = false }) {
     const s = this.state;
     const startMoney = s.money;
     const report = { result, reason, lines: [], bounty: 0, captured: null, lostVehicle: null, champion: false, arrest: false };
@@ -2116,11 +2164,33 @@ export class EconomyManager {
       report.lines.push(`Captured vehicle: ${opponentBug.name} (${Math.round(opponentBug.condition * 100)}% condition) — it's on your hoist.`);
     };
 
-    if (standoff) {
+    if (weave) {
+      const w = s.weave;
+      if (result === 'win') {
+        w.round += 1;
+        if (w.round >= ECONOMY.WEAVE_ROUNDS) {
+          s.earn(ECONOMY.WEAVE_PRIZE);
+          report.bounty = ECONOMY.WEAVE_PRIZE;
+          report.lines.push(`Weevil Weave champion! +${formatMoney(ECONOMY.WEAVE_PRIZE)}`);
+          this.withdrawWeave();
+        } else {
+          report.lines.push(`Won round ${w.round} of the Weevil Weave — next up: ${w.field[w.round].name} (Tournaments tab).`);
+        }
+      } else if (result === 'loss') {
+        report.lines.push(`Out of the Weevil Weave in round ${w.round + 1}.`);
+        this.withdrawWeave();
+      } else {
+        report.lines.push('Nobody crossed the line — the round will be raced again.');
+      }
+    } else if (standoff) {
       if (result === 'win') {
         s.earn(ECONOMY.STANDOFF_PRIZE);
         report.bounty = ECONOMY.STANDOFF_PRIZE;
         report.lines.push(`Last bug standing in the Scarab Standoff: +${formatMoney(ECONOMY.STANDOFF_PRIZE)}`);
+        if (!s.weave.open) {
+          s.weave.open = true;
+          report.lines.push('★ The Weevil Weave is now open to you — a three-round race on the Tournaments tab.');
+        }
       } else if (result === 'loss') {
         report.lines.push(winner
           ? `Knocked out of the Scarab Standoff — ${winner} was the last bug standing. The entry fee is gone.`
@@ -2211,7 +2281,7 @@ export class EconomyManager {
     if (!tournament && challenger.record && result !== 'tie') {
       if (result === 'win') challenger.record.l++; else challenger.record.w++;
     }
-    if (!tournament && !standoff && result === 'win') {
+    if (!tournament && !standoff && !weave && result === 'win') {
       s.record.challengerWins++;
       if (s.record.challengerWins === ECONOMY.MECHANIC_SHOWS_AT_WINS) report.lines.push('A mechanic has heard about your wins and is looking for work — see the Admin tab.');
       if (s.record.challengerWins === ECONOMY.MANAGER_SHOWS_AT_WINS) report.lines.push('A manager wants to represent you — see the Admin tab.');

@@ -54,6 +54,7 @@ export class GameState extends EventEmitter {
     this.candidate = {}; // role → who's applying for the job right now
     this.pendingWages = {}; // role → wages built up during the tournament, paid when it's over
     this.managerWages = false; // your manager sets the wages after each bout
+    this.weave = { open: false, entered: false, round: 0, field: [] }; // the Weevil Weave race
     this.forgetIn = 0; // bouts until a scatter-brained manager next forgets the mechanic's wage
     this.managerHunt = {}; // part key → the manager's chance of finding one to match your other drive next time
     this.blacklist = 0; // bouts left that nobody will work for you (you stiffed your staff)
@@ -160,6 +161,7 @@ export class GameState extends EventEmitter {
     }
     s.candidate = d.candidate || {};
     s.managerWages = !!d.managerWages;
+    s.weave = { open: false, entered: false, round: 0, field: [], ...d.weave };
     s.pendingWages = d.pendingWages || {};
     s.forgetIn = d.forgetIn || 0;
     s.managerHunt = d.managerHunt || {};
@@ -215,6 +217,7 @@ export class GameState extends EventEmitter {
       staffId: this.staffId,
       candidate: this.candidate,
       managerWages: this.managerWages,
+      weave: this.weave,
       pendingWages: this.pendingWages,
       forgetIn: this.forgetIn,
       managerHunt: this.managerHunt,

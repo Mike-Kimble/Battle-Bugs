@@ -11,6 +11,9 @@ const REASONS = {
   stallout: 'Stalled out',
   time: 'Time — the arena collapsed',
   forfeit: 'Forfeit',
+  finish: 'Across the line first',
+  offtrack: 'Fell off the track',
+  beaten: 'Beaten to the line',
 };
 
 /**
@@ -44,7 +47,14 @@ export class CombatEngine extends EventEmitter {
     this.critical = null;        // { bug, part }: a frame that broke down (catastrophic damage)
     this.winner = null;          // free-for-all: the last bug on the ring
 
-    if (this.bugs.length > 2) {
+    this.race = !!this.dohyo.isTrack;
+    if (this.race) {
+      // A race: you from one end of the S, them from the other.
+      const a = this.dohyo.start(1);
+      const b = this.dohyo.start(-1);
+      player.resetForBattle(a.pos, a.angle);
+      opponent.resetForBattle(b.pos, b.angle);
+    } else if (this.bugs.length > 2) {
       // Free-for-all: spread round the ring, everyone facing the middle.
       this.bugs.forEach((b, i) => {
         const a = Math.PI + (i * Math.PI * 2) / this.bugs.length;
@@ -63,7 +73,9 @@ export class CombatEngine extends EventEmitter {
         p.battleFloor = fragile ? null : Math.max(0, p.hp - p.maxHp * MATCH.DAMAGE_CAP);
       }
     }
-    this.ai = ai ? new AIController(opponent, player, difficulty, style) : null; // a training dummy has no pilot
+    this.ai = !ai ? null // a training dummy has no pilot
+      : this.race ? new RaceAI(opponent, player, difficulty, this.dohyo, -1)
+        : new AIController(opponent, player, difficulty, style);
     this.ais = this.ai ? [this.ai, ...extras.map((e) => new AIController(e.bug, player, e.difficulty ?? difficulty, e.style ?? null))] : [];
     // Free-for-all: everyone picks someone to go for — not necessarily you.
     if (this.melee) for (const ai of this.ais) ai.foe = this.bugs.filter((b) => b !== ai.me)[Math.floor(Math.random() * (this.bugs.length - 1))];
@@ -166,6 +178,16 @@ export class CombatEngine extends EventEmitter {
       if (reason) this.eliminate(bug, reason);
     }
 
+    // A race: first with their whole vehicle over the centre line wins.
+    if (this.race && this.phase === 'fight') {
+      const done = [this.player, this.opponent].filter((b, i) => !b.out && this.dohyo.finished(b, i === 0 ? 1 : -1));
+      if (done.length) {
+        const won = done.includes(this.player);
+        this.finish(won ? 'win' : 'loss', won ? 'finish' : 'beaten');
+        return;
+      }
+    }
+
     if (this.phase === 'fight' && this.time >= MATCH.DURATION) {
       // Out of a free-for-all when the clock runs down: you still lost.
       this.finish(this.melee && this.player.out ? 'loss' : 'tie', 'time');
@@ -250,7 +272,7 @@ export class CombatEngine extends EventEmitter {
         if (p.hp <= floor + 0.01) { p.failed = true; this.emit(EVENTS.PART_BROKEN, { bug, part: p, breakdown: true }); }
       }
     }
-    let reason = REASONS[reasonKey] || reasonKey;
+    let reason = REASONS[this.race && reasonKey === 'ringout' ? 'offtrack' : reasonKey] || reasonKey;
     const crit = this.critical;
     if (reasonKey === 'destroyed' && crit) {
       reason = `Catastrophic damage — ${crit.bug.name}'s ${crit.part.name} broke down at ${Math.round(crit.part.hpRatio * 100)}%`;
@@ -762,6 +784,60 @@ export class AIController {
       case 'spikes': return dist < 110;
       case 'slick': return chk.inRange && foeD > R * 0.45;
       default: return false;
+    }
+  }
+}
+
+/**
+ * A racing pilot on the Weevil Weave: follows the track towards the finish,
+ * easing off into the hairpins, and shoves you out of the way when you're
+ * in the lane ahead. Better pilots carry more speed and shove more often.
+ */
+export class RaceAI {
+  /** @param {number} dir +1 racing from the start of the track, -1 from the end */
+  constructor(me, foe, difficulty, track, dir) {
+    this.me = me;
+    this.foe = foe;
+    this.difficulty = difficulty;
+    this.track = track;
+    this.dir = dir;
+    this.think = 0.3;
+  }
+
+  update(dt, engine) {
+    const { me, foe, track, dir, difficulty } = this;
+    if (me.out || me.stalled) return;
+    this.think -= dt;
+    if (this.think > 0) return;
+    this.think = 0.12 + (1 - difficulty) * 0.2;
+    // Nervous pilots lift off now and then.
+    if (Math.random() < (1 - difficulty) * 0.12) { engine.stop(me); return; }
+    const { s } = track.nearest(me.pos);
+    const here = track.tangentAt(s);
+    const turnAt = (d) => { const t = track.tangentAt(s + dir * d); return Math.abs(Math.atan2(here.cross(t), here.dot(t))); };
+    // How fast this bug can take a hairpin on its grip (castors hardly at all), and how far it needs to slow down.
+    const st = me.stats;
+    const v = me.vel.length();
+    const aLat = st.mass > 0 ? (st.fGrip / st.mass) * PHYSICS.LATERAL_GRIP * (st.lateralMult ?? 1) : 0;
+    const vCurve = Math.sqrt(aLat * 130) * (0.55 + 0.35 * difficulty);
+    const aBrake = (st.accelRev ?? st.accel) + PhysicsEngine.idleBrake(st);
+    const brakeDist = Math.max(0, (v * v - vCurve * vCurve) / (2 * Math.max(1, aBrake))) + 60;
+    let bendAhead = false;
+    for (let d = 40; d <= brakeDist; d += 40) if (turnAt(d) > 0.5) { bendAhead = true; break; }
+    if (bendAhead && v > vCurve) {
+      // Too hot for the bend: thrust against the slide to scrub speed.
+      engine.moveTo(me, me.pos.sub(me.vel.normalize().scale(120)));
+      return;
+    }
+    // Look further ahead on the straights, closer (slower) into a hairpin.
+    const look = turnAt(140) > 0.5 ? 55 + 45 * difficulty : 120 + 60 * difficulty;
+    engine.moveTo(me, track.pointAt(s + dir * look));
+    // The other racer in the lane ahead: shove them off (or out of the way).
+    const toFoe = foe.pos.sub(me.pos);
+    const dist = toFoe.length();
+    const facing = Math.abs(Math.atan2(Vector2D.fromAngle(me.angle).cross(toFoe), Vector2D.fromAngle(me.angle).dot(toFoe))) < 0.5;
+    if (!foe.out && dist < 170 && facing && me.actionCooldown <= 0 && me.stamina > 30 && Math.random() < 0.15 + 0.4 * difficulty) {
+      engine.ram(me, Math.random() < 0.5);
     }
   }
 }

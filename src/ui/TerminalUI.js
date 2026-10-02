@@ -48,7 +48,7 @@ function streakText(n = 0) {
  * tournament desk. Also renders the top status bar.
  */
 export class TerminalUI {
-  constructor(root, header, tabbar, { state, economy, sprite, onFight, onTrain, onNewGame, onBack, onStandoff }) {
+  constructor(root, header, tabbar, { state, economy, sprite, onFight, onTrain, onNewGame, onBack, onStandoff, onWeave }) {
     this.root = root;
     this.header = header;
     this.tabbar = tabbar;
@@ -60,6 +60,7 @@ export class TerminalUI {
     this.onTrain = onTrain;
     this.onBack = onBack; // (back) => reopen the Garage area you came from
     this.onStandoff = onStandoff;
+    this.onWeave = onWeave;
     this.trainingDohyo = 0; // 0 = random
     this.onNewGame = onNewGame;
     this.tab = 'hangar';
@@ -845,6 +846,49 @@ export class TerminalUI {
     return card;
   }
 
+  /** The Weevil Weave: a three-round race on an S-shaped track, open once you've won the Scarab Standoff. */
+  renderWeave() {
+    const s = this.state;
+    const eco = this.economy;
+    const w = s.weave;
+    const fee = ECONOMY.WEAVE_FEE;
+    const card = el('div', { class: 'card standoff weave' },
+      el('h3', {}, '🏁 Weevil Weave'),
+      el('p', {}, `A ${ECONOMY.WEAVE_ROUNDS}-round race on an S-shaped track. You start at the bottom left, your opponent at the top right, and the finish line runs across the middle of the S — first to get their whole vehicle over it wins. Fall off and you lose. Win all ${ECONOMY.WEAVE_ROUNDS} for ${formatMoney(ECONOMY.WEAVE_PRIZE)}.`),
+      el('p', { class: 'small muted' }, `Entry ${formatMoney(fee)}. Repair between rounds as you like.`));
+    if (!eco.weaveOpen) {
+      card.append(el('div', { class: 'notice' }, 'Locked. Win the Scarab Standoff to get an invitation.'));
+      return card;
+    }
+    if (eco.inField) {
+      card.append(el('p', { class: 'muted small' }, "Not while you're in the Inter-Planetary Tournament."));
+      return card;
+    }
+    const bug = s.activeBug;
+    if (!w.entered) {
+      const canPay = s.money >= fee;
+      card.append(
+        el('p', {}, 'Racing with: ', el('strong', {}, bug?.name ?? '—'), bug && !bug.isBattleReady ? el('span', { class: 'bad' }, ' (not battle-ready)') : ''),
+        el('button', {
+          class: 'btn btn-fight', disabled: !bug?.isBattleReady || !canPay,
+          onclick: () => this.confirm('Enter the Weevil Weave?', `Pay the ${formatMoney(fee)} entry fee and race ${ECONOMY.WEAVE_ROUNDS} rounds, one opponent at a time. Lose a round and you're out; win them all for ${formatMoney(ECONOMY.WEAVE_PRIZE)}.`,
+            () => this.act(() => eco.enterWeave(), 'Entered the Weevil Weave!')),
+        }, canPay ? `ENTER · ${formatMoney(fee)}` : `Entry ${formatMoney(fee)} — you have ${formatMoney(s.money)}`));
+      return card;
+    }
+    const opp = eco.weaveOpponent;
+    card.append(
+      el('ol', { class: 'bracket' }, w.field.map((o, i) => el('li', { class: i === w.round ? 'current' : i < w.round ? 'done' : '' }, `Round ${i + 1}`))),
+      opp ? el('p', {}, `Round ${w.round + 1} of ${ECONOMY.WEAVE_ROUNDS}: `, el('strong', {}, opp.name), ` in the ${opp.bug.name}.`) : null,
+      el('div', { class: 'part-actions' },
+        el('button', { class: 'btn btn-fight', disabled: !bug?.isBattleReady, onclick: () => this.onWeave?.() }, `RACE · ROUND ${w.round + 1}`),
+        el('button', {
+          class: 'btn btn-small btn-danger',
+          onclick: () => this.confirm('Withdraw from the Weevil Weave?', 'You give up your place and the entry fee.', () => this.act(() => eco.withdrawWeave(), 'Withdrawn from the Weevil Weave')),
+        }, 'Withdraw')));
+    return card;
+  }
+
   renderTournament() {
     const s = this.state;
     const eco = this.economy;
@@ -852,6 +896,7 @@ export class TerminalUI {
     const standoff = this.renderStandoff();
     const wrap = el('div', { class: 'tournament' },
       standoff,
+      this.renderWeave(),
       el('h3', {}, 'The Inter-Planetary Tournament'),
       el('p', {}, `${ECONOMY.TOURNAMENT_ROUNDS} rounds against the galaxy's finest. Win the final for the ${formatMoney(ECONOMY.TOURNAMENT_PRIZE)} grand prize — and the game. `,
         'No purses and no captured vehicles along the way.'),
