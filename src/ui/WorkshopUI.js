@@ -469,7 +469,9 @@ export class WorkshopUI {
       const full = sc(key, p[key]);
       const refVal = rs ? sc(key, rs[key]) : null;
       // Twin drives: each drive's own figure, Drive 1/Drive 2 (the bar shows the whole vehicle).
-      const split = s.perDrive && PER_DRIVE.includes(key) ? s.perDrive.map((d) => shown(sc(key, d[key]))).join('/') : null;
+      // A Limited-Slip Link joins the drives into one — only cooling is still each drive's own.
+      const perKeys = s.lsl ? ['cooling'] : PER_DRIVE;
+      const split = s.perDrive && perKeys.includes(key) ? s.perDrive.map((d) => shown(sc(key, d[key]))).join('/') : null;
       const tip = `${hint}${split ? ' — Drive 1/Drive 2' : ''}`;
       return el('tr', { title: refVal != null ? `${tip} — ${ref.name} (repaired): ${shown(refVal)}` : tip || '' },
         el('th', {}, label),

@@ -337,6 +337,7 @@ export class PhysicsEngine {
       radius: chassis.stats.radius * PHYSICS.BUG_SCALE,
       staminaMax: Math.round(chassis.stats.staminaMax * m.staminaMax),
       perDrive,
+      lsl: !!dt.lsl && drives.length > 1, // a Limited-Slip Link: the two drives work as one (cooling aside)
       cooling: engine ? Math.round((drives.reduce((t, d) => t + d.stats.cooling, 0) * twinK * m.cooling + addCool) * 10) / 10 : 0,
       twinBias,
       drainMult: m.drain,
