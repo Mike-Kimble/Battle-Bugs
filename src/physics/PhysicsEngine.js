@@ -1,4 +1,5 @@
-import { PHYSICS, STAMINA, EVENTS } from '../config/constants.js';
+import { PHYSICS, STAMINA, HEAT, EVENTS } from '../config/constants.js';
+import { REF } from '../config/scores.js';
 import { Vector2D, clamp, approach, wrapAngle } from './Vector2D.js';
 import { INTERACTIONS, worksWith, JACKET_NAMES, THRUST_DRIVES, pushesThrust, hasShaft, hasDriveTrain, turbineLine, driveKind, linkActive, gearWearMatches } from '../config/partsData.js';
 
@@ -395,7 +396,9 @@ export class PhysicsEngine {
       radius: chassis.stats.radius * PHYSICS.BUG_SCALE,
       staminaMax: Math.round(chassis.stats.staminaMax * m.staminaMax),
       regen: chassis.stats.regen || 0, // the shell's stamina regen rating (0–100)
-      staminaRegen: (chassis.stats.regen || 0) * STAMINA.REGEN_PER_POINT, // stamina/s, whatever you're doing
+      // Once you've run dry: how long before the regen starts, and how fast it refills you.
+      regenDelay: STAMINA.REGEN_DELAY_WORST + (STAMINA.REGEN_DELAY_BEST - STAMINA.REGEN_DELAY_WORST) * (chassis.stats.regen || 0) / 100,
+      regenRate: STAMINA.REGEN_RATE_WORST + (STAMINA.REGEN_RATE_BEST - STAMINA.REGEN_RATE_WORST) * (chassis.stats.regen || 0) / 100,
       perDrive,
       lsl: !!dt.lsl && drives.length > 1, // a Limited-Slip Link: the two drives work as one (cooling aside)
       cooling: engine ? Math.round((drives.reduce((t, d) => t + d.stats.cooling, 0) * twinK * m.cooling + addCool) * 10) / 10 : 0,
@@ -635,31 +638,58 @@ export class PhysicsEngine {
     bug.throttle = throttle;
     bug.odometer += Math.abs(fwd) * dt;
 
-    // Stamina: continuous drain ∝ F_drive · v while driving (partly offset by
-    // cooling), full R_cool recovery while idle — and the chassis regen all the time.
-    if (throttle > 0) {
-      const applied = s.fUsable * throttle;
-      bug.stamina -= STAMINA.DRIVE_DRAIN_K * applied * (Math.abs(fwd) + STAMINA.PUSH_SPEED_FLOOR) * s.drainMult * dt;
-      bug.stamina += s.cooling * STAMINA.DRIVING_COOL_FRACTION * dt;
+    // Two bottlenecks. Heat: driving under load heats the motor (∝ F_drive · v)
+    // and cooling takes it away — overheat and you stall until it cools.
+    // Stamina: driving (and every move) uses it up, and it doesn't come back
+    // until it's run out completely — then the chassis regen kicks in.
+    this.updateStall(bug, s); // hit empty or overheated (an EMP, a last shove…)? You stall straight away
+    // Both run off the scores on the hoist (0–100): Cooling against heat, Stamina against the drain.
+    const coolScore = Math.min(1, s.cooling / REF.cooling);
+    const staminaScore = Math.min(1, s.staminaMax / REF.stamina);
+    const heatRate = HEAT.MAX / HEAT.OVERHEAT_SECONDS; // flat out with no cooling at all
+    const driving = throttle > 0 && !bug.stalled;
+    if (driving) {
+      bug.heat += heatRate * (throttle * s.drainMult - coolScore) * dt;
+      const emptyIn = STAMINA.EMPTY_SECONDS_WORST + (STAMINA.EMPTY_SECONDS_BEST - STAMINA.EMPTY_SECONDS_WORST) * staminaScore;
+      bug.stamina -= (s.staminaMax / emptyIn) * throttle * s.drainMult * dt;
     } else {
-      bug.stamina += s.cooling * dt;
+      bug.heat -= heatRate * (HEAT.IDLE_COOL_BASE + coolScore) * dt; // resting cools you
     }
-    bug.stamina += (s.staminaRegen || 0) * dt;
+    bug.heat = clamp(bug.heat, 0, HEAT.MAX);
+    // Resting brings a little stamina back — much slower than the regen once you've run dry.
+    if (!driving && !bug.regenOn && !(bug.regenWait > 0) && bug.stamina > 0) bug.stamina += s.regenRate * STAMINA.REST_SHARE * dt;
+    if (bug.stamina <= 0 && !bug.regenOn && !(bug.regenWait > 0)) {
+      bug.regenWait = s.regenDelay; // run dry: the regen only starts after a wait
+    }
+    if (bug.regenWait > 0 && !bug.regenOn) {
+      bug.regenWait -= dt;
+      if (bug.regenWait <= 0) bug.regenOn = true;
+    }
+    if (bug.regenOn) {
+      // Regen runs until you're full again (you can drive off once you're back to 20%).
+      bug.stamina += s.regenRate * dt;
+      if (bug.stamina >= s.staminaMax) bug.regenOn = false;
+    }
     bug.stamina = clamp(bug.stamina, 0, s.staminaMax);
     this.updateStall(bug, s);
   }
 
   updateStall(bug, s = bug.stats) {
-    if (!bug.stalled && bug.stamina <= 0) {
+    if (!bug.stalled && (bug.heat >= HEAT.MAX || bug.stamina <= 0)) {
       bug.stalled = true;
-      bug.stallStrikes += 1;
+      bug.stallKind = bug.heat >= HEAT.MAX ? 'heat' : 'power';
+      if (bug.stallKind === 'heat') bug.stallStrikes += 1; // overheat three times and you've stalled out
       bug.control.target = null;
       bug.control.cruise = null;
       bug.lunge = null;
-      this.emitter?.emit(EVENTS.STALL, { bug, strikes: bug.stallStrikes });
-    } else if (bug.stalled && bug.stamina >= s.staminaMax * STAMINA.RECOVER_FRACTION) {
+      this.emitter?.emit(EVENTS.STALL, { bug, strikes: bug.stallStrikes, kind: bug.stallKind });
+    } else if (bug.stalled && bug.heat <= HEAT.MAX * HEAT.RECOVER_AT && bug.stamina >= s.staminaMax * STAMINA.RECOVER_FRACTION) {
       bug.stalled = false;
+      bug.stallKind = null;
       this.emitter?.emit(EVENTS.STALL_RECOVER, { bug });
+    } else if (bug.stalled) {
+      // Still stuck: say which (an overheated motor that's cooled may still be out of stamina).
+      bug.stallKind = bug.heat > HEAT.MAX * HEAT.RECOVER_AT ? 'heat' : 'power';
     }
   }
 

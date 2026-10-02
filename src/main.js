@@ -334,8 +334,8 @@ class App {
       sp.debris(bug.pos, '#8d93a0', 10);
       this.renderer.addShake(6);
     });
-    engine.on(EVENTS.STALL, ({ bug, stallOut }) => {
-      sp.float(bug.pos.add(new Vector2D(0, -bug.radius - 10)), stallOut ? 'STALLED OUT!' : 'THERMAL STALL!', '#7a9cff', 11);
+    engine.on(EVENTS.STALL, ({ bug, stallOut, kind }) => {
+      sp.float(bug.pos.add(new Vector2D(0, -bug.radius - 10)), stallOut ? 'STALLED OUT!' : kind === 'power' ? 'OUT OF STAMINA!' : 'OVERHEATED!', '#7a9cff', 11);
       sp.ring(bug.pos, bug.radius * 2, '#4a6cff');
     });
     engine.on(EVENTS.STALL_RECOVER, ({ bug }) => sp.float(bug.pos.add(new Vector2D(0, -bug.radius)), 'REBOOTED', '#5ad8ff', 8));

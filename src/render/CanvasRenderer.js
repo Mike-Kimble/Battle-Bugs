@@ -163,21 +163,26 @@ export class CanvasRenderer {
     const hull = bug.chassis.hpRatio;
     bar(y + 18, hull, hull > 0.5 ? '#5bd66b' : hull > 0.25 ? '#ffc93c' : '#ff4a4a', `HULL ${Math.ceil(bug.chassis.hp)}`);
     const sr = bug.stamina / s.staminaMax;
-    bar(y + 31, sr, bug.stalled ? '#4a6cff' : sr < 0.25 ? '#ff9a3c' : '#5ad8ff', bug.stalled ? 'THERMAL STALL' : `STAMINA ${Math.round(bug.stamina)}`);
+    const powerOut = bug.stalled && bug.stallKind === 'power';
+    const staminaText = bug.regenOn ? `REGEN ${Math.round(bug.stamina)}`
+      : bug.regenWait > 0 ? `OUT · REGEN IN ${Math.ceil(bug.regenWait)}s` : `STAMINA ${Math.round(bug.stamina)}`;
+    bar(y + 31, sr, powerOut ? '#4a6cff' : sr < 0.25 ? '#ff9a3c' : '#5ad8ff', staminaText);
+    const hr = (bug.heat || 0) / 100;
+    bar(y + 44, hr, bug.stalled && bug.stallKind === 'heat' ? '#ff4a4a' : hr > 0.75 ? '#ff7a3d' : '#c9a24a', bug.stalled && bug.stallKind === 'heat' ? 'OVERHEATED' : `HEAT ${Math.round(hr * 100)}%`);
 
     // Stall strike pips
     ctx.font = '7px "Press Start 2P", ui-monospace, monospace';
     ctx.fillStyle = '#8f86a8';
     const pipsX = right ? x + w : x;
-    ctx.fillText('STALLS', pipsX, y + 50);
+    ctx.fillText('STALLS', pipsX, y + 63);
     for (let i = 0; i < 3; i++) {
       ctx.fillStyle = i < bug.stallStrikes ? '#ff4a4a' : '#2d2640';
       const px = right ? x + w - 52 - i * 10 - 8 : x + 52 + i * 10;
-      ctx.fillRect(px, y + 46, 8, 8);
+      ctx.fillRect(px, y + 59, 8, 8);
     }
     if (bug.effects.lifted > 0 || bug.stats.gripMod < 1) {
       ctx.fillStyle = '#b6ff5a';
-      ctx.fillText('NO GRIP', right ? x + w - 90 : x + 90, y + 50);
+      ctx.fillText('NO GRIP', right ? x + w - 90 : x + 90, y + 63);
     }
   }
 

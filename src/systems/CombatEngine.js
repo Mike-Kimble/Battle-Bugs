@@ -1,4 +1,4 @@
-import { ARENA, MATCH, PHYSICS, ACTIONS, EVENTS, PILOT_SKILL } from '../config/constants.js';
+import { ARENA, MATCH, PHYSICS, ACTIONS, HEAT, EVENTS, PILOT_SKILL } from '../config/constants.js';
 import { PILOT_STYLES, heavyGear, turbineLine, driveKind, gearWearMatches, worksWith } from '../config/partsData.js';
 import { EventEmitter } from '../core/EventEmitter.js';
 import { Dohyo } from './Dohyo.js';
@@ -364,10 +364,16 @@ export class CombatEngine extends EventEmitter {
     return false;
   }
 
+  /** A move or weapon: its stamina cost, and the heat it puts into the motor. */
+  spend(bug, cost, heatShare = HEAT.ACTION_FRACTION) {
+    this.spend(bug, cost);
+    bug.heat = Math.min(HEAT.MAX, (bug.heat || 0) + cost * heatShare);
+  }
+
   canAct(bug, cost) {
     if (!this.live) return false;
     if (bug.out) return false;
-    if (bug.stalled) return this.fail(bug, 'THERMAL STALL');
+    if (bug.stalled) return this.fail(bug, bug.stallKind === 'power' ? 'NO STAMINA' : 'OVERHEATED');
     if (bug.stamina < cost) return this.fail(bug, 'LOW POWER');
     return true;
   }
@@ -443,7 +449,7 @@ export class CombatEngine extends EventEmitter {
     bug.control.target = null;
     bug.control.cruise = null;
     bug.control.backing = false;
-    bug.stamina -= ACTIONS.SPIN_COST;
+    this.spend(bug, ACTIONS.SPIN_COST);
     bug.actionCooldown = ACTIONS.SPIN_DURATION;
     bug.cooldowns.spin = ACTIONS.SPIN_COOLDOWN;
     this.emit(EVENTS.ACTION, { bug, type: 'spin', dir: heading });
@@ -517,7 +523,7 @@ export class CombatEngine extends EventEmitter {
       bug.control.backing = false;
       bug.control.reverse = false;
       bug.control.cruise = null;
-      bug.stamina -= ACTIONS.DASH_COST;
+      this.spend(bug, ACTIONS.DASH_COST);
       bug.actionCooldown = ACTIONS.ACTION_COOLDOWN;
       this.emit(EVENTS.ACTION, { bug, type: 'swerve', dir: d });
       return true;
@@ -540,7 +546,7 @@ export class CombatEngine extends EventEmitter {
     bug.control.reverse = reverse;
     bug.control.backing = false;
     bug.control.cruise = { angle: wrapAngle(angle) };
-    bug.stamina -= ACTIONS.DASH_COST;
+    this.spend(bug, ACTIONS.DASH_COST);
     bug.actionCooldown = ACTIONS.ACTION_COOLDOWN;
     this.emit(EVENTS.ACTION, { bug, type: 'swerve', dir: travel });
     return true;
@@ -566,7 +572,7 @@ export class CombatEngine extends EventEmitter {
     const st = w.stats;
     if (!this.canAct(bug, st.cost)) return false;
 
-    bug.stamina -= st.cost;
+    this.spend(bug, st.cost, HEAT.WEAPON_FRACTION);
     bug.cooldowns[w.uid] = st.cooldown;
     const eff = 0.5 + 0.5 * w.hpRatio;
     const chk = this.weaponCheck(bug, w);
@@ -667,10 +673,12 @@ export class AIController {
       return;
     }
 
-    // 2. Stamina management — idle to cool, hysteresis to avoid dithering.
-    const low = (0.18 + 0.12 * difficulty) * style.rest; // hotheads barely rest, turtles rest early
-    if (sFrac < low) this.resting = true;
-    if (this.resting && sFrac > low + 0.25) this.resting = false;
+    // 2. Heat management — idle to cool before the motor overheats, hysteresis to avoid dithering.
+    // (Resting doesn't bring stamina back: that only comes once it's run out, from the chassis regen.)
+    const hFrac = (me.heat || 0) / HEAT.MAX;
+    const hot = 1 - (0.18 + 0.12 * difficulty) * style.rest; // hotheads barely rest, turtles rest early
+    if (hFrac > hot) this.resting = true;
+    if (this.resting && hFrac < hot - 0.3) this.resting = false;
     if (this.resting) {
       engine.stop(me);
       if (foe.lunge && dist < 140 && sFrac > 0.12 && !me.twinDrive) engine.dash(me, this.dodgeDir(toFoe));
@@ -814,8 +822,8 @@ export class RaceAI {
     const v = me.vel.length();
     // Quick reactions at speed: a fast bug covers a lot of track between decisions.
     this.think = Math.min(0.12 + (1 - difficulty) * 0.2, 30 / Math.max(1, v));
-    // Nervous pilots lift off now and then.
-    if (Math.random() < (1 - difficulty) * 0.12) { engine.stop(me); return; }
+    // Nervous pilots lift off now and then — and anyone lifts off before the motor overheats.
+    if (Math.random() < (1 - difficulty) * 0.12 || (me.heat || 0) > HEAT.MAX * (0.8 + 0.12 * difficulty)) { engine.stop(me); return; }
     const { s } = track.nearest(me.pos);
     const here = track.tangentAt(s);
     const turnAt = (d) => { const t = track.tangentAt(s + dir * d); return Math.abs(Math.atan2(here.cross(t), here.dot(t))); };

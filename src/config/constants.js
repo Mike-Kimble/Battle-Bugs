@@ -67,11 +67,32 @@ export const PHYSICS = Object.freeze({
 });
 
 export const STAMINA = Object.freeze({
-  DRIVE_DRAIN_K: 4e-7,       // ΔS = k · F_drive · (|v| + floor) · dt
-  PUSH_SPEED_FLOOR: 120,     // motor under load while pushing a stationary mass
   RECOVER_FRACTION: 0.2,     // stall clears at S ≥ 20%
-  DRIVING_COOL_FRACTION: 0.2, // share of R_cool still recovered while driving
-  REGEN_PER_POINT: 0.1,      // chassis regen (0–100) → stamina/s back all the time: driving, idle or stalled
+  // Chassis regen (0–100) only kicks in once stamina has run out completely: after a
+  // wait (12s at regen 0 down to 3s at 100) it refills you, faster the better the regen.
+  REGEN_DELAY_WORST: 12,
+  REGEN_DELAY_BEST: 3,
+  REGEN_RATE_WORST: 4,       // stamina/s at regen 0
+  REGEN_RATE_BEST: 20,       // …at regen 100
+  // Flat out, a Stamina score of 0 runs dry in 10s, a score of 100 lasts 25s.
+  EMPTY_SECONDS_WORST: 10,
+  EMPTY_SECONDS_BEST: 25,
+  REST_SHARE: 0.35,          // resting brings stamina back too, but only at this share of the regen rate
+});
+
+/**
+ * Heat: the first bottleneck. Driving hard and every move heats the motor;
+ * cooling takes it away (less of it while you're driving). Hit 100% and you
+ * overheat — a thermal stall until cooling brings you back down.
+ */
+export const HEAT = Object.freeze({
+  MAX: 100,
+  // Flat out, with a Cooling score of 0 you overheat in 7s; at a score of 100 you never do.
+  OVERHEAT_SECONDS: 7,
+  IDLE_COOL_BASE: 0.3,       // resting cools you even with no cooling: (base + cooling score) × the full-throttle heat rate
+  ACTION_FRACTION: 0.6,      // a ram, shove, swerve or spin: heat = 60% of its stamina cost
+  WEAPON_FRACTION: 0.3,      // a weapon shot: 30% of its stamina cost
+  RECOVER_AT: 0.4,           // an overheated motor restarts once it's cooled to 40%
 });
 
 export const ACTIONS = Object.freeze({

@@ -7,7 +7,7 @@
  * matches or bought whole) — the shop only ever teases one you can't afford.
  * `look` is the sprite drawn for the part (a base design, recoloured by `glow`/`tint`).
  * Type-specific `stats`:
- *   chassis: radius, staminaMax, regen (0–100: stamina back every second, driving or not), weaponSlots, turn (rad/s), shape, drives?, backwards?
+ *   chassis: radius, staminaMax, regen (0–100: once stamina runs out, how soon it starts coming back — 12s down to 3s — and how fast), weaponSlots, turn (rad/s), shape, drives?, backwards?
  *   engine:  force (F_base), rpm, cooling (R_cool, stamina/s while idle), kind
  *   tires:   mu (μ), radius (tire radius → top speed), kind
  *   castor:  roll (rolling resistance, μ-like), hold? (braking/sideways grip, defaults to roll),

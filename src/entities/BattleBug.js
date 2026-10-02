@@ -377,6 +377,10 @@ export class BattleBug {
     this.stamina = this.stats.staminaMax;
     this.stalled = false;
     this.stallStrikes = 0;
+    this.regenWait = 0; // run dry: time until the chassis regen kicks in
+    this.regenOn = false; // regen refilling you after you ran dry
+    this.heat = 0; // 0–100: overheat at 100 (a thermal stall)
+    this.stallKind = null; // while stalled: 'heat' (overheated) or 'power' (out of stamina)
     this.throttle = 0;
     this.odometer = 0;
     this.control = { target: null, reverse: false, cruise: null, pushHold: 0 };
