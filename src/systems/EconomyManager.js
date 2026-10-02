@@ -1380,7 +1380,7 @@ export class EconomyManager {
     const armor = bug.armor && !bug.armor.isBroken ? bug.armor.stats.absorb * bug.armor.hpRatio * 20 : 0;
     const guns = bug.weapons.filter((w) => !w.isBroken).length * 5;
     const heat = s.cooling * 0.8 - (s.drainMult - 1) * 30;
-    return s.fUsable / 1000 + s.fGrip / 2500 + bug.chassis.hp / 8 + s.staminaMax / 10 + s.vMax / 25 + guns + armor + heat;
+    return s.fUsable / 1000 + s.fGrip / 2500 + bug.chassis.hp / 8 + s.staminaMax / 10 + s.vMax / 25 + guns + armor + heat + s.staminaRegen * 1.5;
   }
 
   /**

@@ -143,7 +143,7 @@ export function partCompare(part, current, { legend } = {}) {
 }
 
 /** Stats you can judge from the outside, without seeing under the hood. */
-const EXTERIOR = new Set(['Hull']);
+const EXTERIOR = new Set(['Hull', 'Regen']) // the shell's regen is the shell's: you can see what it is;
 
 export function vehicleCompare(bug, current, { neutral = false, exterior = false } = {}) {
   const s = bug.getStats();
@@ -461,7 +461,7 @@ export class WorkshopUI {
     // The reference vehicle is compared fully repaired.
     const rs = ref ? pristineStats(ref) : null;
     // Scores out of 100 — the bar (and the number) stop at 100.
-    const refFor = { fDrive: REF.fDrive, fGrip: REF.fGrip, fUsable: REF.fUsable, accel: REF.accel, vMax: REF.vMax, staminaMax: REF.stamina, cooling: REF.cooling, mass: REF.mass };
+    const refFor = { fDrive: REF.fDrive, fGrip: REF.fGrip, fUsable: REF.fUsable, accel: REF.accel, vMax: REF.vMax, staminaMax: REF.stamina, regen: REF.regen, cooling: REF.cooling, mass: REF.mass };
     const sc = (key, v) => capped((v / refFor[key]) * 100);
     const row = (label, key, hint, neutral = false) => {
       // Bar = current value, red = what repairs would restore, white tick = reference.
@@ -488,6 +488,7 @@ export class WorkshopUI {
           row('Acceleration', 'accel', 'Push for your weight'),
           row('Top speed', 'vMax', 'Motor revs × tire size'),
           row('Stamina', 'staminaMax', 'How long you can push before a thermal stall'),
+          row('Regen', 'regen', "Stamina the chassis gives back every second — driving, stopped or stalled"),
           row('Cooling', 'cooling', 'How fast stamina comes back'),
           row('Weight', 'mass', 'Heavier is harder to push around — and harder to move', true),
         )),

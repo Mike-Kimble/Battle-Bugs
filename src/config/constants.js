@@ -71,6 +71,7 @@ export const STAMINA = Object.freeze({
   PUSH_SPEED_FLOOR: 120,     // motor under load while pushing a stationary mass
   RECOVER_FRACTION: 0.2,     // stall clears at S ≥ 20%
   DRIVING_COOL_FRACTION: 0.2, // share of R_cool still recovered while driving
+  REGEN_PER_POINT: 0.1,      // chassis regen (0–100) → stamina/s back all the time: driving, idle or stalled
 });
 
 export const ACTIONS = Object.freeze({

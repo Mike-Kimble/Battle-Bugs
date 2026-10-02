@@ -20,7 +20,7 @@ export const REF = Object.freeze({
   // armour
   absorb: 0.75,
   // chassis
-  stamina: 150, turn: 5.5,
+  stamina: 150, turn: 5.5, regen: 100,
   // weapons, by effect
   drain: 48, ram: 40, spikes: 41, lift: 2.1, slick: 336, range: 230,
   // durability (max HP) and weight (kg) per part type
@@ -83,6 +83,7 @@ export const PART_SCORES = {
   chassis: [
     { label: 'Hull', get: (p) => pct(p.hp, REF.durability.chassis) },
     { label: 'Stamina', get: (p) => pct(p.stats.staminaMax, REF.stamina) },
+    { label: 'Regen', get: (p) => pct(p.stats.regen || 0, REF.regen) },
     { label: 'Agility', get: (p) => pct(p.stats.turn, REF.turn) },
     { label: 'Weight', get: (p) => pct(p.mass, REF.weight.chassis), neutral: true },
   ],
@@ -128,6 +129,7 @@ export const VEHICLE_SCORES = [
   { label: 'Top speed', key: 'vMax', get: (s) => pct(s.vMax, REF.vMax) },
   { label: 'Acceleration', key: 'accel', get: (s) => pct(s.accel, REF.accel) },
   { label: 'Stamina', key: 'staminaMax', get: (s) => pct(s.staminaMax, REF.stamina) },
+  { label: 'Regen', key: 'regen', get: (s) => pct(s.regen || 0, REF.regen) },
   { label: 'Cooling', key: 'cooling', get: (s) => pct(s.cooling, REF.cooling) },
   { label: 'Hull', key: 'hull', get: (s, bug, repaired) => pct(repaired ? bug.chassis.maxHp : bug.chassis.hp, REF.hull) },
   { label: 'Weight', key: 'mass', get: (s) => pct(s.mass, REF.mass), neutral: true },
@@ -138,7 +140,7 @@ export function partSummary(part) {
   const s = part.stats;
   const n = (v) => shown(v);
   switch (part.type) {
-    case 'chassis': return `Stamina ${n(pct(s.staminaMax, REF.stamina))} · Agility ${n(pct(s.turn, REF.turn))} · ${s.weaponSlots} hardpoint${s.weaponSlots === 1 ? '' : 's'}${s.drives > 1 ? ' · twin drive bays' : ''}`;
+    case 'chassis': return `Stamina ${n(pct(s.staminaMax, REF.stamina))} · Regen ${n(pct(s.regen || 0, REF.regen))} · Agility ${n(pct(s.turn, REF.turn))} · ${s.weaponSlots} hardpoint${s.weaponSlots === 1 ? '' : 's'}${s.drives > 1 ? ' · twin drive bays' : ''}`;
     case 'engine': return `Power ${n(pct(s.force, REF.force))} · Revs ${n(pct(s.rpm, REF.rpm))} · Cooling ${n(pct(s.cooling, REF.cooling))}`;
     case 'tires': return `Grip ${n(pct(s.mu, REF.mu))} · Speed ${n(pct(s.radius, REF.tireRadius))}`;
     case 'drivetrain': {

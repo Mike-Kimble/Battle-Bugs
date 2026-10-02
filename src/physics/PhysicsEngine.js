@@ -394,6 +394,8 @@ export class PhysicsEngine {
       gripMod,
       radius: chassis.stats.radius * PHYSICS.BUG_SCALE,
       staminaMax: Math.round(chassis.stats.staminaMax * m.staminaMax),
+      regen: chassis.stats.regen || 0, // the shell's stamina regen rating (0–100)
+      staminaRegen: (chassis.stats.regen || 0) * STAMINA.REGEN_PER_POINT, // stamina/s, whatever you're doing
       perDrive,
       lsl: !!dt.lsl && drives.length > 1, // a Limited-Slip Link: the two drives work as one (cooling aside)
       cooling: engine ? Math.round((drives.reduce((t, d) => t + d.stats.cooling, 0) * twinK * m.cooling + addCool) * 10) / 10 : 0,
@@ -634,7 +636,7 @@ export class PhysicsEngine {
     bug.odometer += Math.abs(fwd) * dt;
 
     // Stamina: continuous drain ∝ F_drive · v while driving (partly offset by
-    // cooling), full R_cool recovery while idle.
+    // cooling), full R_cool recovery while idle — and the chassis regen all the time.
     if (throttle > 0) {
       const applied = s.fUsable * throttle;
       bug.stamina -= STAMINA.DRIVE_DRAIN_K * applied * (Math.abs(fwd) + STAMINA.PUSH_SPEED_FLOOR) * s.drainMult * dt;
@@ -642,6 +644,7 @@ export class PhysicsEngine {
     } else {
       bug.stamina += s.cooling * dt;
     }
+    bug.stamina += (s.staminaRegen || 0) * dt;
     bug.stamina = clamp(bug.stamina, 0, s.staminaMax);
     this.updateStall(bug, s);
   }
