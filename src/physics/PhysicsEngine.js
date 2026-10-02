@@ -66,8 +66,9 @@ export class PhysicsEngine {
     for (const f of fans) if (vented) cool += f.stats.ventBonus || 0;
     const partner = coolers.some((c) => FAN_BOOSTS.includes(c.stats.kind));
     if (fans.length && partner) interactions.push({ id: `fan_boost${bay}`, good: true, mods: {}, text: `Your fan is blowing on the liquid cooling / heat exchanger${where} — a big boost to cooling.` });
-    else if (fans.length && vented) interactions.push({ id: `fan_vent${bay}`, good: true, mods: {}, text: 'Your fan pushes air through the vented armour. Nice.' });
-    else if (fans.length) interactions.push({ id: `fan_alone${bay}`, good: false, mods: {}, text: `A fan on its own${where} does almost nothing — pair it with water or oil cooling, a heat exchanger or vented armour on the same drive.` });
+    // Vented armour is the whole shell, not one drive: any fan can blow through it (one note will do).
+    else if (fans.length && vented) { if (!interactions.some((i) => i.id === 'fan_vent')) interactions.push({ id: 'fan_vent', good: true, mods: {}, text: 'Your fan pushes air through the vented armour. Nice.' }); }
+    else if (fans.length) interactions.push({ id: `fan_alone${bay}`, good: false, mods: {}, text: `A fan on its own${where} does almost nothing — pair it with water or oil cooling or a heat exchanger${where ? ' on the same drive' : ''}, or fit vented armour.` });
 
     for (const e of (bug.mods || []).filter(on).filter(live)) {
       const s = e.stats;
