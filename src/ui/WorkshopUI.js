@@ -794,7 +794,7 @@ export class WorkshopUI {
       section.append(el('p', { class: 'muted small' }, `${mine.length}/${per} ${title.toLowerCase()} slot${per > 1 ? 's' : ''} on ${name}. ${type === 'cooling'
         ? 'Each power plant cools itself; liquid cooling needs a jacket on this drive (unless it\'s combustion or torque). The same cooling on both drives works together: +10%.'
         : type === 'drivetrain'
-          ? `One shaft and one prop count per drive, and ${bug.drives.length > 1 ? 'one gearbox' : 'up to two gearboxes while only one drive is fitted'} — a turbine runs High-Speed Shaft → gearbox → drive shaft. Fit the same to both drives or she pulls.`
+          ? 'One shaft and one prop count per drive. This chassis takes two gearboxes in all — on either drive, and two on one drive work together in line. A turbine runs High-Speed Shaft → gearbox → drive shaft. Fit the same to both drives or she pulls.'
           : 'Fit the same to both drives or she pulls to one side.'}`));
       const odd = bug.unmatched({ cooling: true }).filter((u) => u.part.type === type);
       if (odd.length) section.append(this.renderMatching(bug, odd, locked, type === 'cooling'));
@@ -843,7 +843,7 @@ export class WorkshopUI {
     } else if (multi && !bug.drives.length) {
       section.append(el('p', { class: 'muted small' }, `No drive fitted — ${title.toLowerCase()} mounts on the drive. Fit a drive first dummy!`));
     } else if (type === 'drivetrain') {
-      const gearboxes = bug.driveSlots > 1 ? 'two gearboxes (a twin-bay shell with one drive has room for both)' : 'one gearbox';
+      const gearboxes = bug.driveSlots > 1 ? 'two gearboxes (they work together in line)' : 'one gearbox';
       section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} drive-train slots used. Only ${gearboxes}, one shaft and one prop count — a turbine runs High-Speed Shaft → gearbox → drive shaft. Your mechanic knows which combinations pay off.`));
     } else if (multi) {
       section.append(el('p', { class: 'muted small' }, `${multi.length}/${cap} ${type === 'cooling' ? 'cooling' : 'enhancement'} slot${cap > 1 ? 's' : ''} used. Not every add-on suits every drive.`));

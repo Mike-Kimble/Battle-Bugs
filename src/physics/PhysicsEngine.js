@@ -92,6 +92,11 @@ export class PhysicsEngine {
     return { cool: cool * k };
   }
 
+  /** Gearboxes (reducers included) a chassis takes: two in a twin-bay shell, one otherwise. */
+  static gearboxLimit(bug) {
+    return (bug.chassis?.stats.drives || 1) > 1 ? 2 : 1;
+  }
+
   /** "left" / "right" drive bay. */
   static side(bay) { return bay ? 'Drive 2' : 'Drive 1'; }
 
@@ -103,20 +108,23 @@ export class PhysicsEngine {
   /**
    * Drive-train parts on drive bay `bay`: folds their multipliers into `m`
    * (force, accel, vMax, turn, grip, drain, brake, lateral) and returns the
-   * special effects. Only one part per group works on each drive (one gearbox,
-   * one shaft, one prop); parts that don't suit the drive, or are broken, do nothing.
+   * special effects. One shaft and one prop work on each drive; gearboxes are
+   * counted across the whole vehicle (`shared`): up to two in a twin-bay shell, one
+   * otherwise, on whichever drives they're on. Parts that don't suit the drive, or
+   * are broken, do nothing.
    */
-  static driveTrain(bug, m, interactions, castor, bay = 0) {
+  static driveTrain(bug, m, interactions, castor, bay = 0, shared = {}) {
     const fx = { vector: false, prop: 0, propRpm: false, lsl: false, tcu: false, guard: 1 };
-    const groups = {};
+    const groups = { gearbox: 0 };
+    shared.gearbox = shared.gearbox || 0;
     const turbine = driveKind(bug, bay) === 'turbine';
     const line = turbineLine(bug, bay);
     const shaft = hasShaft(bug, bay);
     const tracks = bug.tires?.stats.kind === 'track';
     const where = PhysicsEngine.bayName(bug, bay);
-    // How many of each group count on this drive: a turbine runs two shafts (one each side
-    // of the gearbox); a twin-bay shell running one drive has room for two gearboxes.
-    const limit = { shaft: turbine ? 2 : 1, gearbox: (bug.chassis?.stats.drives || 1) > 1 && (bug.drives?.length || 0) < 2 ? 2 : 1 };
+    // How many of each group count: a turbine runs two shafts on its drive (one each side
+    // of the gearbox); gearboxes are a vehicle-wide limit — two in a twin-bay shell, else one.
+    const limit = { shaft: turbine ? 2 : 1, gearbox: PhysicsEngine.gearboxLimit(bug) };
     // Gearboxes work one after another: their torque gains and speed losses add up.
     const gear = {};
     for (const p of (bug.drivetrain || []).filter((q) => (q.bay || 0) === bay)) {
@@ -144,12 +152,16 @@ export class PhysicsEngine {
       }
       if (s.group) {
         const max = limit[s.group] || 1;
-        if ((groups[s.group] || 0) >= max) {
+        const used = s.group === 'gearbox' ? shared.gearbox : (groups[s.group] || 0);
+        if (used >= max) {
           const many = { 1: 'two', 2: 'three' }[max];
-          interactions.push({ id: `dt_dup_${p.uid}`, good: false, mods: {}, text: `You've got ${many} ${s.group === 'prop' ? 'propellers' : `${s.group}s`}${where || ' on one drive'} — only ${max === 1 ? 'one' : max} can do anything. The ${p.name} is dead weight.` });
+          interactions.push({ id: `dt_dup_${p.uid}`, good: false, mods: {}, text: s.group === 'gearbox'
+            ? `You've got ${many} gearboxes — only ${max === 1 ? 'one' : max} can work in this chassis. The ${p.name} is dead weight.`
+            : `You've got ${many} ${s.group === 'prop' ? 'propellers' : `${s.group}s`}${where || ' on one drive'} — only ${max === 1 ? 'one' : max} can do anything. The ${p.name} is dead weight.` });
           continue;
         }
         groups[s.group] = (groups[s.group] || 0) + 1;
+        if (s.group === 'gearbox') shared.gearbox += 1;
       }
       const onTyres = (k) => !(castor && s.tyresOnly?.includes(k)); // some parts only matter on driven wheels
       for (const k of ['force', 'accel', 'vMax', 'turn', 'grip', 'drain', 'brake']) {
@@ -213,11 +225,12 @@ export class PhysicsEngine {
     const fxs = [];
     let addCool = 0;
     const coolBy = [];
+    const shared = {}; // gearboxes are counted across both drives
     for (let b = 0; b < bays; b++) {
       const mm = ones();
       coolBy[b] = PhysicsEngine.addOns(bug, mm, interactions, b).cool;
       addCool += coolBy[b];
-      fxs.push(PhysicsEngine.driveTrain(bug, mm, interactions, castor, b));
+      fxs.push(PhysicsEngine.driveTrain(bug, mm, interactions, castor, b, shared));
       mb.push(mm);
     }
     for (const k of MULTS) if (k !== 'force') m[k] *= mb.reduce((t, mm) => t * mm[k], 1) ** (1 / bays);

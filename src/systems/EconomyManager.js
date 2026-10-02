@@ -4,6 +4,7 @@ import {
 } from '../config/partsData.js';
 import { STAFF_ROSTER } from '../config/staff.js';
 import { BattleBug } from '../entities/BattleBug.js';
+import { PhysicsEngine } from '../physics/PhysicsEngine.js';
 import { Part, makeId } from '../entities/Part.js';
 
 // ───────────── RNG helpers ─────────────
@@ -249,6 +250,13 @@ export class EconomyManager {
     if (part.type === 'weapon' && bug.weaponSlots === 0) return 'This chassis has no hardpoints';
     // Add-ons go on a particular drive (the one you picked, or the one it'd go on by default).
     const onBay = BattleBug.isAddOn(part.type) && bug.drives.length > 1 ? (bay ?? bug.defaultBay(part)) : null;
+    // Gearboxes (reducers included): two in a twin-bay shell, one otherwise — wherever they go.
+    // Swapping one gearbox for another is fine.
+    if (part.stats.group === 'gearbox') {
+      const fitted = bug.drivetrain.filter((p) => p.stats.group === 'gearbox' && p !== part).length;
+      const replacing = slot != null && bug.addOnsOn('drivetrain', onBay ?? 0)[slot]?.stats.group === 'gearbox';
+      if (fitted >= PhysicsEngine.gearboxLimit(bug) && !replacing) return 'No room dummy!';
+    }
     if (!this.fits(part, bug, onBay)) {
       if (part.stats.jacket && bug.drives.length > 1) return `That drive needs ${/^[AEIOU]/.test(JACKET_NAMES[part.stats.jacket]) ? 'an' : 'a'} ${JACKET_NAMES[part.stats.jacket]} of its own first`;
       return "Doesn't look like you can fit that here";
@@ -1872,6 +1880,8 @@ export class EconomyManager {
     for (const key of keys) {
       if (!this.affordable(key, budget, opts)) continue;
       if (opts.only && !opts.only(PARTS[key].stats)) continue;
+      // No room for another gearbox (your mechanic won't suggest one).
+      if (PARTS[key].stats.group === 'gearbox' && bug.drivetrain.filter((p) => p.stats.group === 'gearbox').length >= PhysicsEngine.gearboxLimit(bug)) continue;
       // A standard shaft would snap on a turbine: never the right call.
       if (['std', 'chain'].includes(PARTS[key].stats.shaft) && bug.engine?.stats.kind === 'turbine') continue;
       // …and a chain on heavy running gear would need repairing after every fight.

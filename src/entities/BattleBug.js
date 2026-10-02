@@ -84,6 +84,9 @@ export class BattleBug {
       }
       for (const p of spare) out.push({ part: p, bay: 1, missingOn: 0 });
     }
+    // No room for another gearbox: there's no matching one up, so it's not a mismatch to fix.
+    const gearboxes = this.drivetrain.filter((p) => p.stats.group === 'gearbox').length;
+    if (gearboxes >= ((this.chassis.stats.drives || 1) > 1 ? 2 : 1)) return out.filter((u) => u.part.stats.group !== 'gearbox');
     return out;
   }
 
