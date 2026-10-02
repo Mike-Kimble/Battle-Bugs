@@ -268,9 +268,29 @@ export class EconomyManager {
     const problem = this.fitProblem(part, bug, slot, bay);
     if (problem) throw new Error(problem);
     this.state.removePart(partUid);
-    for (const displaced of bug.equip(part, slot, bay)) this.state.addPart(displaced);
+    const displaced = bug.equip(part, slot, bay);
+    for (const d of displaced) this.state.addPart(d);
+    // A different type of motor: whatever on that drive doesn't suit it comes off into your spares.
+    this.lastStripped = [];
+    const swapped = part.type === 'engine' && displaced.some((d) => d.type === 'engine' && d.stats.kind !== part.stats.kind);
+    if (swapped) {
+      const b = bug.drives.indexOf(part);
+      for (const p of [...bug.coolers, ...bug.mods, ...bug.drivetrain]) {
+        if ((p.bay || 0) !== b || worksWith(p, bug)) continue;
+        for (const off of bug.unequip(p) || []) { this.state.addPart(off); this.lastStripped.push(off); }
+      }
+    }
     this.tidyName(bug);
     return part;
+  }
+
+  /** " — took off X and Y (they don't suit a turbine)" after a motor swap that stripped parts, or "". */
+  strippedNote(part) {
+    const off = this.lastStripped || [];
+    if (!off.length) return '';
+    const names = off.map((p) => p.name);
+    const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
+    return ` — took off the ${list} (${off.length > 1 ? "they don't" : "it doesn't"} suit ${/^[aeiou]/.test(part.stats.kind) ? 'an' : 'a'} ${part.stats.kind} motor)`;
   }
 
   /**

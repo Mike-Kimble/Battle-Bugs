@@ -408,7 +408,7 @@ export class WorkshopUI {
         lines.push(el('div', { class: 'advice-row' }, 'You\'ve got one in your spares.',
           el('button', {
             class: 'btn btn-small btn-primary', disabled: locked,
-            onclick: () => this.act(() => eco.equipFromInventory(bug, where.part.uid), `Fitted ${def.name}`),
+            onclick: () => this.act(() => eco.equipFromInventory(bug, where.part.uid), () => `Fitted ${def.name}${eco.strippedNote(where.part)}`),
           }, 'Fit it')));
       } else if (where.where === 'market') {
         lines.push(el('div', { class: 'advice-row' }, `On the Marketplace for ${formatMoney(where.price)}.`,
@@ -779,7 +779,7 @@ export class WorkshopUI {
       } else {
         section.append(spares((part) => [el('button', {
           class: `btn btn-small${drive ? '' : ' btn-primary'}`, disabled: locked || part.isScrap,
-          onclick: () => this.act(() => eco.equipFromInventory(bug, part.uid, bay), `${drive ? 'Swapped' : 'Fitted'} ${part.name} in ${name}`),
+          onclick: () => this.act(() => eco.equipFromInventory(bug, part.uid, bay), () => `${drive ? 'Swapped' : 'Fitted'} ${part.name} in ${name}${eco.strippedNote(part)}`),
         }, drive ? 'Swap' : 'Fit')]));
       }
     } else if (!drive) {
@@ -864,7 +864,7 @@ export class WorkshopUI {
             onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid, i), `Swapped in ${part.name}`),
           }, `Swap slot ${i + 1}`)));
         } else {
-          actions.push(el('button', { class: 'btn btn-small btn-primary', disabled: locked || part.isScrap, onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid), `Fitted ${part.name}`) }, 'Fit'));
+          actions.push(el('button', { class: 'btn btn-small btn-primary', disabled: locked || part.isScrap, onclick: () => this.act(() => this.economy.equipFromInventory(bug, part.uid), () => `Fitted ${part.name}${this.economy.strippedNote(part)}`) }, 'Fit'));
         }
         actions.push(sellStackButton(group, this.economy, (fn, msg) => this.act(fn, msg), {
           disabled: this.economy.inField,
