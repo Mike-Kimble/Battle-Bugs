@@ -68,6 +68,7 @@ export class PhysicsEngine {
       // A fan blowing on liquid cooling, a heat sink or a heat exchanger makes it far better.
       if (boost > 1 && FAN_BOOSTS.includes(c.stats.kind)) cool += base * (boost - 1);
       if (c.stats.staminaMax) m.staminaMax *= scaled(c.stats.staminaMax);
+      if (c.stats.drain) m.drain *= scaled(c.stats.drain); // heat pumps and compressors run off the motor
     }
     const vented = (bug.armor?.stats.heat || 0) < 0 && !bug.armor.isBroken;
     for (const f of fans) if (vented) cool += (f.stats.ventBonus || 0) * (1 + mist);
@@ -311,7 +312,8 @@ export class PhysicsEngine {
     // alone (half strength), plasma never drives wheels, any other motor goes nowhere.
     const per = drives.map((d, i) => {
       const thrustDrive = isThrust(d);
-      const f = (d.isBroken ? 0 : d.stats.force * d.hpRatio) * mb[i].force * twinK * m.force; // broken down = no push
+      // Broken down = no push; what the drive train loses to friction and inertia never reaches the ground.
+      const f = (d.isBroken ? 0 : d.stats.force * d.hpRatio) * mb[i].force * twinK * m.force * (fxs[i].eff / HEAT.REF_EFFICIENCY);
       // A propeller or ducted fan turns shaft power into thrust (a ducted fan makes more of high revs).
       const propEff = fxs[i].prop * (fxs[i].propRpm ? 0.7 + 0.5 * (d.stats.rpm / 6400) : 1);
       // A prop or fan on a turbine adds to its thrust (a fifth of the prop's own efficiency).
@@ -418,6 +420,10 @@ export class PhysicsEngine {
       castor,
       // How hard the running gear is to push along: more grip and rolling resistance = more heat and stamina.
       gearLoad: PhysicsEngine.gearLoad(tires),
+      // How much of the motors' work becomes heat (electric motors waste little; combustion, a lot).
+      heatMult: drives.length ? drives.reduce((t, d) => t + (HEAT.MOTOR[d.stats.kind] ?? 1), 0) / drives.length : 1,
+      // Regen brakes: stamina back (per second, at speed) whenever you're slowing down.
+      regenBrake: (bug.mods || []).filter((p) => !p.spent && !p.isBroken && worksWith(p, bug)).reduce((t, p) => t + (p.stats.regenBrake || 0), 0),
       // Drive train efficiency (each working part's rating multiplied together; a twin averages its drives):
       // what's lost is friction and inertia, so a less efficient line costs more heat and stamina.
       driveEff: fxs.reduce((t, f) => t + f.eff, 0) / fxs.length,
@@ -672,9 +678,9 @@ export class PhysicsEngine {
       // Grip and rolling resistance take more energy; so does a drive train that wastes it, and so does
       // weight (× √(mass / 250kg)). More energy spent is more heat made and more stamina used.
       const weight = (Math.max(1, s.mass) / STAMINA.MASS_REF) ** STAMINA.MASS_EXP;
-      const load = (effort * s.drainMult * (s.gearLoad ?? 1) * weight * HEAT.REF_EFFICIENCY) / (s.driveEff || 1);
+      const load = effort * s.drainMult * (s.gearLoad ?? 1) * weight * (HEAT.REF_EFFICIENCY / (s.driveEff || 1)) ** HEAT.EFF_HEAT_EXP;
       // Cooling takes away its share of whatever heat you make: at 100% it all goes, however lossy the drive.
-      bug.heat += heatRate * load * (1 - coolScore) * dt;
+      bug.heat += heatRate * load * (s.heatMult ?? 1) * (1 - coolScore) * dt;
       const emptyIn = STAMINA.EMPTY_SECONDS_WORST + (STAMINA.EMPTY_SECONDS_BEST - STAMINA.EMPTY_SECONDS_WORST) * staminaScore ** STAMINA.EMPTY_CURVE;
       bug.stamina -= (s.staminaMax / emptyIn) * load * dt;
     } else {
@@ -683,6 +689,8 @@ export class PhysicsEngine {
     bug.heat = clamp(bug.heat, 0, HEAT.MAX);
     // Resting brings a little stamina back — much slower than the regen once you've run dry.
     if (!driving && !bug.regenOn && !(bug.regenWait > 0) && bug.stamina > 0) bug.stamina += s.regenRate * STAMINA.REST_SHARE * dt;
+    // Regen brakes turn slowing down back into charge.
+    if (!driving && s.regenBrake && !bug.stalled) bug.stamina += s.regenBrake * Math.min(1, bug.vel.length() / Math.max(1, s.vMax)) * dt;
     if (bug.stamina <= 0 && !bug.regenOn && !(bug.regenWait > 0)) {
       bug.regenWait = s.regenDelay; // run dry: the regen only starts after a wait
     }

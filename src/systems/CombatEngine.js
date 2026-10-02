@@ -587,7 +587,15 @@ export class CombatEngine extends EventEmitter {
     switch (st.effect) {
       case 'drain':
         if (hit) {
-          target.drainStamina(st.drain * eff);
+          if (st.heats) {
+            // Induction heating: it cooks their motor instead of draining it.
+            target.heat = Math.min(HEAT.MAX, (target.heat || 0) + st.drain * eff * st.heats);
+          } else {
+            // Electrics feel a drain most; a diesel barely notices.
+            const kinds = target.drives.length ? target.drives.map((d) => d.stats.kind) : ['combustion'];
+            const feel = kinds.reduce((t, k) => t + (HEAT.DRAIN_SUSCEPTIBILITY[k] ?? 1), 0) / kinds.length;
+            target.drainStamina(st.drain * eff * feel);
+          }
           target.effects.flash = 0.2;
           this.physics.updateStall(target);
         }

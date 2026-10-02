@@ -46,7 +46,7 @@ export const PHYSICS = Object.freeze({
   ROLL_RESIST: 18,          // px/s² that free-rolling wheels lose to rolling resistance
   SLOPE_SKEW: 0.9,          // rad the nose is pulled towards downhill (at full slope) when moving across one
   SLOPE_SLEW: 3,            // rad/s a free-rolling bug turns to roll downhill (at full slope)
-  CASTOR_THRUST: 1.3,       // a thrust drive on castors pushes this much harder than through wheels (before rolling resistance)
+  CASTOR_THRUST: 1,         // a thrust drive on castors: its thrust, less the rolling resistance (no bonus — thrust is thrust)
   VECTOR_FACE_RATE: 9,      // rad/s: a thrust-vectoring bug swings round to keep facing its opponent
   SLICK_CASTOR_SPEED: 0.5,  // castors in a slick: top speed + this × the grip lost (a 0.2-grip patch → +40%)
   WHEELSPIN: 0.5,           // turbine into the wheels with no gearbox: share of grip and control left
@@ -97,14 +97,19 @@ export const HEAT = Object.freeze({
   OVERHEAT_SECONDS: 7,
   IDLE_COOL_BASE: 0.3,       // resting cools you even with no cooling: (base + cooling score) × the full-throttle heat rate
   WEAPON_FRACTION: 0.3,      // a weapon shot: 30% of its stamina cost
+  // Stamina drains (EMP and the like) hit electrics hardest: share of the drain each motor type feels.
+  DRAIN_SUSCEPTIBILITY: { electric: 1.3, plasma: 1.3, turbine: 1, combustion: 0.8, torque: 0.5 },
   // Running gear load: the harder the gear is to push along (grip, rolling resistance),
   // the more heat and stamina driving costs. Knobby Treads (μ 1.05) are 1.0.
   LOAD_REF_MU: 1.05,
   LOAD_TYRE_BASE: 0.6,       // tyres: base + (1 − base) · μ / ref…
   LOAD_KIND: { track: 1.2, pads: 1.1, slick: 0.9 }, // …× the tread type
   LOAD_CASTOR_BASE: 0.5,     // castors: base + roll × this
-  LOAD_CASTOR_ROLL: 2,
-  REF_EFFICIENCY: 0.97,      // a plain Standard Drive Shaft line: the 7s / 10–60s timings are for this
+  LOAD_CASTOR_ROLL: 4,
+  REF_EFFICIENCY: 0.97,      // a plain Standard Drive Shaft line: the 7s / 10–60s timings (and full push) are for this
+  EFF_HEAT_EXP: 0.5,         // drive losses cut your push; the heat and stamina they cost is softened (√) so it isn't a double hit
+  // How much of a motor's work turns into heat, by motor type (combustion = 1: the 7s figure).
+  MOTOR: { combustion: 1, torque: 0.9, turbine: 1.15, electric: 0.4, plasma: 0.9 },
   RECOVER_AT: 0.4,           // an overheated motor restarts once it's cooled to 40%
 });
 
